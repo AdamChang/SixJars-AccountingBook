@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <ItemGroup>
+    <ProjectReference Include="..\SixJars.Application\SixJars.Application.csproj" />
+    <ProjectReference Include="..\SixJars.Infrastructure\SixJars.Infrastructure.csproj" />
+  </ItemGroup>
+</Project>

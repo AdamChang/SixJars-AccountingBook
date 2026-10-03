@@ -9,11 +9,12 @@
     <PackageReference Include="xunit.runner.visualstudio" />
     <PackageReference Include="FluentAssertions" />
     <PackageReference Include="Testcontainers.PostgreSql" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\src\SixJars.Infrastructure\SixJars.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\SixJars.Api\SixJars.Api.csproj" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="..\Shared\**\*.cs" Exclude="..\Shared\Api*.cs;..\Shared\TestAuthHandler.cs" LinkBase="Shared" />
+    <Compile Include="..\Shared\**\*.cs" LinkBase="Shared" />
   </ItemGroup>
 </Project>

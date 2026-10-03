@@ -15,18 +15,24 @@ public sealed class PostgresFixture : IAsyncLifetime
 
     public ValueTask DisposeAsync() => _container.DisposeAsync();
 
-    public async Task<Func<SixJarsDbContext>> CreateDatabaseAsync(CancellationToken cancellationToken)
+    /// <summary>建立一個已套用 migration 的獨立資料庫，回傳連線字串（API 測試用）。</summary>
+    public async Task<string> CreateConnectionStringAsync(CancellationToken cancellationToken)
     {
         var connectionString = new NpgsqlConnectionStringBuilder(_container.GetConnectionString())
         {
             Database = $"t_{Guid.NewGuid():N}",
         }.ConnectionString;
-        var options = new DbContextOptionsBuilder<SixJarsDbContext>().UseNpgsql(connectionString).Options;
-        await using (var db = new SixJarsDbContext(options))
-        {
-            await db.Database.MigrateAsync(cancellationToken);
-        }
+        await using var db = new SixJarsDbContext(Options(connectionString));
+        await db.Database.MigrateAsync(cancellationToken);
+        return connectionString;
+    }
 
+    public async Task<Func<SixJarsDbContext>> CreateDatabaseAsync(CancellationToken cancellationToken)
+    {
+        var options = Options(await CreateConnectionStringAsync(cancellationToken));
         return () => new SixJarsDbContext(options);
     }
+
+    private static DbContextOptions<SixJarsDbContext> Options(string connectionString) =>
+        new DbContextOptionsBuilder<SixJarsDbContext>().UseNpgsql(connectionString).Options;
 }
