@@ -30,6 +30,7 @@ internal sealed partial class MappingSession(LegacyWorkbook workbook)
         foreach (var month in workbook.Months)
         {
             MapJournal(month);
+            MapTemplates(month);
         }
 
         return new LegacyImportResult(_book, _transactions, _plannedExpenses, _report);
