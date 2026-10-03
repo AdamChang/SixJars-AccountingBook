@@ -37,6 +37,39 @@ public class TransactionsEndpointsTests(PostgresFixture postgres)
     }
 
     [Fact]
+    public async Task Transaction_of_another_book_is_404()
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var mine = await factory.SeedBookAsync(Ct);
+        var other = await factory.SeedBookAsync(Ct);
+        var client = factory.CreateSignedInClient();
+        var created = await client.PostAsJsonAsync($"/api/books/{other.Id.Value}/transactions",
+            new
+            {
+                kind = "Expense", date = "2026-01-05", amount = -120m,
+                accountId = other.FindAccount("現金")!.Id.Value, categoryId = other.FindCategory("主食", "午餐")!.Id.Value,
+            },
+            ApiJson.Options, Ct);
+        var id = (await created.Content.ReadFromJsonAsync<JsonElement>(Ct)).GetProperty("id").GetGuid();
+
+        // 用自己帳本的路徑讀別本帳的交易：只用交易 Id 查詢就會讀到（T21 審查的變異測試）
+        var response = await client.GetAsync($"/api/books/{mine.Id.Value}/transactions/{id}", Ct);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task Unknown_transaction_is_404()
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var book = await factory.SeedBookAsync(Ct);
+
+        var response = await factory.CreateSignedInClient().GetAsync($"/api/books/{book.Id.Value}/transactions/{Guid.NewGuid()}", Ct);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
     public async Task Transfer_to_credit_card_is_422()
     {
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
