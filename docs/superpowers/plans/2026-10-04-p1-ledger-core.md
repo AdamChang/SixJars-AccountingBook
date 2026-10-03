@@ -146,6 +146,8 @@ T6 ─► T14 ─► T15 ─► T16（需 T13）  ◄── checkpoint B
       <PackageVersion Include="ExcelDataReader" Version="3.9.0" />
       <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
       <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.12" />
+      <!-- 段 B 補上（commit 1d0c270）：Npgsql 只要求 EF Core >= 10.0.4，需明確參考 Relational 才能全面對齊 10.0.12 -->
+      <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.12" />
       <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />
       <PackageVersion Include="xunit.v3" Version="4.0.1" />
       <PackageVersion Include="xunit.runner.visualstudio" Version="4.0.0" />
@@ -2196,7 +2198,8 @@ D1-b 的實作。容易錯的地方有四個：
 - **小數精度**：`decimal` 一律設為 `HasPrecision(18, 4)`，和讀取器的 4 位小數一致。
 
 - [ ] Step 1：套件、fixture 與失敗測試
-  - `src/SixJars.Infrastructure.csproj`：加上 `Npgsql.EntityFrameworkCore.PostgreSQL`，以及 `Microsoft.EntityFrameworkCore.Design`（`PrivateAssets="all"`）。
+  - `src/SixJars.Infrastructure.csproj`：加上 `Npgsql.EntityFrameworkCore.PostgreSQL`、`Microsoft.EntityFrameworkCore.Relational`（對齊 10.0.12，見 Checkpoint B 紀錄），以及 `Microsoft.EntityFrameworkCore.Design`（`PrivateAssets="all"`）。
+  - `tests/SixJars.AcceptanceTests.csproj`：同樣在此加上 `Testcontainers.PostgreSql`。原因是兩個測試專案都編譯 `tests/Shared/**`，新增 `PostgresFixture.cs` 後，AcceptanceTests 會立刻需要這個套件。
   - `tests/SixJars.Infrastructure.Tests.csproj`：加上 `Testcontainers.PostgreSql`。
   - `tests/SixJars.Infrastructure.Tests/AssemblyInfo.cs`：
     ```csharp
@@ -2372,7 +2375,7 @@ D1-b 的實作。容易錯的地方有四個：
 - [ ] Step 5：`dotnet test` → Expected：總計 94 以上、失敗 0（A2 審查多補 1 個測試，原為 93）
 - [ ] Step 6：Commit
   ```bash
-  git add src/SixJars.Infrastructure/SixJars.Infrastructure.csproj src/SixJars.Infrastructure/Persistence src/SixJars.Domain/Transactions/Transaction.cs tests/Shared/PostgresFixture.cs tests/SixJars.Infrastructure.Tests/SixJars.Infrastructure.Tests.csproj tests/SixJars.Infrastructure.Tests/AssemblyInfo.cs tests/SixJars.Infrastructure.Tests/Persistence/LedgerPersistenceTests.cs
+  git add Directory.Packages.props tests/SixJars.AcceptanceTests/SixJars.AcceptanceTests.csproj src/SixJars.Infrastructure/SixJars.Infrastructure.csproj src/SixJars.Infrastructure/Persistence src/SixJars.Domain/Transactions/Transaction.cs tests/Shared/PostgresFixture.cs tests/SixJars.Infrastructure.Tests/SixJars.Infrastructure.Tests.csproj tests/SixJars.Infrastructure.Tests/AssemblyInfo.cs tests/SixJars.Infrastructure.Tests/Persistence/LedgerPersistenceTests.cs
   git commit -m "feat(infra): EF Core + PostgreSQL 持久層，分錄實體化存檔" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
   ```
 
@@ -2505,11 +2508,29 @@ D1-b 的實作。容易錯的地方有四個：
 - [ ] Step 5：`dotnet test` → Expected：總計 98 以上、失敗 0（原為 97）
 - [ ] Step 6：Commit
   ```bash
-  git add tests/SixJars.AcceptanceTests/SixJars.AcceptanceTests.csproj tests/SixJars.AcceptanceTests/AssemblyInfo.cs tests/SixJars.AcceptanceTests/PersistedLedgerAcceptanceTests.cs
+  git add tests/SixJars.AcceptanceTests/AssemblyInfo.cs tests/SixJars.AcceptanceTests/PersistedLedgerAcceptanceTests.cs
   git commit -m "test(acceptance): 匯入結果經 PostgreSQL 往返後仍與 Excel 一致" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
   ```
 
 > **Checkpoint B**：P1 完成。
+
+> **B 執行紀錄（2026-10-04）**：`9158853`..`1d0c270`。subagent 執行 Task 14–16，主控者審查後補了 2 個 commit。`dotnet test` 總計 98、失敗 0、已略過 0；`reference/` 暫時移走時，總計 98、已略過 12（5+4+3）。`dotnet build` 0 warning；`has-pending-model-changes` 沒有變更。
+> - **Migration `20261003174753_InitialLedger`**：
+>   - 共 7 張表：Books、Accounts、PlanningFunds、Categories、Transactions、Postings、PlannedExpenses。
+>   - Postings 是 Transactions 的 owned 表，主鍵是影子 int identity。
+>   - 歸屬月份以 integer 存 yyyymm。
+>   - 所有 decimal 都是 numeric(18,4)。
+> - **EF Core 版本**：
+>   - 問題：Npgsql 10.0.3 只要求 EF Core ≥10.0.4，與 Design 10.0.12 混用會產生 CS1705 與 MSB3277。
+>   - 段 B 先把 Design 降到 10.0.4 暫解。
+>   - 使用者決定改為在 Infrastructure 明確參考 `Microsoft.EntityFrameworkCore.Relational` 10.0.12（`1d0c270`），取得最新 patch，並與 dotnet-ef 工具同版。之後升版時，Relational 與 Design 要一起改。
+> - **Testcontainers 提前到 Task 14 加入 AcceptanceTests**：原因是兩個測試專案共用編譯 `tests/Shared/**`。Task 14 與 Task 16 的 git add 清單已依此修正。
+> - **`Transaction` 的 EF 建構子**：寫成 `private Transaction() => _postings = [];`，因為 `_postings` 是 readonly 而且不可為 null。這是 Domain 唯一的變更。
+> - **審查補的測試（`17b75a9`）**：
+>   - 持久層做了 5 個變異：歸屬月份讀回錯月、交易不限帳本、預定支出不限帳本、帳戶 Id 讀回錯、無參數建構子殘留分錄。
+>   - 其中「預定支出不限帳本」原本沒被抓到，因為原測試的兩本帳本都沒有預定支出。已改為兩本各一筆，現在能抓到。
+>   - 測試總數不變。
+> - **留意**：`LedgerSnapshotLoader` 讀交易沒有排序。目前的計算器只做加總，與順序無關；P2 若需要逐筆列表，要加 `OrderBy(Date)`。
 
 ---
 
