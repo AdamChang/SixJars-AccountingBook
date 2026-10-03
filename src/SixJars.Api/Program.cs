@@ -14,6 +14,8 @@ builder.Services.AddSixJarsInfrastructure(connectionString);
 builder.Services.AddSixJarsApplication(builder.Configuration["MediatR:LicenseKey"]);
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUser, HttpCurrentUser>();
+// 「今天」由注入的時鐘提供（/summary 省略 asOf 時使用），測試以 ConfigureTestServices 換成固定時間。
+builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
@@ -34,7 +36,7 @@ app.UseAuthorization();
 
 app.MapHealthEndpoints();
 var api = app.MapGroup("/api").RequireAuthorization();
-api.MapBooksEndpoints().MapTransactionsEndpoints().MapPlannedExpensesEndpoints();
+api.MapBooksEndpoints().MapTransactionsEndpoints().MapPlannedExpensesEndpoints().MapSummaryEndpoints();
 app.Run();
 
 public partial class Program;
