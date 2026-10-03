@@ -3,7 +3,7 @@
 - 日期：2026-10-04
 - 範圍：**後端**（.NET API、CLI、部署設定）。Angular PWA 另寫一份前端 spec 與 plan（tddplan 慣例）。
 - 依據：[CONTEXT.md](../../../CONTEXT.md)、[ADR 0001–0006](../../adr/)、[P1 設計](2026-10-04-p1-ledger-core-design.md)、P1 計畫的「後續」清單
-- 狀態：**草稿，待使用者核准**。核准前，§9 的待確認項目要先定案。
+- 狀態：**已核准（2026-10-04）**。§9 的 O1–O3 都照建議定案。
 
 ## 1. 目標
 
@@ -189,9 +189,9 @@ P1 的 Domain 是建立後就不能改的。P2 需要支援以下變更，而且
   - Cloud Scheduler 每 10 分鐘 ping `/health`
 - Data Protection key（cookie 加密用）存在 DB 的 `DataProtectionKeys` 表（EF Core 提供者）。否則 Cloud Run instance 一換，所有人就會被登出。
 
-## 9. 待確認（核准 spec 前要先定案）
+## 9. 核准時定案的項目（2026-10-04，全部照建議）
 
-| # | 問題 | 建議 |
+| # | 問題 | 決定 |
 |---|---|---|
 | O1 | MediatR 從 v13 起改為商業授權，個人與小型組織可以用免費的 Community license，但需要設定 license key。 | 用 MediatR 最新版，搭配 Community license（P1 的 FluentAssertions 8 也是同樣的取捨），key 從環境變數讀取。事實查核時確認授權條款與沒有 key 時的行為。替代方案：鎖在 12.x（Apache，已停止維護），或改用 `Mediator`（source generator，MIT）。 |
 | O2 | 某筆交易已經連結為某預定支出的付款，刪除這筆交易時該怎麼處理？ | 預定支出自動回到「未付」，並在同一筆稽核記錄裡注記。否決「禁止刪除」，因為使用者會無法修正記錯的付款。 |
