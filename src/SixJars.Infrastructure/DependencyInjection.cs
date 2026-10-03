@@ -2,6 +2,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using SixJars.Application.Common;
+using SixJars.Application.Ledger;
+using SixJars.Infrastructure.Ledger;
 using SixJars.Infrastructure.Persistence;
 
 namespace SixJars.Infrastructure;
@@ -18,6 +20,7 @@ public static class DependencyInjection
             .UseNpgsql(connectionString)
             .AddInterceptors(sp.GetServices<IInterceptor>()));
         services.AddScoped<ISixJarsDbContext>(sp => sp.GetRequiredService<SixJarsDbContext>());
+        services.AddScoped<ILedgerSummaryQuery, SqlLedgerSummaryQuery>();
         return services;
     }
 }

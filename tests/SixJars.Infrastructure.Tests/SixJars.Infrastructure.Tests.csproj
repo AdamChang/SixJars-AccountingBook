@@ -15,5 +15,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="..\Shared\**\*.cs" Exclude="..\Shared\Api*.cs;..\Shared\TestAuthHandler.cs" LinkBase="Shared" />
+    <!-- SampleBook 是 internal，以 link 方式編譯進來，不改成 public（T26）。 -->
+    <Compile Include="..\SixJars.Domain.Tests\SampleBook.cs" Link="Shared\SampleBook.cs" />
   </ItemGroup>
 </Project>
