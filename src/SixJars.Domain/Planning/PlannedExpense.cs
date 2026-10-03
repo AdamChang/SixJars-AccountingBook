@@ -1,0 +1,67 @@
+using SixJars.Domain.Books;
+using SixJars.Domain.Common;
+using SixJars.Domain.Transactions;
+
+namespace SixJars.Domain.Planning;
+
+/// <summary>
+/// 預定支出：歸屬於某月的固定／貸款／特別支出預計項目。
+/// 未付時只占用月可用餘額（先佔額度），付款後連結到實際交易，改以實際金額為準（晚扣款）。
+/// </summary>
+public sealed class PlannedExpense
+{
+    // 參數名稱必須與屬性名稱一致，EF Core 的建構子綁定依賴這一點。
+    private PlannedExpense(BookId bookId, BudgetMonth budgetMonth, CategoryId categoryId, AccountId? accountId, decimal estimatedAmount, string? note)
+    {
+        Id = PlannedExpenseId.New();
+        BookId = bookId;
+        BudgetMonth = budgetMonth;
+        CategoryId = categoryId;
+        AccountId = accountId;
+        EstimatedAmount = estimatedAmount;
+        Note = note;
+    }
+
+    public PlannedExpenseId Id { get; private set; }
+    public BookId BookId { get; private set; }
+    public BudgetMonth BudgetMonth { get; private set; }
+    public CategoryId CategoryId { get; private set; }
+    /// <summary>預計的付款帳戶；可不指定。</summary>
+    public AccountId? AccountId { get; private set; }
+    /// <summary>預估金額，沿用支出的符號慣例（負數）。</summary>
+    public decimal EstimatedAmount { get; private set; }
+    public string? Note { get; private set; }
+    public TransactionId? PaidTransactionId { get; private set; }
+    public bool IsPaid => PaidTransactionId is not null;
+
+    public static PlannedExpense Create(Book book, BudgetMonth budgetMonth, CategoryId categoryId, AccountId? accountId, decimal estimatedAmount, string? note = null)
+    {
+        var category = book.GetCategory(categoryId);
+        if (category.Kind != CategoryKind.Expense || category.Nature is not (ExpenseNature.Fixed or ExpenseNature.Loan or ExpenseNature.Special))
+        {
+            throw new DomainException($"預定支出只限固定、貸款、特別支出：「{category.Name}」。");
+        }
+
+        if (accountId is { } id)
+        {
+            book.GetAccount(id);
+        }
+
+        return new PlannedExpense(book.Id, budgetMonth, categoryId, accountId, estimatedAmount, note);
+    }
+
+    public void MarkPaid(Transaction transaction)
+    {
+        if (IsPaid)
+        {
+            throw new DomainException($"預定支出 {Id.Value} 已付款，不可重複標記。");
+        }
+
+        if (transaction.BookId != BookId)
+        {
+            throw new DomainException("付款交易與預定支出不屬於同一本帳本。");
+        }
+
+        PaidTransactionId = transaction.Id;
+    }
+}
