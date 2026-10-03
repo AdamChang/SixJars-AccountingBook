@@ -21,6 +21,9 @@ public sealed class Transaction
 {
     private readonly List<Posting> _postings;
 
+    // EF Core 專用：internal 建構子含分錄集合，EF 無法綁定。
+    private Transaction() => _postings = [];
+
     internal Transaction(
         BookId bookId,
         TransactionKind kind,
