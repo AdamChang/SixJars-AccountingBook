@@ -1,0 +1,7 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/SixJars.Application/SixJars.Application.csproj" />
+    <Project Path="src/SixJars.Domain/SixJars.Domain.csproj" />
+    <Project Path="src/SixJars.Infrastructure/SixJars.Infrastructure.csproj" />
+  </Folder>
+</Solution>

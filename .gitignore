@@ -8,3 +8,5 @@ src/.vs/
 src/count-dashboard/test-results/
 *.csproj.lscache
 playwright-report/
+TestResults/
+*.user

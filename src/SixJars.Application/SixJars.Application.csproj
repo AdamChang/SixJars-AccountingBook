@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="..\SixJars.Domain\SixJars.Domain.csproj" />
+  </ItemGroup>
+</Project>

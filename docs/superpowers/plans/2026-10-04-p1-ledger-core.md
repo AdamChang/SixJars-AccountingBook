@@ -11,7 +11,7 @@
 
 MediatR 與 FluentValidation 等 P2 有 API 時才引入。
 
-**Tech Stack**：.NET 10（SDK 10.0.401）、C# latest、EF Core 10 + Npgsql、xUnit v3（Microsoft Testing Platform）、FluentAssertions 7.2、Testcontainers（postgres:17-alpine）、ExcelDataReader。
+**Tech Stack**：.NET 10（SDK 10.0.401）、C# latest、EF Core 10 + Npgsql、xUnit v3（Microsoft Testing Platform）、FluentAssertions 8.11（Xceed 授權；本專案為個人非商業使用，免費）、Testcontainers（postgres:17-alpine）、ExcelDataReader。
 
 **相關文件**
 - 設計：[docs/superpowers/specs/2026-10-04-p1-ledger-core-design.md](../specs/2026-10-04-p1-ledger-core-design.md)
@@ -149,7 +149,7 @@ T6 ─► T14 ─► T15 ─► T16（需 T13）  ◄── checkpoint B
       <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />
       <PackageVersion Include="xunit.v3" Version="4.0.1" />
       <PackageVersion Include="xunit.runner.visualstudio" Version="4.0.0" />
-      <PackageVersion Include="FluentAssertions" Version="7.2.0" />
+      <PackageVersion Include="FluentAssertions" Version="8.11.0" />
       <PackageVersion Include="Testcontainers.PostgreSql" Version="4.15.0" />
     </ItemGroup>
   </Project>
@@ -2525,7 +2525,7 @@ D1-b 的實作。容易錯的地方有四個：
 | `TheoryData<int>` 集合運算式、`MemberData` | ✓ | spike 3 個 case 全部通過 | — |
 | `TestContext.Current.TestOutputHelper` / `CancellationToken` | ✓ | spike | — |
 | `--filter-class` / `--filter-method` / `--project` | ✓ | spike：總計 1 | — |
-| FluentAssertions 7.2.0 在 xUnit v3 下的失敗回報 | ✓ | spike：「Expected value to be 2, but found 1」，判定為失敗 | — |
+| FluentAssertions 8.11.0（使用者 2026-10-04 指定改用 8.x） | ✓ | spike：計畫用到的 `Throw<T>`、`ContainSingle().Which`、`Contain`、`ContainEquivalentOf`、`BeEquivalentTo`、`HaveCount`，以及 xUnit v3 下的失敗回報，7 個測試全部通過；build 與 test 都沒有授權警告。計畫沒有用到 8.x 的破壞性變更（`AssertionScope`、`Execute.Assertion`） | `Directory.Packages.props` 改成 8.11.0 |
 | ExcelDataReader 3.9.0 讀 `.xlsm` 快取值 | ✓ | spike：`1月!J6 = -4557`、`AH7` 為 DateTime、`AL7 = 84223`，列與欄對位正確 | — |
 | `PostgreSqlBuilder(string image)` + `postgres:17-alpine` | ✓ | spike 容器啟動成功 | — |
 | EF Core OwnsMany + 強型別 Id converter + internal 建構子綁定 + record 分錄 + `int` 歸屬月份 | ✓ | spike 往返測試通過（Npgsql 10.0.3） | — |
