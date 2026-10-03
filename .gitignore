@@ -1,0 +1,10 @@
+reference/
+.claude/
+.github/
+obj/
+bin/
+src/.vs/
+.playwright-mcp/
+src/count-dashboard/test-results/
+*.csproj.lscache
+playwright-report/
