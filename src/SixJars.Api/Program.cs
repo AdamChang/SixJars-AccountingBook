@@ -34,7 +34,7 @@ app.UseAuthorization();
 
 app.MapHealthEndpoints();
 var api = app.MapGroup("/api").RequireAuthorization();
-api.MapBooksEndpoints().MapTransactionsEndpoints();
+api.MapBooksEndpoints().MapTransactionsEndpoints().MapPlannedExpensesEndpoints();
 app.Run();
 
 public partial class Program;

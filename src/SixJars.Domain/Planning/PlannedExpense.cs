@@ -36,18 +36,29 @@ public sealed class PlannedExpense
 
     public static PlannedExpense Create(Book book, BudgetMonth budgetMonth, CategoryId categoryId, AccountId? accountId, decimal estimatedAmount, string? note = null)
     {
-        var category = book.GetCategory(categoryId);
-        if (category.Kind != CategoryKind.Expense || category.Nature is not (ExpenseNature.Fixed or ExpenseNature.Loan or ExpenseNature.Special))
-        {
-            throw new DomainException($"預定支出只限固定、貸款、特別支出：「{category.Name}」。");
-        }
-
-        if (accountId is { } id)
-        {
-            book.GetAccount(id);
-        }
-
+        Validate(book, categoryId, accountId);
         return new PlannedExpense(book.Id, budgetMonth, categoryId, accountId, estimatedAmount, note);
+    }
+
+    /// <summary>修改未付的預定支出。付款後金額以實際交易為準，所以禁止修改。</summary>
+    public void Update(Book book, BudgetMonth budgetMonth, CategoryId categoryId, AccountId? accountId, decimal estimatedAmount, string? note)
+    {
+        if (IsPaid)
+        {
+            throw new DomainException($"預定支出 {Id.Value} 已付款，金額以實際交易為準，不可修改。");
+        }
+
+        if (book.Id != BookId)
+        {
+            throw new DomainException("帳本與預定支出不屬於同一本帳本。");
+        }
+
+        Validate(book, categoryId, accountId);
+        BudgetMonth = budgetMonth;
+        CategoryId = categoryId;
+        AccountId = accountId;
+        EstimatedAmount = estimatedAmount;
+        Note = note;
     }
 
     public void MarkPaid(Transaction transaction)
@@ -63,5 +74,20 @@ public sealed class PlannedExpense
         }
 
         PaidTransactionId = transaction.Id;
+    }
+
+    /// <summary>分類必須是固定、貸款或特別支出；有指定帳戶時，帳戶必須屬於這本帳本。</summary>
+    private static void Validate(Book book, CategoryId categoryId, AccountId? accountId)
+    {
+        var category = book.GetCategory(categoryId);
+        if (category.Kind != CategoryKind.Expense || category.Nature is not (ExpenseNature.Fixed or ExpenseNature.Loan or ExpenseNature.Special))
+        {
+            throw new DomainException($"預定支出只限固定、貸款、特別支出：「{category.Name}」。");
+        }
+
+        if (accountId is { } id)
+        {
+            book.GetAccount(id);
+        }
     }
 }

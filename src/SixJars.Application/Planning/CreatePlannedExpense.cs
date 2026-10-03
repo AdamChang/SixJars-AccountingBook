@@ -1,0 +1,34 @@
+using FluentValidation;
+using MediatR;
+using SixJars.Application.Books;
+using SixJars.Application.Common;
+using SixJars.Domain.Common;
+using SixJars.Domain.Planning;
+
+namespace SixJars.Application.Planning;
+
+/// <summary>新增一筆預定支出。形狀由 <see cref="PlannedExpenseInputValidator"/> 檢查（400），業務規則由 <see cref="PlannedExpense"/> 檢查（422）。</summary>
+public sealed record CreatePlannedExpense(Guid BookId, PlannedExpenseInput Input) : IRequest<PlannedExpenseDto>;
+
+internal sealed class CreatePlannedExpenseValidator : AbstractValidator<CreatePlannedExpense>
+{
+    public CreatePlannedExpenseValidator() => RuleFor(c => c.Input).NotNull().SetValidator(new PlannedExpenseInputValidator());
+}
+
+internal sealed class CreatePlannedExpenseHandler(ISixJarsDbContext db) : IRequestHandler<CreatePlannedExpense, PlannedExpenseDto>
+{
+    public async Task<PlannedExpenseDto> Handle(CreatePlannedExpense request, CancellationToken cancellationToken)
+    {
+        // 帳本只用來驗證帳戶與分類，不會被修改。
+        var book = await db.GetBookAsNoTrackingAsync(request.BookId, cancellationToken);
+        var input = request.Input;
+        var planned = PlannedExpense.Create(
+            book, BudgetMonth.FromKey(input.BudgetMonth), new CategoryId(input.CategoryId),
+            input.AccountId is { } accountId ? new AccountId(accountId) : null, input.EstimatedAmount, input.Note);
+        db.PlannedExpenses.Add(planned);
+        await db.SaveChangesAsync(cancellationToken);
+
+        // 存檔時 EF 已讀回資料庫產生的版本。
+        return PlannedExpenseDto.From(planned, db.GetVersion(planned));
+    }
+}
