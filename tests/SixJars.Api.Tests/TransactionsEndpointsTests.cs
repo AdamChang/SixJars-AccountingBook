@@ -180,6 +180,59 @@ public class TransactionsEndpointsTests(PostgresFixture postgres)
     }
 
     [Fact]
+    public async Task List_filters_by_date_range_inclusive()
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var book = await factory.SeedBookAsync(Ct);
+        var client = factory.CreateSignedInClient();
+        await CreateLunchAsync(client, book, "2026-01-09", "區間前");
+        var first = await CreateLunchAsync(client, book, "2026-01-10", "下限當天");
+        var last = await CreateLunchAsync(client, book, "2026-01-20", "上限當天");
+        await CreateLunchAsync(client, book, "2026-01-21", "區間後");
+
+        var list = await ListAsync(client, book, "?from=2026-01-10&to=2026-01-20");
+
+        list.Select(t => t.Id).Should().Equal(first, last);
+    }
+
+    [Fact]
+    public async Task List_by_account_includes_same_account_fund_allocation_without_postings()
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var book = await factory.SeedBookAsync(Ct);
+        var client = factory.CreateSignedInClient();
+        var bank = book.FindAccount("國泰世華銀行")!.Id.Value;
+        var earmark = await CreateDtoAsync(client, book, new
+        {
+            kind = "FundAllocation", date = "2026-01-05", amount = 1000m,
+            accountId = bank, planningFundId = book.FindPlanningFund("財務自由帳戶")!.Id.Value,
+        });
+        earmark.Postings.Should().BeEmpty("同帳戶圈存不產生分錄，只能靠 AccountId 條件篩到");
+
+        var list = await ListAsync(client, book, $"?accountId={bank}");
+
+        list.Select(t => t.Id).Should().Equal(earmark.Id);
+    }
+
+    [Fact]
+    public async Task Same_day_order_stays_by_creation_after_update()
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var book = await factory.SeedBookAsync(Ct);
+        var client = factory.CreateSignedInClient();
+        var earlier = await CreateDtoAsync(client, book, LunchInput(book, "2026-01-05", "先建立"));
+        var later = await CreateLunchAsync(client, book, "2026-01-05", "後建立");
+        // UPDATE 會把列搬到資料表尾端；沒有 ThenBy(Id) 時，同一天的順序就會跟著實體儲存順序變動
+        (await client.PutAsJsonAsync($"/api/books/{book.Id.Value}/transactions/{earlier.Id}",
+            new { version = earlier.Version, input = LunchInput(book, "2026-01-05", "先建立（改過）") }, ApiJson.Options, Ct))
+            .StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var list = await ListAsync(client, book, "");
+
+        list.Select(t => t.Id).Should().Equal(earlier.Id, later);
+    }
+
+    [Fact]
     public async Task Update_changes_kind_and_postings_and_bumps_version()
     {
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
