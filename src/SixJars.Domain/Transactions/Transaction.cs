@@ -77,4 +77,32 @@ public sealed class Transaction
     };
 
     public decimal? LoanInterest => Kind == TransactionKind.LoanPayment ? Amount - LoanPrincipal : null;
+
+    /// <summary>
+    /// 以 <paramref name="draft"/> 的內容修改本交易：Id 不變，欄位與分錄整組換成 draft 的（可改交易類型）。
+    /// </summary>
+    /// <param name="draft">
+    /// 必須由 <see cref="TransactionFactory"/> 依新內容產生，展開規則因此只存在 factory 一處（spec §3.2）；
+    /// draft 本身用完即丟，不可再加入帳本。
+    /// </param>
+    public void ReplaceWith(Transaction draft)
+    {
+        if (draft.BookId != BookId)
+        {
+            throw new DomainException("不可用其他帳本的交易內容修改這筆交易。");
+        }
+
+        Kind = draft.Kind;
+        Date = draft.Date;
+        BudgetMonth = draft.BudgetMonth;
+        Amount = draft.Amount;
+        AccountId = draft.AccountId;
+        CounterAccountId = draft.CounterAccountId;
+        CategoryId = draft.CategoryId;
+        PlanningFundId = draft.PlanningFundId;
+        LoanPrincipal = draft.LoanPrincipal;
+        Note = draft.Note;
+        _postings.Clear();
+        _postings.AddRange(draft.Postings);
+    }
 }
