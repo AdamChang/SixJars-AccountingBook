@@ -27,6 +27,11 @@ internal sealed partial class MappingSession(LegacyWorkbook workbook)
         AddPlanningFunds();
         AddCategories();
 
+        foreach (var month in workbook.Months)
+        {
+            MapJournal(month);
+        }
+
         return new LegacyImportResult(_book, _transactions, _plannedExpenses, _report);
     }
 
