@@ -97,7 +97,9 @@ public class LegacyWorkbookMapperJournalTests
     {
         var result = MapJanuary(Row(20, Jan6, "國泰世華銀行", "手續費", null, -15m));
 
-        result.Transactions.Single().CategoryId.Should().Be(result.Book.FindCategory("金融交易", "手續費")!.Id);
+        var tx = result.Transactions.Single();
+        tx.CategoryId.Should().Be(result.Book.FindCategory("金融交易", "手續費")!.Id);
+        tx.Postings.Should().Equal(new Posting(result.Book.FindAccount("國泰世華銀行")!.Id, -15m));
     }
 
     [Fact]
@@ -125,5 +127,14 @@ public class LegacyWorkbookMapperJournalTests
 
         result.Transactions.Should().BeEmpty();
         result.Report.Errors.Should().ContainSingle(i => i.Row == 90);
+    }
+
+    [Fact]
+    public void Cash_into_planning_fund_from_bank_is_rejected()
+    {
+        var result = MapJanuary(Row(91, Jan6, "現金", "財務自由帳戶", "國泰世華銀行", 1000m));
+
+        result.Transactions.Should().BeEmpty();
+        result.Report.Errors.Should().ContainSingle(i => i.Row == 91);
     }
 }
