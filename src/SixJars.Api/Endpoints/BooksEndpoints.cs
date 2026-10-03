@@ -11,6 +11,16 @@ internal static class BooksEndpoints
         api.MapGet("/books", (ISender sender, CancellationToken ct) => sender.Send(new ListBooks(), ct));
         var book = api.MapGroup("/books/{bookId:guid}");
         book.MapGet("/", (Guid bookId, ISender sender, CancellationToken ct) => sender.Send(new GetBook(bookId), ct));
+
+        // 帳本 Id 一律以路由為準，覆寫 body 裡的值。
+        book.MapPost("/accounts", async (Guid bookId, AddAccount command, ISender sender, CancellationToken ct) =>
+            Created(bookId, await sender.Send(command with { BookId = bookId }, ct)));
+        book.MapPost("/planning-funds", async (Guid bookId, AddPlanningFund command, ISender sender, CancellationToken ct) =>
+            Created(bookId, await sender.Send(command with { BookId = bookId }, ct)));
+        book.MapPost("/categories", async (Guid bookId, AddCategory command, ISender sender, CancellationToken ct) =>
+            Created(bookId, await sender.Send(command with { BookId = bookId }, ct)));
         return book;
     }
+
+    private static IResult Created(Guid bookId, Guid id) => Results.Created($"/api/books/{bookId}", new { id });
 }
