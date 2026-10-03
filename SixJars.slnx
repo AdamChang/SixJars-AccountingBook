@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/SixJars.Application/SixJars.Application.csproj" />
+    <Project Path="src/SixJars.Domain/SixJars.Domain.csproj" />
+    <Project Path="src/SixJars.Infrastructure/SixJars.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/SixJars.AcceptanceTests/SixJars.AcceptanceTests.csproj" />
+    <Project Path="tests/SixJars.Application.Tests/SixJars.Application.Tests.csproj" />
+    <Project Path="tests/SixJars.Domain.Tests/SixJars.Domain.Tests.csproj" />
+    <Project Path="tests/SixJars.Infrastructure.Tests/SixJars.Infrastructure.Tests.csproj" />
+  </Folder>
+</Solution>

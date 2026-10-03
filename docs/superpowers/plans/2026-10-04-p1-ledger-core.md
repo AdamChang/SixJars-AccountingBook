@@ -11,7 +11,7 @@
 
 MediatR 與 FluentValidation 等 P2 有 API 時才引入。
 
-**Tech Stack**：.NET 10（SDK 10.0.401）、C# latest、EF Core 10 + Npgsql、xUnit v3（Microsoft Testing Platform）、FluentAssertions 7.2、Testcontainers（postgres:17-alpine）、ExcelDataReader。
+**Tech Stack**：.NET 10（SDK 10.0.401）、C# latest、EF Core 10 + Npgsql、xUnit v3（Microsoft Testing Platform）、FluentAssertions 8.11（Xceed 授權；本專案為個人非商業使用，免費）、Testcontainers（postgres:17-alpine）、ExcelDataReader。
 
 **相關文件**
 - 設計：[docs/superpowers/specs/2026-10-04-p1-ledger-core-design.md](../specs/2026-10-04-p1-ledger-core-design.md)
@@ -146,10 +146,12 @@ T6 ─► T14 ─► T15 ─► T16（需 T13）  ◄── checkpoint B
       <PackageVersion Include="ExcelDataReader" Version="3.9.0" />
       <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
       <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.12" />
+      <!-- 段 B 補上（commit 1d0c270）：Npgsql 只要求 EF Core >= 10.0.4，需明確參考 Relational 才能全面對齊 10.0.12 -->
+      <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.12" />
       <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />
       <PackageVersion Include="xunit.v3" Version="4.0.1" />
       <PackageVersion Include="xunit.runner.visualstudio" Version="4.0.0" />
-      <PackageVersion Include="FluentAssertions" Version="7.2.0" />
+      <PackageVersion Include="FluentAssertions" Version="8.11.0" />
       <PackageVersion Include="Testcontainers.PostgreSql" Version="4.15.0" />
     </ItemGroup>
   </Project>
@@ -1247,6 +1249,24 @@ Book 是設定資料的聚合根。容易錯的地方有三個：
 
 > **Checkpoint A1**：Domain 完成，全綠 55。可以在這裡收工。如果與計畫有偏差，用 `docs(plans):` commit 回寫原因。
 
+> **A1 執行紀錄（2026-10-04）**：`c09a2ae`..`01a07a5`，共 9 個 commit；`dotnet test` 總計 55、失敗 0；`dotnet build` 0 warning。
+> - **與計畫的偏差**：沒有 API 或簽章偏差，下游 Task 照原計畫引用即可。
+> - **Step 2 的錯誤碼**：Task 1、2、6、7 的 Step 2 出現的是 **CS0234**（命名空間不存在），不是計畫寫的 CS0246。原因是第一次引用新的命名空間；兩者都表示「型別還沒寫」，所以失敗原因正確。
+> - **Task 0 的 commit**：spec 與計畫在執行前已經進版控，所以這個 commit 只帶入計畫的 FluentAssertions 8.11 修改。
+> - **變異測試**：12 個變異全部被測試抓到。涵蓋的規則有：
+>   - 錢包消費排除
+>   - 已付預定支出不重扣
+>   - 貸款繳款扣總額
+>   - 年累計範圍
+>   - 出資金符號
+>   - 歸屬月份截止
+>   - 可用現金只計現金帳戶
+>   - 本金上限
+>   - 同帳戶圈存
+>   - 現金存入方向
+>   - 繳卡費付款帳戶類型
+>   - 錢包是否計入
+
 ---
 
 ## Task 9：舊 Excel 讀取器
@@ -2150,6 +2170,21 @@ Book 是設定資料的聚合根。容易錯的地方有三個：
 
 > **Checkpoint A**：規則已用真實資料驗證。回寫 spec 與計畫的偏差（`docs(plans):`、`docs(spec):`）。可以在這裡收工。
 
+> **A2 執行紀錄（2026-10-04）**：`1fce7ae`..`adcce51`，由 subagent 執行 Task 9–12，主控者審查後補 1 個 commit，Task 13 經使用者決策後提交。`dotnet test` 總計 91、失敗 0；`dotnet build` 0 warning。
+> - **測試數**：Task 9–12 依序為 60 → 68 → 79 → 86，與計畫相同。審查補了 `5ded9ba` 一個測試，所以 Task 13 結束時是 91（計畫寫 90），段 B 的期望值已各加 1。
+> - **已知 Excel 差異（使用者決定採 B）**：3 月月可用餘額本系統 8,299，Excel `J6 − N5` 是 8,326，差 −27。來源是流水帳第 20 列主選單「手續費」：Excel 的 J6 依主選單名稱 DSUM，漏算這筆。本系統維持 spec §5.2，計為支出。驗收新增 `tests/SixJars.AcceptanceTests/KnownExcelDifferences.cs`，以精確金額調整 Excel 期望值，不放寬比對；把調整值改成 −26 會重新失敗。
+> - **Step 2 的錯誤碼**：Task 9 是 CS0234（命名空間還不存在），Task 10 是 CS0103（以靜態成員呼叫不存在的類別）。失敗原因都正確。
+> - **讀取器**：制式表格的「固定」區沒有備註欄（AB 欄是「預算剩餘」），Note 一律為 null。計畫的儲存格位址全部經真實檔案查證正確；spec §5.1 的位址已改成與計畫一致。
+> - **Task 11**：
+>   - 主選單「固定支出」沒有另寫分支，而是走 `MapIncomeOrExpense`。差別是子分類不在清單時，會自動新增並記一筆警告。
+>   - `MapFund` 的 Q26 檢查只比對字面上的「現金」，「非手上現金」會對應到外幣現鈔，不在拒絕之列。
+> - **Task 12**：「同月多筆已付貸款列」的判定，多了「有方式」這個條件，與「有支出日但沒有方式就視為未付」的規則一致。
+> - **審查補的測試（`5ded9ba`）**：匯入規則做了 10 個變異，其中 2 個原本沒被抓到，補測試後都能抓到：
+>   - 手續費的分錄符號：原本被 3 月驗收的既有失敗遮蔽。
+>   - Q26「現金＋銀行」撥入財務規劃帳戶：原本的測試只用「入新資金」組合，這個組合本來就會被兜底分支拒絕。
+> - **留意**：3 月 J6 的 DSUM 範圍只到流水帳第 79 列，1、2 月到第 170 列以上。之後的月份若資料超過該月公式範圍，Excel 端會少算，比對時要先排除這種情況。
+> - **已知小瑕疵（未處理）**：特別支出的子分類會在建立交易之前先建立。如果該列之後失敗，會留下一個沒有被使用的子分類。不影響任何數字。
+
 ---
 
 ## Task 14：EF Core 持久層與 migration
@@ -2163,7 +2198,8 @@ D1-b 的實作。容易錯的地方有四個：
 - **小數精度**：`decimal` 一律設為 `HasPrecision(18, 4)`，和讀取器的 4 位小數一致。
 
 - [ ] Step 1：套件、fixture 與失敗測試
-  - `src/SixJars.Infrastructure.csproj`：加上 `Npgsql.EntityFrameworkCore.PostgreSQL`，以及 `Microsoft.EntityFrameworkCore.Design`（`PrivateAssets="all"`）。
+  - `src/SixJars.Infrastructure.csproj`：加上 `Npgsql.EntityFrameworkCore.PostgreSQL`、`Microsoft.EntityFrameworkCore.Relational`（對齊 10.0.12，見 Checkpoint B 紀錄），以及 `Microsoft.EntityFrameworkCore.Design`（`PrivateAssets="all"`）。
+  - `tests/SixJars.AcceptanceTests.csproj`：同樣在此加上 `Testcontainers.PostgreSql`。原因是兩個測試專案都編譯 `tests/Shared/**`，新增 `PostgresFixture.cs` 後，AcceptanceTests 會立刻需要這個套件。
   - `tests/SixJars.Infrastructure.Tests.csproj`：加上 `Testcontainers.PostgreSql`。
   - `tests/SixJars.Infrastructure.Tests/AssemblyInfo.cs`：
     ```csharp
@@ -2336,10 +2372,10 @@ D1-b 的實作。容易錯的地方有四個：
     ```
     產生後檢查 migration 內容：資料表有 `Books`、`Accounts`、`PlanningFunds`、`Categories`、`Transactions`、`Postings`、`PlannedExpenses`；`BudgetMonth` 欄位是 `integer`；金額是 `numeric(18,4)`。
 - [ ] Step 4：`dotnet test --project tests/SixJars.Infrastructure.Tests -- --filter-class "SixJars.Infrastructure.Tests.Persistence.LedgerPersistenceTests"` → Expected：總計 3、失敗 0（第一次執行需要拉取映像檔）
-- [ ] Step 5：`dotnet test` → Expected：總計 93 以上、失敗 0
+- [ ] Step 5：`dotnet test` → Expected：總計 94 以上、失敗 0（A2 審查多補 1 個測試，原為 93）
 - [ ] Step 6：Commit
   ```bash
-  git add src/SixJars.Infrastructure/SixJars.Infrastructure.csproj src/SixJars.Infrastructure/Persistence src/SixJars.Domain/Transactions/Transaction.cs tests/Shared/PostgresFixture.cs tests/SixJars.Infrastructure.Tests/SixJars.Infrastructure.Tests.csproj tests/SixJars.Infrastructure.Tests/AssemblyInfo.cs tests/SixJars.Infrastructure.Tests/Persistence/LedgerPersistenceTests.cs
+  git add Directory.Packages.props tests/SixJars.AcceptanceTests/SixJars.AcceptanceTests.csproj src/SixJars.Infrastructure/SixJars.Infrastructure.csproj src/SixJars.Infrastructure/Persistence src/SixJars.Domain/Transactions/Transaction.cs tests/Shared/PostgresFixture.cs tests/SixJars.Infrastructure.Tests/SixJars.Infrastructure.Tests.csproj tests/SixJars.Infrastructure.Tests/AssemblyInfo.cs tests/SixJars.Infrastructure.Tests/Persistence/LedgerPersistenceTests.cs
   git commit -m "feat(infra): EF Core + PostgreSQL 持久層，分錄實體化存檔" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
   ```
 
@@ -2410,7 +2446,7 @@ D1-b 的實作。容易錯的地方有四個：
   }
   ```
 - [ ] Step 4：`dotnet test --project tests/SixJars.Infrastructure.Tests -- --filter-class "SixJars.Infrastructure.Tests.Persistence.LedgerSnapshotLoaderTests"` → Expected：總計 1、失敗 0
-- [ ] Step 5：`dotnet test` → Expected：總計 94 以上、失敗 0
+- [ ] Step 5：`dotnet test` → Expected：總計 95 以上、失敗 0（原為 94）
 - [ ] Step 6：Commit
   ```bash
   git add src/SixJars.Infrastructure/Persistence/LedgerSnapshotLoader.cs tests/SixJars.Infrastructure.Tests/Persistence/LedgerSnapshotLoaderTests.cs
@@ -2469,21 +2505,39 @@ D1-b 的實作。容易錯的地方有四個：
 - [ ] Step 2：`dotnet test --project tests/SixJars.AcceptanceTests -- --filter-class "SixJars.AcceptanceTests.PersistedLedgerAcceptanceTests"` → 這是在既有元件上做的整合驗證，**預期一次通過**。如果失敗，問題一定出在 Task 14 的 mapping，例如精度或 converter。依照 Task 13 的紀律，先在 `LedgerPersistenceTests` 補上能重現問題的測試再修。
 - [ ] Step 3：（不需要額外實作）
 - [ ] Step 4：同 Step 2 → Expected：總計 3、失敗 0
-- [ ] Step 5：`dotnet test` → Expected：總計 97 以上、失敗 0
+- [ ] Step 5：`dotnet test` → Expected：總計 98 以上、失敗 0（原為 97）
 - [ ] Step 6：Commit
   ```bash
-  git add tests/SixJars.AcceptanceTests/SixJars.AcceptanceTests.csproj tests/SixJars.AcceptanceTests/AssemblyInfo.cs tests/SixJars.AcceptanceTests/PersistedLedgerAcceptanceTests.cs
+  git add tests/SixJars.AcceptanceTests/AssemblyInfo.cs tests/SixJars.AcceptanceTests/PersistedLedgerAcceptanceTests.cs
   git commit -m "test(acceptance): 匯入結果經 PostgreSQL 往返後仍與 Excel 一致" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
   ```
 
 > **Checkpoint B**：P1 完成。
+
+> **B 執行紀錄（2026-10-04）**：`9158853`..`1d0c270`。subagent 執行 Task 14–16，主控者審查後補了 2 個 commit。`dotnet test` 總計 98、失敗 0、已略過 0；`reference/` 暫時移走時，總計 98、已略過 12（5+4+3）。`dotnet build` 0 warning；`has-pending-model-changes` 沒有變更。
+> - **Migration `20261003174753_InitialLedger`**：
+>   - 共 7 張表：Books、Accounts、PlanningFunds、Categories、Transactions、Postings、PlannedExpenses。
+>   - Postings 是 Transactions 的 owned 表，主鍵是影子 int identity。
+>   - 歸屬月份以 integer 存 yyyymm。
+>   - 所有 decimal 都是 numeric(18,4)。
+> - **EF Core 版本**：
+>   - 問題：Npgsql 10.0.3 只要求 EF Core ≥10.0.4，與 Design 10.0.12 混用會產生 CS1705 與 MSB3277。
+>   - 段 B 先把 Design 降到 10.0.4 暫解。
+>   - 使用者決定改為在 Infrastructure 明確參考 `Microsoft.EntityFrameworkCore.Relational` 10.0.12（`1d0c270`），取得最新 patch，並與 dotnet-ef 工具同版。之後升版時，Relational 與 Design 要一起改。
+> - **Testcontainers 提前到 Task 14 加入 AcceptanceTests**：原因是兩個測試專案共用編譯 `tests/Shared/**`。Task 14 與 Task 16 的 git add 清單已依此修正。
+> - **`Transaction` 的 EF 建構子**：寫成 `private Transaction() => _postings = [];`，因為 `_postings` 是 readonly 而且不可為 null。這是 Domain 唯一的變更。
+> - **審查補的測試（`17b75a9`）**：
+>   - 持久層做了 5 個變異：歸屬月份讀回錯月、交易不限帳本、預定支出不限帳本、帳戶 Id 讀回錯、無參數建構子殘留分錄。
+>   - 其中「預定支出不限帳本」原本沒被抓到，因為原測試的兩本帳本都沒有預定支出。已改為兩本各一筆，現在能抓到。
+>   - 測試總數不變。
+> - **留意**：`LedgerSnapshotLoader` 讀交易沒有排序。目前的計算器只做加總，與順序無關；P2 若需要逐筆列表，要加 `OrderBy(Date)`。
 
 ---
 
 ## 完成後的驗證
 
 - [ ] `dotnet build`：0 warning、0 error
-- [ ] `dotnet test`：總計 ≥ 97、失敗 0、已略過 0（`reference/` 存在且 Docker 正在執行時）
+- [ ] `dotnet test`：總計 ≥ 98、失敗 0、已略過 0（`reference/` 存在且 Docker 正在執行時）
   - Domain.Tests 55、Application.Tests 26、Infrastructure.Tests 9、AcceptanceTests 7，再加上 Task 13 修正時新增的測試。
 - [ ] 暫時把 `reference/` 改名後執行 `dotnet test`：失敗 0，已略過 12（9 + 3 個 xlsm 相關）。結束後改回原名。
 - [ ] `git status`：工作區乾淨，`reference/` 不在追蹤清單中（`git ls-files reference` 沒有輸出）。
@@ -2525,7 +2579,7 @@ D1-b 的實作。容易錯的地方有四個：
 | `TheoryData<int>` 集合運算式、`MemberData` | ✓ | spike 3 個 case 全部通過 | — |
 | `TestContext.Current.TestOutputHelper` / `CancellationToken` | ✓ | spike | — |
 | `--filter-class` / `--filter-method` / `--project` | ✓ | spike：總計 1 | — |
-| FluentAssertions 7.2.0 在 xUnit v3 下的失敗回報 | ✓ | spike：「Expected value to be 2, but found 1」，判定為失敗 | — |
+| FluentAssertions 8.11.0（使用者 2026-10-04 指定改用 8.x） | ✓ | spike：計畫用到的 `Throw<T>`、`ContainSingle().Which`、`Contain`、`ContainEquivalentOf`、`BeEquivalentTo`、`HaveCount`，以及 xUnit v3 下的失敗回報，7 個測試全部通過；build 與 test 都沒有授權警告。計畫沒有用到 8.x 的破壞性變更（`AssertionScope`、`Execute.Assertion`） | `Directory.Packages.props` 改成 8.11.0 |
 | ExcelDataReader 3.9.0 讀 `.xlsm` 快取值 | ✓ | spike：`1月!J6 = -4557`、`AH7` 為 DateTime、`AL7 = 84223`，列與欄對位正確 | — |
 | `PostgreSqlBuilder(string image)` + `postgres:17-alpine` | ✓ | spike 容器啟動成功 | — |
 | EF Core OwnsMany + 強型別 Id converter + internal 建構子綁定 + record 分錄 + `int` 歸屬月份 | ✓ | spike 往返測試通過（Npgsql 10.0.3） | — |
