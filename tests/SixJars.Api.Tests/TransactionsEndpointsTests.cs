@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using FluentAssertions;
 using SixJars.Application.Transactions;
+using SixJars.Domain.Books;
 using SixJars.Tests.Shared;
 using Xunit;
 
@@ -103,6 +104,99 @@ public class TransactionsEndpointsTests(PostgresFixture postgres)
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
         var problem = await ReadProblemAsync(response);
         problem.GetProperty("errors").TryGetProperty("Input.CounterAccountId", out _).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task List_is_ordered_by_date_then_creation()
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var book = await factory.SeedBookAsync(Ct);
+        var client = factory.CreateSignedInClient();
+        var tenth = await CreateLunchAsync(client, book, "2026-01-10", "1/10");
+        var fifth = await CreateLunchAsync(client, book, "2026-01-05", "先建立");
+        var fifthLater = await CreateLunchAsync(client, book, "2026-01-05", "後建立");
+
+        var list = await ListAsync(client, book, "");
+
+        list.Select(t => t.Id).Should().Equal(fifth, fifthLater, tenth);
+    }
+
+    [Fact]
+    public async Task List_filters_by_budget_month()
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var book = await factory.SeedBookAsync(Ct);
+        var client = factory.CreateSignedInClient();
+        await CreateLunchAsync(client, book, "2026-01-15", "1 月");
+        var salary = await CreateAsync(client, book, new
+        {
+            kind = "Income", date = "2026-01-30", budgetMonth = 202602, amount = 50000m,
+            accountId = book.FindAccount("國泰世華銀行")!.Id.Value, categoryId = book.FindCategory("工作薪資")!.Id.Value,
+        });
+        var february = await CreateLunchAsync(client, book, "2026-02-03", "2 月");
+
+        var list = await ListAsync(client, book, "?budgetMonth=202602");
+
+        list.Select(t => t.Id).Should().Equal(salary, february);
+    }
+
+    [Fact]
+    public async Task List_filters_by_account_including_counter_account()
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var book = await factory.SeedBookAsync(Ct);
+        var client = factory.CreateSignedInClient();
+        var cash = book.FindAccount("現金")!.Id.Value;
+        var bank = book.FindAccount("國泰世華銀行")!.Id.Value;
+        var expense = await CreateLunchAsync(client, book, "2026-01-05", "現金午餐");
+        var transfer = await CreateAsync(client, book,
+            new { kind = "Transfer", date = "2026-01-06", amount = 500m, accountId = bank, counterAccountId = cash });
+        await CreateAsync(client, book, new
+        {
+            kind = "Expense", date = "2026-01-07", amount = -80m,
+            accountId = bank, categoryId = book.FindCategory("主食", "午餐")!.Id.Value,
+        });
+
+        var list = await ListAsync(client, book, $"?accountId={cash}");
+
+        list.Select(t => t.Id).Should().Equal(expense, transfer);
+    }
+
+    [Fact]
+    public async Task List_by_account_of_another_book_returns_nothing()
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var mine = await factory.SeedBookAsync(Ct);
+        var other = await factory.SeedBookAsync(Ct);
+        var client = factory.CreateSignedInClient();
+        await CreateLunchAsync(client, mine, "2026-01-05", "我的");
+        await CreateLunchAsync(client, other, "2026-01-05", "別人的");
+
+        // 用自己帳本的路徑、帶別本帳的帳戶 Id 篩選：只用帳戶條件查詢就會讀到別本帳的交易。
+        var list = await ListAsync(client, mine, $"?accountId={other.FindAccount("現金")!.Id.Value}");
+
+        list.Should().BeEmpty();
+    }
+
+    private static Task<Guid> CreateLunchAsync(HttpClient client, Book book, string date, string note) =>
+        CreateAsync(client, book, new
+        {
+            kind = "Expense", date, amount = -120m, note,
+            accountId = book.FindAccount("現金")!.Id.Value, categoryId = book.FindCategory("主食", "午餐")!.Id.Value,
+        });
+
+    private static async Task<Guid> CreateAsync(HttpClient client, Book book, object input)
+    {
+        var response = await client.PostAsJsonAsync($"/api/books/{book.Id.Value}/transactions", input, ApiJson.Options, Ct);
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+        return (await response.Content.ReadFromJsonAsync<JsonElement>(Ct)).GetProperty("id").GetGuid();
+    }
+
+    private static async Task<IReadOnlyList<TransactionDto>> ListAsync(HttpClient client, Book book, string query)
+    {
+        var response = await client.GetAsync($"/api/books/{book.Id.Value}/transactions{query}", Ct);
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        return (await response.Content.ReadFromJsonAsync<List<TransactionDto>>(ApiJson.Options, Ct))!;
     }
 
     private static async Task<JsonElement> ReadProblemAsync(HttpResponseMessage response)
