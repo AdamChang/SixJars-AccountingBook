@@ -297,6 +297,39 @@ public class PlannedExpensesEndpointsTests(PostgresFixture postgres)
         edit.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
+    [Fact]
+    public async Task Pay_with_stale_version_is_409_and_creates_no_transaction()
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var book = await factory.SeedBookAsync(Ct);
+        var client = factory.CreateSignedInClient();
+        var planned = await CreateAsync(client, book, InsuranceInput(book, 202602, -3000m, "保險費"));
+        // 另一台裝置先改了預估金額，版本因此前進
+        (await client.PutAsJsonAsync($"{Url(book)}/{planned.Id}",
+            new { version = planned.Version, input = InsuranceInput(book, 202602, -3500m, "保險費") }, ApiJson.Options, Ct))
+            .StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var response = await client.PostAsJsonAsync($"{Url(book)}/{planned.Id}/pay",
+            new { version = planned.Version, date = "2026-02-20", accountId = book.FindAccount("國泰世華銀行")!.Id.Value, amount = -3000m },
+            ApiJson.Options, Ct);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        await ShouldBeUnpaidWithoutTransactionsAsync(client, book);
+    }
+
+    [Theory]
+    [InlineData("planned-expenses")]
+    [InlineData("transactions")]
+    public async Task List_with_invalid_budget_month_is_400(string resource)
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var book = await factory.SeedBookAsync(Ct);
+
+        var response = await factory.CreateSignedInClient().GetAsync($"/api/books/{book.Id.Value}/{resource}?budgetMonth=202613", Ct);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
     internal static string Url(Book book) => $"/api/books/{book.Id.Value}/planned-expenses";
 
     private static object MortgageInput(Book book) => new

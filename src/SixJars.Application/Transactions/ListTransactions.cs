@@ -1,3 +1,4 @@
+using FluentValidation;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using SixJars.Application.Common;
@@ -14,6 +15,16 @@ namespace SixJars.Application.Transactions;
 /// <param name="AccountId">只列出動到該帳戶的交易，包含該帳戶是對方帳戶的情形。</param>
 public sealed record ListTransactions(Guid BookId, DateOnly? From, DateOnly? To, int? BudgetMonth, Guid? AccountId)
     : IRequest<IReadOnlyList<TransactionDto>>;
+
+/// <summary>歸屬月份必須是合法的 yyyymm；否則 <see cref="BudgetMonth.FromKey"/> 會擲例外，變成 500。</summary>
+internal sealed class ListTransactionsValidator : AbstractValidator<ListTransactions>
+{
+    public ListTransactionsValidator() =>
+        RuleFor(q => q.BudgetMonth)
+            .Must(key => key!.Value % 100 is >= 1 and <= 12)
+            .When(q => q.BudgetMonth is not null)
+            .WithMessage("歸屬月份必須是 yyyymm，月份介於 1 到 12。");
+}
 
 internal sealed class ListTransactionsHandler(ISixJarsDbContext db) : IRequestHandler<ListTransactions, IReadOnlyList<TransactionDto>>
 {
