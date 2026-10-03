@@ -44,6 +44,20 @@ public class BookSettingsEndpointsTests(PostgresFixture postgres)
     }
 
     [Fact]
+    public async Task Expense_main_category_without_nature_is_400()
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var book = await factory.SeedBookAsync(Ct);
+
+        var response = await factory.CreateSignedInClient().PostAsJsonAsync($"/api/books/{book.Id.Value}/categories",
+            new { name = "交通", kind = "Expense" }, ApiJson.Options, Ct);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var problem = await ReadProblemAsync(response);
+        problem.GetProperty("errors").TryGetProperty("Nature", out _).Should().BeTrue();
+    }
+
+    [Fact]
     public async Task Duplicate_account_name_is_422_with_rule_code()
     {
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
