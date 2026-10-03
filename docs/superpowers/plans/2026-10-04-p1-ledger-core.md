@@ -2168,6 +2168,21 @@ Book 是設定資料的聚合根。容易錯的地方有三個：
 
 > **Checkpoint A**：規則已用真實資料驗證。回寫 spec 與計畫的偏差（`docs(plans):`、`docs(spec):`）。可以在這裡收工。
 
+> **A2 執行紀錄（2026-10-04）**：`1fce7ae`..`adcce51`，由 subagent 執行 Task 9–12，主控者審查後補 1 個 commit，Task 13 經使用者決策後提交。`dotnet test` 總計 91、失敗 0；`dotnet build` 0 warning。
+> - **測試數**：Task 9–12 依序為 60 → 68 → 79 → 86，與計畫相同。審查補了 `5ded9ba` 一個測試，所以 Task 13 結束時是 91（計畫寫 90），段 B 的期望值已各加 1。
+> - **已知 Excel 差異（使用者決定採 B）**：3 月月可用餘額本系統 8,299，Excel `J6 − N5` 是 8,326，差 −27。來源是流水帳第 20 列主選單「手續費」：Excel 的 J6 依主選單名稱 DSUM，漏算這筆。本系統維持 spec §5.2，計為支出。驗收新增 `tests/SixJars.AcceptanceTests/KnownExcelDifferences.cs`，以精確金額調整 Excel 期望值，不放寬比對；把調整值改成 −26 會重新失敗。
+> - **Step 2 的錯誤碼**：Task 9 是 CS0234（命名空間還不存在），Task 10 是 CS0103（以靜態成員呼叫不存在的類別）。失敗原因都正確。
+> - **讀取器**：制式表格的「固定」區沒有備註欄（AB 欄是「預算剩餘」），Note 一律為 null。計畫的儲存格位址全部經真實檔案查證正確；spec §5.1 的位址已改成與計畫一致。
+> - **Task 11**：
+>   - 主選單「固定支出」沒有另寫分支，而是走 `MapIncomeOrExpense`。差別是子分類不在清單時，會自動新增並記一筆警告。
+>   - `MapFund` 的 Q26 檢查只比對字面上的「現金」，「非手上現金」會對應到外幣現鈔，不在拒絕之列。
+> - **Task 12**：「同月多筆已付貸款列」的判定，多了「有方式」這個條件，與「有支出日但沒有方式就視為未付」的規則一致。
+> - **審查補的測試（`5ded9ba`）**：匯入規則做了 10 個變異，其中 2 個原本沒被抓到，補測試後都能抓到：
+>   - 手續費的分錄符號：原本被 3 月驗收的既有失敗遮蔽。
+>   - Q26「現金＋銀行」撥入財務規劃帳戶：原本的測試只用「入新資金」組合，這個組合本來就會被兜底分支拒絕。
+> - **留意**：3 月 J6 的 DSUM 範圍只到流水帳第 79 列，1、2 月到第 170 列以上。之後的月份若資料超過該月公式範圍，Excel 端會少算，比對時要先排除這種情況。
+> - **已知小瑕疵（未處理）**：特別支出的子分類會在建立交易之前先建立。如果該列之後失敗，會留下一個沒有被使用的子分類。不影響任何數字。
+
 ---
 
 ## Task 14：EF Core 持久層與 migration
@@ -2354,7 +2369,7 @@ D1-b 的實作。容易錯的地方有四個：
     ```
     產生後檢查 migration 內容：資料表有 `Books`、`Accounts`、`PlanningFunds`、`Categories`、`Transactions`、`Postings`、`PlannedExpenses`；`BudgetMonth` 欄位是 `integer`；金額是 `numeric(18,4)`。
 - [ ] Step 4：`dotnet test --project tests/SixJars.Infrastructure.Tests -- --filter-class "SixJars.Infrastructure.Tests.Persistence.LedgerPersistenceTests"` → Expected：總計 3、失敗 0（第一次執行需要拉取映像檔）
-- [ ] Step 5：`dotnet test` → Expected：總計 93 以上、失敗 0
+- [ ] Step 5：`dotnet test` → Expected：總計 94 以上、失敗 0（A2 審查多補 1 個測試，原為 93）
 - [ ] Step 6：Commit
   ```bash
   git add src/SixJars.Infrastructure/SixJars.Infrastructure.csproj src/SixJars.Infrastructure/Persistence src/SixJars.Domain/Transactions/Transaction.cs tests/Shared/PostgresFixture.cs tests/SixJars.Infrastructure.Tests/SixJars.Infrastructure.Tests.csproj tests/SixJars.Infrastructure.Tests/AssemblyInfo.cs tests/SixJars.Infrastructure.Tests/Persistence/LedgerPersistenceTests.cs
@@ -2428,7 +2443,7 @@ D1-b 的實作。容易錯的地方有四個：
   }
   ```
 - [ ] Step 4：`dotnet test --project tests/SixJars.Infrastructure.Tests -- --filter-class "SixJars.Infrastructure.Tests.Persistence.LedgerSnapshotLoaderTests"` → Expected：總計 1、失敗 0
-- [ ] Step 5：`dotnet test` → Expected：總計 94 以上、失敗 0
+- [ ] Step 5：`dotnet test` → Expected：總計 95 以上、失敗 0（原為 94）
 - [ ] Step 6：Commit
   ```bash
   git add src/SixJars.Infrastructure/Persistence/LedgerSnapshotLoader.cs tests/SixJars.Infrastructure.Tests/Persistence/LedgerSnapshotLoaderTests.cs
@@ -2487,7 +2502,7 @@ D1-b 的實作。容易錯的地方有四個：
 - [ ] Step 2：`dotnet test --project tests/SixJars.AcceptanceTests -- --filter-class "SixJars.AcceptanceTests.PersistedLedgerAcceptanceTests"` → 這是在既有元件上做的整合驗證，**預期一次通過**。如果失敗，問題一定出在 Task 14 的 mapping，例如精度或 converter。依照 Task 13 的紀律，先在 `LedgerPersistenceTests` 補上能重現問題的測試再修。
 - [ ] Step 3：（不需要額外實作）
 - [ ] Step 4：同 Step 2 → Expected：總計 3、失敗 0
-- [ ] Step 5：`dotnet test` → Expected：總計 97 以上、失敗 0
+- [ ] Step 5：`dotnet test` → Expected：總計 98 以上、失敗 0（原為 97）
 - [ ] Step 6：Commit
   ```bash
   git add tests/SixJars.AcceptanceTests/SixJars.AcceptanceTests.csproj tests/SixJars.AcceptanceTests/AssemblyInfo.cs tests/SixJars.AcceptanceTests/PersistedLedgerAcceptanceTests.cs
@@ -2501,7 +2516,7 @@ D1-b 的實作。容易錯的地方有四個：
 ## 完成後的驗證
 
 - [ ] `dotnet build`：0 warning、0 error
-- [ ] `dotnet test`：總計 ≥ 97、失敗 0、已略過 0（`reference/` 存在且 Docker 正在執行時）
+- [ ] `dotnet test`：總計 ≥ 98、失敗 0、已略過 0（`reference/` 存在且 Docker 正在執行時）
   - Domain.Tests 55、Application.Tests 26、Infrastructure.Tests 9、AcceptanceTests 7，再加上 Task 13 修正時新增的測試。
 - [ ] 暫時把 `reference/` 改名後執行 `dotnet test`：失敗 0，已略過 12（9 + 3 個 xlsm 相關）。結束後改回原名。
 - [ ] `git status`：工作區乾淨，`reference/` 不在追蹤清單中（`git ls-files reference` 沒有輸出）。
