@@ -68,6 +68,45 @@ public sealed class TransactionFactory(Book book)
         return Create(TransactionKind.CardPayment, date, budgetMonth, amount, payerId, cardId, null, note, Move(payerId, cardId, amount));
     }
 
+    public Transaction LoanDisbursement(DateOnly date, AccountId receiverId, AccountId loanId, decimal amount, string? note = null, BudgetMonth? budgetMonth = null)
+    {
+        RequirePositive(amount);
+        RequireAccount(receiverId, AccountType.Cash, AccountType.Bank);
+        RequireAccount(loanId, AccountType.Loan);
+        return Create(TransactionKind.LoanDisbursement, date, budgetMonth, amount, receiverId, loanId, null, note, Move(loanId, receiverId, amount));
+    }
+
+    /// <summary>
+    /// 貸款繳款：付款帳戶付出總額，貸款餘額只減少本金；利息 = 總額 − 本金，是不進任何帳戶的支出。
+    /// 提前還本即本金等於總額。
+    /// </summary>
+    public Transaction LoanPayment(
+        DateOnly date,
+        AccountId payerId,
+        AccountId loanId,
+        decimal total,
+        decimal principal,
+        CategoryId? interestCategoryId = null,
+        string? note = null,
+        BudgetMonth? budgetMonth = null)
+    {
+        RequirePositive(total);
+        if (principal < 0m || principal > total)
+        {
+            throw new DomainException($"本金必須介於 0 與繳款總額之間（本金 {principal}，總額 {total}）。");
+        }
+
+        RequireAccount(payerId, AccountType.Cash, AccountType.Bank);
+        RequireAccount(loanId, AccountType.Loan);
+        if (interestCategoryId is { } categoryId)
+        {
+            RequireCategory(categoryId, CategoryKind.Expense);
+        }
+
+        Posting[] postings = principal > 0m ? [new(payerId, -total), new(loanId, principal)] : [new(payerId, -total)];
+        return Create(TransactionKind.LoanPayment, date, budgetMonth, total, payerId, loanId, interestCategoryId, note, postings, loanPrincipal: principal);
+    }
+
     private Transaction Create(
         TransactionKind kind,
         DateOnly date,
