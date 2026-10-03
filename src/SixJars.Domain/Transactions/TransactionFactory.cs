@@ -6,6 +6,8 @@ namespace SixJars.Domain.Transactions;
 /// <summary>依交易類型驗證帳戶與分類，並把交易展開成分錄。</summary>
 public sealed class TransactionFactory(Book book)
 {
+    private static readonly AccountType[] FundAccountTypes = [AccountType.Cash, AccountType.Bank, AccountType.EWallet];
+
     public Transaction Income(DateOnly date, AccountId accountId, CategoryId categoryId, decimal amount, string? note = null, BudgetMonth? budgetMonth = null)
     {
         RequireNonZero(amount);
@@ -105,6 +107,66 @@ public sealed class TransactionFactory(Book book)
 
         Posting[] postings = principal > 0m ? [new(payerId, -total), new(loanId, principal)] : [new(payerId, -total)];
         return Create(TransactionKind.LoanPayment, date, budgetMonth, total, payerId, loanId, interestCategoryId, note, postings, loanPrincipal: principal);
+    }
+
+    /// <summary>
+    /// 入新資金（ADR 0003）：資金撥入財務規劃帳戶。有 <paramref name="fromId"/> 時同時從該帳戶轉入 <paramref name="toId"/>；
+    /// 沒有、或與 <paramref name="toId"/> 相同時，視為同一帳戶內的圈存，不產生分錄。
+    /// </summary>
+    public Transaction FundAllocation(
+        DateOnly date,
+        PlanningFundId fundId,
+        AccountId toId,
+        AccountId? fromId,
+        decimal amount,
+        string? note = null,
+        BudgetMonth? budgetMonth = null)
+    {
+        RequirePositive(amount);
+        book.GetPlanningFund(fundId);
+        RequireAccount(toId, FundAccountTypes);
+        if (fromId == toId)
+        {
+            fromId = null;
+        }
+
+        if (fromId is { } from)
+        {
+            RequireAccount(from, AccountType.Cash, AccountType.Bank);
+        }
+
+        Posting[] postings = fromId is { } source ? Move(source, toId, amount) : [];
+        return Create(TransactionKind.FundAllocation, date, budgetMonth, amount, toId, fromId, null, note, postings, planningFundId: fundId);
+    }
+
+    /// <summary>出資金：從財務規劃帳戶動用資金；不影響月可用餘額。分類可選填，只供報表歸類。</summary>
+    public Transaction FundWithdrawal(
+        DateOnly date,
+        PlanningFundId fundId,
+        AccountId accountId,
+        decimal amount,
+        CategoryId? categoryId = null,
+        string? note = null,
+        BudgetMonth? budgetMonth = null)
+    {
+        RequirePositive(amount);
+        book.GetPlanningFund(fundId);
+        RequireAccount(accountId, FundAccountTypes);
+        if (categoryId is { } category)
+        {
+            RequireCategory(category, CategoryKind.Expense);
+        }
+
+        return Create(TransactionKind.FundWithdrawal, date, budgetMonth, amount, accountId, null, categoryId, note, [new(accountId, -amount)], planningFundId: fundId);
+    }
+
+    /// <summary>資金回流：投資收益或回收款回到財務規劃帳戶；不視為收入。</summary>
+    public Transaction FundReturn(DateOnly date, PlanningFundId fundId, AccountId accountId, decimal amount, string? note = null, BudgetMonth? budgetMonth = null)
+    {
+        RequirePositive(amount);
+        book.GetPlanningFund(fundId);
+        RequireAccount(accountId, FundAccountTypes);
+        return Create(TransactionKind.FundReturn, date, budgetMonth, amount, accountId, null, null, note, [new(accountId, amount)], planningFundId: fundId);
     }
 
     private Transaction Create(
