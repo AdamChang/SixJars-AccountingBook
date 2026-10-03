@@ -1103,6 +1103,67 @@ public sealed record BalanceDto(Guid Id, string Name, decimal Balance);
 - 比對 diff 與本計畫；以 `git diff master --stat` 與 grep 掃描機密（`Password=`、`ClientSecret`、`LicenseKey`）。
 - 用 `docs(plans):` 回寫偏差，**停下來讓使用者檢視**。
 
+### 段 C 執行紀錄（2026-10-04，雲端 container）
+
+執行方式：每批由一個 subagent 執行，依序為 T17｜T18–19｜T20–21｜T22–23｜T24–25｜T26–27。每批交付後，主控者都獨立做一次審查：
+- 重跑 build 與全部測試。
+- 比對 diff 與計畫。
+- 做變異測試。
+- 補上缺漏的測試。
+
+Checkpoint C 結束時：總計 **190**、失敗 0、略過 15（`reference/` 不存在：P1 的 12 個，加上 T27 的 3 個）；build 0 warning；機密掃描乾淨。
+
+**測試總數與計畫不同**：審查與 subagent 都額外加了測試，所以實際總數比計畫多。後續段落的 Expected 一律以「計畫值 + 32」為準，T28 起算，例如 T28 為 196。
+
+| Task | 計畫 | 實際 | 差異的來源 |
+|---|---|---|---|
+| T17 | 100 | 101 | 審查補測：`/health` 在資料庫無法連線時回 503 |
+| T18–19 | 109 | 111 | 審查補測：支出主分類缺 Nature 時回 400 |
+| T20–21 | 132 | 144 | 審查補測：跨帳本讀取回 404、不存在回 404、validator 7 個案例、選填欄位可以留空 |
+| T22–23 | 140 | 157 | subagent 加 2 個（跨帳本篩選、跨帳本 PUT）；審查補 3 個（日期區間、同帳戶圈存、修改後的同日排序） |
+| T24–25 | 148 | 176 | subagent 加 8 個；審查補 3 個（付款版本過舊回 409、兩個清單的月份不合法回 400） |
+| T26–27 | 158 | 190 | subagent 在 `/summary` 加 4 個（時區、月份不合法、帳本不存在） |
+
+**審查時抓到、已經修正的問題**
+- `GET /transactions` 與 `GET /planned-expenses` 帶 `?budgetMonth=202613` 時，`BudgetMonth.FromKey` 擲例外，回 500。已補上 query validator，改回 400（`5b677f3`）。
+- 下列變異在審查前沒有測試能抓到，現在都已經補測：
+  - `GetTransaction` 拿掉 BookId 條件。
+  - validator 中「不使用的欄位必須為 null」與月份範圍兩條規則。
+  - 清單的 from／to 篩選，以及同帳戶圈存的篩選。
+  - 付款時的 `ExpectVersion`。
+  - `/health` 的資料庫檢查。
+
+**與計畫的偏離**（以 committed code 為準）
+- **`GetVersion`／`ExpectVersion`**：改用非泛型的 `Property("xmin")`。`Entry(object)` 回傳的是非泛型的 `EntityEntry`，照計畫的泛型寫法會出現 CS0308。
+- **T23 的 `ConcurrencyTests`**：計畫的例子是「把 FundAllocation 的轉出帳戶從 null 改成銀行」，但轉出帳戶是交易本身的欄位，EF 本來就會檢查版本，這個例子鎖不住 S2b。實作改成用與現有內容完全相同的 draft 去 `ReplaceWith`，讓變更只發生在分錄上；另一個 context 用 `ExecuteUpdateAsync` 改 Note。已確認拿掉 `State = Modified` 時，這個測試會失敗。
+- **讀取 version**：Get 與 List 改成追蹤查詢，再呼叫 `db.GetVersion`。不用 `EF.Property(t, "xmin")` 投影，這樣 Application 層不會出現 provider 專屬的字串。
+- **新增檔案**：
+  - `Books/BookLoading.cs`：`GetBookForUpdateAsync` 與 `GetBookAsNoTrackingAsync`。
+  - `Planning/PlannedExpenseInput.cs`：Create 與 Update 共用的輸入與 validator。
+  - `Ledger/LedgerBalances.cs`：「期初 + 加總」與可用現金的篩選，handler 與 SQL 版驗收共用。
+- **endpoint 的 body 形狀**：
+  - 帳本設定類 endpoint 直接綁定 command，再以 `with { BookId = 路由值 }` 覆寫。
+  - 新增交易的 body 是平面的 `TransactionInput`。
+  - PUT 一律是 `{ version, input }`。
+- **付款**：
+  - 回 201，body 是 `PayPlannedExpenseResult(PlannedExpense, Transaction)`，兩者都帶最新版本。
+  - 貸款性質卻缺少貸款帳戶或本金時，回 422，code 為 `rule`。
+  - 非貸款性質卻帶了貸款欄位時，也回 422。這條規則計畫沒有寫，是比照交易輸入「不使用的欄位必須留空」的慣例。
+- **`/summary`**：
+  - 實測 5 次資料庫往返，與計畫 T27 的預估一致；spec §5 寫的是 ≤ 3。
+  - 帳戶、財務規劃帳戶、可用現金依 `asOf` 日期截止；月可用餘額與年累計依歸屬月份。
+  - `asOf` 省略時取 `Asia/Taipei` 的今天，時間由注入的 `TimeProvider` 提供；測試用自寫的 `FixedTimeProvider`，沒有新增套件。
+- **`MonthFigureComparison`**：重構成 `Compare` 與 `CompareSqlAsync` 共用同一個比對核心。指標、`KnownExcelDifferences` 的調整、取到小數兩位的比對都不變；主控者已逐行核對。這條路徑在雲端跑不到，**要在有 `reference/` 的本機跑過一次才算驗證完成**。
+- **`ApiFactory`**：加入可選的 `testServices` 參數，用來注入 `CommandCounter` 與固定時鐘。
+
+**等價變異**：拿掉 `ListTransactions` 的 `ThenBy(Id)` 不會讓任何測試失敗。這不是測試缺口：交易一併載入 owned 分錄集合時，EF 會自動在 SQL 加上 `ORDER BY t."Id"`，已檢查 SQL 確認。仍保留排序測試，日後改成投影查詢時可以抓到問題。
+
+**留給後續段落的注意事項**
+- **T28**：軟刪除後，SQL 彙總必須排除已刪除的資料。T26 的 oracle 資料要加上已刪除的交易與預定支出（計畫已有這個測試）。
+- **T44**：省略 `asOf` 時需要 `Asia/Taipei` 時區。Docker image 若改用 chiseled 或 alpine，要確認有 tzdata。
+- **前端 spec**：validation 錯誤 `errors` 的 key 是 PascalCase，而且新增或修改交易時帶有 `Input.` 前綴，例如 `Input.CounterAccountId`。**這點待使用者決定**。
+- 建立預定支出時，回應的 `Location` 指向 `/planned-expenses/{id}`，但目前沒有讀取單筆的 GET。
+
 ---
 ## 段 D：軟刪除、稽核記錄、鎖帳日
 
