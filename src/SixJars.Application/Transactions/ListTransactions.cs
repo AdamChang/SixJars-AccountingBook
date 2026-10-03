@@ -20,7 +20,8 @@ internal sealed class ListTransactionsHandler(ISixJarsDbContext db) : IRequestHa
     public async Task<IReadOnlyList<TransactionDto>> Handle(ListTransactions request, CancellationToken cancellationToken)
     {
         var bookId = new BookId(request.BookId);
-        var query = db.Transactions.AsNoTracking().Where(t => t.BookId == bookId);
+        // 要追蹤變更，db.GetVersion 才讀得到版本。
+        var query = db.Transactions.Where(t => t.BookId == bookId);
 
         if (request.From is { } from)
         {
@@ -49,8 +50,6 @@ internal sealed class ListTransactionsHandler(ISixJarsDbContext db) : IRequestHa
 
         // 同一天的交易依 Id 排：Guid.CreateVersion7 依建立時間遞增，PostgreSQL 的 uuid 以位元組比較，結果與建立順序一致。
         var transactions = await query.OrderBy(t => t.Date).ThenBy(t => t.Id).ToListAsync(cancellationToken);
-
-        // xmin 還沒建模（db.GetVersion 會擲例外），版本先回傳 0；T23 改為追蹤查詢並接上 db.GetVersion。
-        return [.. transactions.Select(t => TransactionDto.From(t, version: 0))];
+        return [.. transactions.Select(t => TransactionDto.From(t, db.GetVersion(t)))];
     }
 }

@@ -1,0 +1,42 @@
+using FluentValidation;
+using MediatR;
+using Microsoft.EntityFrameworkCore;
+using SixJars.Application.Books;
+using SixJars.Application.Common;
+using SixJars.Domain.Common;
+
+namespace SixJars.Application.Transactions;
+
+/// <summary>
+/// 修改一筆交易（可改交易類型），以樂觀並行控制：<see cref="Version"/> 是前端讀到的版本，
+/// 期間若有人改過這筆交易，存檔時擲 <see cref="DbUpdateConcurrencyException"/>（409）。
+/// </summary>
+public sealed record UpdateTransaction(Guid BookId, Guid TransactionId, uint Version, TransactionInput Input) : IRequest<TransactionDto>;
+
+internal sealed class UpdateTransactionValidator : AbstractValidator<UpdateTransaction>
+{
+    public UpdateTransactionValidator() => RuleFor(c => c.Input).NotNull().SetValidator(new TransactionInputValidator());
+}
+
+internal sealed class UpdateTransactionHandler(ISixJarsDbContext db) : IRequestHandler<UpdateTransaction, TransactionDto>
+{
+    public async Task<TransactionDto> Handle(UpdateTransaction request, CancellationToken cancellationToken)
+    {
+        // 帳本與交易 Id 一起當查詢條件：只用交易 Id 查詢，就能改到別本帳的交易。
+        var bookId = new BookId(request.BookId);
+        var transactionId = new TransactionId(request.TransactionId);
+        var transaction = await db.Transactions
+            .SingleOrDefaultAsync(t => t.BookId == bookId && t.Id == transactionId, cancellationToken)
+            ?? throw new NotFoundException($"找不到交易 {request.TransactionId}。");
+
+        // 帳本只用來驗證帳戶與分類，不會被修改。
+        var book = await db.GetBookAsNoTrackingAsync(request.BookId, cancellationToken);
+        var draft = TransactionBuilder.Build(book, request.Input);
+
+        db.ExpectVersion(transaction, request.Version);
+        transaction.ReplaceWith(draft);
+        await db.SaveChangesAsync(cancellationToken);
+
+        return TransactionDto.From(transaction, db.GetVersion(transaction));
+    }
+}

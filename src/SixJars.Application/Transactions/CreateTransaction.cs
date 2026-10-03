@@ -23,7 +23,7 @@ internal sealed class CreateTransactionHandler(ISixJarsDbContext db) : IRequestH
         db.Transactions.Add(transaction);
         await db.SaveChangesAsync(cancellationToken);
 
-        // xmin 還沒建模（db.GetVersion 會擲例外），版本先回傳 0；T23 接上 db.GetVersion。
-        return TransactionDto.From(transaction, version: 0);
+        // 存檔時 EF 已讀回資料庫產生的版本。
+        return TransactionDto.From(transaction, db.GetVersion(transaction));
     }
 }

@@ -4,6 +4,7 @@ using System.Text.Json;
 using FluentAssertions;
 using SixJars.Application.Transactions;
 using SixJars.Domain.Books;
+using SixJars.Domain.Transactions;
 using SixJars.Tests.Shared;
 using Xunit;
 
@@ -178,12 +179,104 @@ public class TransactionsEndpointsTests(PostgresFixture postgres)
         list.Should().BeEmpty();
     }
 
+    [Fact]
+    public async Task Update_changes_kind_and_postings_and_bumps_version()
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var book = await factory.SeedBookAsync(Ct);
+        var client = factory.CreateSignedInClient();
+        var cash = book.FindAccount("現金")!.Id.Value;
+        var bank = book.FindAccount("國泰世華銀行")!.Id.Value;
+        var created = await CreateDtoAsync(client, book, LunchInput(book, "2026-01-05", "午餐"));
+
+        var response = await client.PutAsJsonAsync($"/api/books/{book.Id.Value}/transactions/{created.Id}",
+            new
+            {
+                version = created.Version,
+                input = new { kind = "Transfer", date = "2026-01-06", amount = 500m, accountId = bank, counterAccountId = cash },
+            },
+            ApiJson.Options, Ct);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var updated = (await response.Content.ReadFromJsonAsync<TransactionDto>(ApiJson.Options, Ct))!;
+        updated.Id.Should().Be(created.Id);
+        updated.Kind.Should().Be(TransactionKind.Transfer);
+        updated.Postings.Should().BeEquivalentTo([new PostingDto(bank, -500m), new PostingDto(cash, 500m)]);
+        updated.Version.Should().NotBe(created.Version);
+
+        // 讀取單筆與清單回傳的版本，必須是修改後的版本，前端才能接著再改。
+        var reloaded = await client.GetFromJsonAsync<TransactionDto>($"/api/books/{book.Id.Value}/transactions/{created.Id}", ApiJson.Options, Ct);
+        reloaded!.Version.Should().Be(updated.Version);
+        reloaded.Postings.Should().BeEquivalentTo(updated.Postings);
+        (await ListAsync(client, book, "")).Single().Version.Should().Be(updated.Version);
+    }
+
+    [Fact]
+    public async Task Update_with_stale_version_is_409()
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var book = await factory.SeedBookAsync(Ct);
+        var client = factory.CreateSignedInClient();
+        var created = await CreateDtoAsync(client, book, LunchInput(book, "2026-01-05", "午餐"));
+        var url = $"/api/books/{book.Id.Value}/transactions/{created.Id}";
+
+        var first = await client.PutAsJsonAsync(url,
+            new { version = created.Version, input = LunchInput(book, "2026-01-05", "第一次修改") }, ApiJson.Options, Ct);
+        var second = await client.PutAsJsonAsync(url,
+            new { version = created.Version, input = LunchInput(book, "2026-01-05", "第二次修改") }, ApiJson.Options, Ct);
+
+        first.StatusCode.Should().Be(HttpStatusCode.OK);
+        second.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        (await ReadProblemAsync(second)).GetProperty("status").GetInt32().Should().Be(409);
+        var current = await client.GetFromJsonAsync<TransactionDto>(url, ApiJson.Options, Ct);
+        current!.Note.Should().Be("第一次修改");
+    }
+
+    [Fact]
+    public async Task Update_unknown_transaction_is_404()
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var book = await factory.SeedBookAsync(Ct);
+
+        var response = await factory.CreateSignedInClient().PutAsJsonAsync($"/api/books/{book.Id.Value}/transactions/{Guid.NewGuid()}",
+            new { version = 1u, input = LunchInput(book, "2026-01-05", "午餐") }, ApiJson.Options, Ct);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task Update_transaction_of_another_book_is_404_and_leaves_it_unchanged()
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var mine = await factory.SeedBookAsync(Ct);
+        var other = await factory.SeedBookAsync(Ct);
+        var client = factory.CreateSignedInClient();
+        var theirs = await CreateDtoAsync(client, other, LunchInput(other, "2026-01-05", "別人的午餐"));
+
+        // 用自己帳本的路徑、自己帳本的帳戶與分類，去改別本帳的交易：只用交易 Id 查詢就會改到。
+        var response = await client.PutAsJsonAsync($"/api/books/{mine.Id.Value}/transactions/{theirs.Id}",
+            new { version = theirs.Version, input = LunchInput(mine, "2026-01-09", "被改掉了") }, ApiJson.Options, Ct);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        var after = await client.GetFromJsonAsync<TransactionDto>($"/api/books/{other.Id.Value}/transactions/{theirs.Id}", ApiJson.Options, Ct);
+        after.Should().BeEquivalentTo(theirs);
+    }
+
+    private static object LunchInput(Book book, string date, string note) => new
+    {
+        kind = "Expense", date, amount = -120m, note,
+        accountId = book.FindAccount("現金")!.Id.Value, categoryId = book.FindCategory("主食", "午餐")!.Id.Value,
+    };
+
+    private static async Task<TransactionDto> CreateDtoAsync(HttpClient client, Book book, object input)
+    {
+        var response = await client.PostAsJsonAsync($"/api/books/{book.Id.Value}/transactions", input, ApiJson.Options, Ct);
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+        return (await response.Content.ReadFromJsonAsync<TransactionDto>(ApiJson.Options, Ct))!;
+    }
+
     private static Task<Guid> CreateLunchAsync(HttpClient client, Book book, string date, string note) =>
-        CreateAsync(client, book, new
-        {
-            kind = "Expense", date, amount = -120m, note,
-            accountId = book.FindAccount("現金")!.Id.Value, categoryId = book.FindCategory("主食", "午餐")!.Id.Value,
-        });
+        CreateAsync(client, book, LunchInput(book, date, note));
 
     private static async Task<Guid> CreateAsync(HttpClient client, Book book, object input)
     {

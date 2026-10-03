@@ -16,8 +16,14 @@ public sealed class SixJarsDbContext(DbContextOptions<SixJarsDbContext> options)
 
     public uint GetVersion(object entity) => (uint)Entry(entity).Property("xmin").CurrentValue!;
 
-    // xmin 在 T23 才加入 configuration，屆時以測試驅動完成。
-    public void ExpectVersion(object entity, uint version) => throw new NotImplementedException();
+    public void ExpectVersion(object entity, uint version)
+    {
+        var entry = Entry(entity);
+        entry.Property("xmin").OriginalValue = version;
+
+        // 只改 owned 分錄時，EF 不會更新 owner，也就不會檢查 xmin（spike S2b）；強制整筆 UPDATE，WHERE 才會帶上版本（S2c）。
+        entry.State = EntityState.Modified;
+    }
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
