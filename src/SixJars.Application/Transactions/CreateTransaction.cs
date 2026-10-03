@@ -1,0 +1,29 @@
+using FluentValidation;
+using MediatR;
+using SixJars.Application.Books;
+using SixJars.Application.Common;
+
+namespace SixJars.Application.Transactions;
+
+/// <summary>新增一筆交易。形狀由 <see cref="TransactionInputValidator"/> 檢查（400），業務規則由 TransactionFactory 檢查（422）。</summary>
+public sealed record CreateTransaction(Guid BookId, TransactionInput Input) : IRequest<TransactionDto>;
+
+internal sealed class CreateTransactionValidator : AbstractValidator<CreateTransaction>
+{
+    public CreateTransactionValidator() => RuleFor(c => c.Input).NotNull().SetValidator(new TransactionInputValidator());
+}
+
+internal sealed class CreateTransactionHandler(ISixJarsDbContext db) : IRequestHandler<CreateTransaction, TransactionDto>
+{
+    public async Task<TransactionDto> Handle(CreateTransaction request, CancellationToken cancellationToken)
+    {
+        // 帳本只用來驗證帳戶與分類，不會被修改。
+        var book = await db.GetBookAsNoTrackingAsync(request.BookId, cancellationToken);
+        var transaction = TransactionBuilder.Build(book, request.Input);
+        db.Transactions.Add(transaction);
+        await db.SaveChangesAsync(cancellationToken);
+
+        // xmin 還沒建模（db.GetVersion 會擲例外），版本先回傳 0；T23 接上 db.GetVersion。
+        return TransactionDto.From(transaction, version: 0);
+    }
+}
