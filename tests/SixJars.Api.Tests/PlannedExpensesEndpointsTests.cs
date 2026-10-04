@@ -403,6 +403,24 @@ public class PlannedExpensesEndpointsTests(PostgresFixture postgres)
     }
 
     [Fact]
+    public async Task Delete_planned_expense_with_stale_version_is_409()
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var book = await factory.SeedBookAsync(Ct);
+        var client = factory.CreateSignedInClient();
+        var created = await CreateAsync(client, book, InsuranceInput(book, 202602, -3000m, "年繳"));
+        // 另一台裝置先改過，版本因此前進。
+        (await client.PutAsJsonAsync($"{Url(book)}/{created.Id}",
+            new { version = created.Version, input = InsuranceInput(book, 202602, -3200m, "改過") }, ApiJson.Options, Ct))
+            .StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var response = await client.DeleteAsync($"{Url(book)}/{created.Id}?version={created.Version}", Ct);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        (await ListAsync(client, book, "")).Should().ContainSingle().Which.Note.Should().Be("改過");
+    }
+
+    [Fact]
     public async Task Delete_planned_expense_of_another_book_is_404_and_leaves_it()
     {
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
