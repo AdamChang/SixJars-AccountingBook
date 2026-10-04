@@ -261,4 +261,4 @@ git commit -m "feat(api): 登入失敗轉址到前端的 /denied，移除 /auth/
 | `src/SixJars.Api/wwwroot` | 不存在 | `Test-Path` 為 False | 「沒有 web root」的測試直接用 Api 專案的預設值 |
 | 各 Create 檔案不存在；各 Modify 檔案存在 | ✓ | `Test-Path`；Modify 的行號已核對 | — |
 | `SixJars.Api` 的 `InternalsVisibleTo` | ✓ | `SixJars.Api.csproj:6` 已開給 `SixJars.Api.Tests` | Task 2 不需修改 csproj |
-| Angular 雜湊檔名格式 `-[A-Z0-9]{8}` | 未確認 | 需要 Angular 22 的實際 build | 前端 plan 段 I 驗證，必要時修正 Task 2 |
+| Angular 雜湊檔名格式 `-[A-Z0-9]{8}` | ✓ | Angular CLI 22.2.1 的 production build（scratchpad spike）：`main-DISDLN5L.js`、`styles-OPUTW5UJ.css`；`ngsw-worker.js`、`ngsw.json`、`manifest.webmanifest`、`safety-worker.js`、`worker-basic.min.js` 不帶雜湊 | 規則不變；前端 plan 段 I 再以 `web/` 的實際 build 確認一次 |

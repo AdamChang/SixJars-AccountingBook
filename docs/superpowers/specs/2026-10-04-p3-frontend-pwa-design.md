@@ -44,10 +44,10 @@
 ```
 web/src/app/
   core/            跨畫面共用：只放 root service、interceptor、guard
-    api/           每個 API 資源一個薄 service（MeApi、BookApi、TransactionApi、SummaryApi）＋ DTO 型別
+    api/           每個 API 資源一個薄 service（SessionApi、BookApi、TransactionApi、SummaryApi）＋ DTO 型別
     auth/          SessionService（/api/me 快取、登入導向、登出）、authGuard
     book/          CurrentBook（目前帳本的 BookDto 快取，表單的下拉選單用）
-    errors/        ProblemDetails 解析、422 錯誤代碼對照、全域 snackbar
+    errors/        ProblemDetails 分類（ApiError）、錯誤 interceptor、全域 snackbar
   features/
     summary/       總覽頁
     transactions/  記帳頁（表單＋當月列表）、欄位與金額規則的純函式
@@ -61,10 +61,13 @@ web/src/app/
 
 ### 2.3 本機開發
 
-- 後端：`dotnet run --project src/SixJars.Api`（HTTPS，Development）。
-- 前端：`ng serve --ssl`，透過 proxy 把 `/api`、`/auth` 轉給後端。瀏覽器只看到 `https://localhost:4200` 一個 origin，cookie 與 XSRF 的行為和正式環境相同。
-- Google OAuth client（localhost 專用）的 redirect URI 是 `https://localhost:4200/auth/callback`。client id 與 secret 放在 `dotnet user-secrets`，不進 repo。
-- **風險，事實查核時實測**：proxy 必須保留瀏覽器的 `Host`（以及 HTTPS 的 scheme），否則 OIDC 的 `redirect_uri` 會變成後端的 port，Google 會拒絕這個 callback。實測不通時的備案在 plan 決定（例如 proxy 加上 `X-Forwarded-Host`／`X-Forwarded-Proto`）。
+- 後端：`dotnet run --project src/SixJars.Api`，照 `docs/deploy.md` §5 的方式以環境變數設定，`ASPNETCORE_URLS=https://localhost:5001`（HTTPS，Development）。
+- 前端：`ng serve --ssl`，port **4300**，透過 proxy 把 `/api`、`/auth` 轉給 `https://localhost:5001`。瀏覽器只看到 `https://localhost:4300` 一個 origin，cookie 與 XSRF 的行為和正式環境相同。
+- Google OAuth client（localhost 專用）的 redirect URI 是 `https://localhost:4300/auth/callback`。client id 與 secret 只放在本機 PowerShell session 的環境變數，不進 repo。
+- **事實查核（2026-10-04 實測）**：
+  - 本機 Windows 把 TCP 4150–4249 保留給 Hyper-V／WinNAT（`netsh interface ipv4 show excludedportrange protocol=tcp`），`ng serve` 在 4200 會 `EACCES`。使用者決定改用 4300，並已在 Google client 加上對應的 redirect URI。這類保留是動態的，哪天 4300 也被保留時，以系統管理員執行 `netsh int ipv4 add excludedportrange protocol=tcp startport=4300 numberofports=1` 把它固定保留給自己。
+  - Angular 22 的 dev-server proxy **保留瀏覽器的 `Host`**（後端收到 `localhost:4300`），不送 `X-Forwarded-*`。proxy 的目標是後端的 **https** endpoint，後端看到的 scheme 本來就是 https，所以 OIDC 的 `redirect_uri` 會是 `https://localhost:4300/auth/callback`，不需要 forwarded header。
+  - proxy 設定檔改了要重啟 `ng serve` 才生效（不會熱重載）。
 
 ### 2.4 正式建置
 
