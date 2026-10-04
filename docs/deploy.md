@@ -311,7 +311,7 @@ curl.exe -i "$url/health"
 
 ## 8. 閒置與喚醒：預設不設定 Cloud Scheduler
 
-ADR 0007：**預設不設定定時 ping**（待使用者確認）。
+ADR 0007：**不設定定時 ping**（使用者於 2026-10-04 確認）。
 
 | | 不 ping（預設） | 定時 ping `/health` |
 |---|---|---|

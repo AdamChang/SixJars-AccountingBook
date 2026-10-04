@@ -1964,7 +1964,7 @@ public sealed record BackupMember(string Email, string? GoogleSubject, BookRole 
 5. **Cloud Run**：
    - `gcloud run deploy sixjars --region asia-east1 --source .`，或先 build image 再部署。
    - 設定 `--min-instances 0`，保持免費方案。
-6. **不設定 Cloud Scheduler 定時 ping**（ADR 0007，待使用者確認）：Neon 閒置時自動暫停、下次連線自動喚醒；定時 ping 會讓 compute 一直醒著，耗用免費額度。代價是閒置後第一個請求較慢（Cloud Run 與 Neon 各一次冷啟動）。
+6. **不設定 Cloud Scheduler 定時 ping**（ADR 0007，使用者已確認）：Neon 閒置時自動暫停、下次連線自動喚醒；定時 ping 會讓 compute 一直醒著，耗用免費額度。代價是閒置後第一個請求較慢（Cloud Run 與 Neon 各一次冷啟動）。
 7. **搬家**：
    1. `ConnectionStrings__SixJars=... dotnet run --project src/SixJars.Cli -- import-legacy --file reference/2026帳本v1.xlsm --book-name 家庭帳本 --owner-email <email> --dry-run`
    2. 確認報告無誤後，拿掉 `--dry-run` 再執行一次。
@@ -2041,7 +2041,7 @@ Checkpoint F 結束時：總計 **344**、失敗 0、略過 18（`reference/` �
 2. `docs/deploy.md` 第 2 節的 Docker image 驗證：build、`Asia/Taipei` 時區、image 內沒有 `reference` 與 `.xlsm`、`/health` 回 200。
 3. 本計畫 Checkpoint F 原列的手動驗證：真實 xlsm 的 `import-legacy --dry-run` 與正式匯入、`/summary` 1–3 月與 Excel 一致。Google 登入待前端完成後一起驗證。
 
-**待使用者決定**：是否設定 Cloud Scheduler 定時 ping（ADR 0007 預設不設定）。
+**使用者的決定**（2026-10-04）：不設定 Cloud Scheduler 定時 ping（ADR 0007 的選項 A）。接受閒置後第一個請求較慢，換取不耗用 Neon 的 compute 額度。
 
 ---
 

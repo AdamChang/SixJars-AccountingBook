@@ -186,7 +186,7 @@ P1 的 Domain 是建立後就不能改的。P2 需要支援以下變更，而且
   - Cloud Run（asia-east1）
   - 以 Secret Manager 提供連線字串、Google client secret 與 MediatR license key
   - Google OAuth client 的 redirect URI
-  - 不設定 Cloud Scheduler 定時 ping：Neon 閒置時自動暫停、下次連線自動喚醒，定時 ping 反而會耗用 compute 額度（ADR 0007，待使用者確認）
+  - 不設定 Cloud Scheduler 定時 ping：Neon 閒置時自動暫停、下次連線自動喚醒，定時 ping 反而會耗用 compute 額度（ADR 0007，使用者已確認）
 - Data Protection key（cookie 加密用）存在 DB 的 `DataProtectionKeys` 表（EF Core 提供者）。否則 Cloud Run instance 一換，所有人就會被登出。
 
 ## 9. 核准時定案的項目（2026-10-04，全部照建議）
