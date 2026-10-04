@@ -19,8 +19,17 @@ internal static class BooksEndpoints
             Created(bookId, await sender.Send(command with { BookId = bookId }, ct)));
         book.MapPost("/categories", async (Guid bookId, AddCategory command, ISender sender, CancellationToken ct) =>
             Created(bookId, await sender.Send(command with { BookId = bookId }, ct)));
+        // lockDate 為 null 時清除鎖帳日。
+        book.MapPut("/lock-date", async (Guid bookId, SetLockDateBody body, ISender sender, CancellationToken ct) =>
+        {
+            await sender.Send(new SetLockDate(bookId, body.LockDate), ct);
+            return Results.NoContent();
+        });
         return book;
     }
 
     private static IResult Created(Guid bookId, Guid id) => Results.Created($"/api/books/{bookId}", new { id });
 }
+
+/// <summary>設定鎖帳日的 body；<see cref="LockDate"/> 為 null 時清除。</summary>
+internal sealed record SetLockDateBody(DateOnly? LockDate);

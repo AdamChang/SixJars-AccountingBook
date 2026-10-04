@@ -48,8 +48,11 @@ internal sealed class PayPlannedExpenseHandler(ISixJarsDbContext db, IAuditTrail
     {
         var planned = await db.FindPlannedExpenseAsync(request.BookId, request.PlannedExpenseId, cancellationToken);
 
-        // 帳本只用來驗證帳戶與分類，不會被修改。
+        // 帳本只用來驗證帳戶、分類與鎖帳日，不會被修改。
         var book = await db.GetBookAsNoTrackingAsync(request.BookId, cancellationToken);
+        // 付款同時新增交易（看付款日期）與修改預定支出（看歸屬月份），兩者都要開放。
+        book.EnsureUnlocked(request.Date);
+        book.EnsureUnlocked(planned.BudgetMonth);
         var transaction = BuildPayment(book, planned.CategoryId, planned.BudgetMonth, planned.Note, request);
 
         // 修改前的快照必須在 MarkPaid 之前取得。

@@ -18,8 +18,9 @@ internal sealed class CreateTransactionHandler(ISixJarsDbContext db, IAuditTrail
 {
     public async Task<TransactionDto> Handle(CreateTransaction request, CancellationToken cancellationToken)
     {
-        // 帳本只用來驗證帳戶與分類，不會被修改。
+        // 帳本只用來驗證帳戶、分類與鎖帳日，不會被修改。
         var book = await db.GetBookAsNoTrackingAsync(request.BookId, cancellationToken);
+        book.EnsureUnlocked(request.Input.Date);
         var transaction = TransactionBuilder.Build(book, request.Input);
         db.Transactions.Add(transaction);
         audit.Record(request.BookId, AuditAction.Create, AuditEntityTypes.Transaction, transaction.Id.Value,

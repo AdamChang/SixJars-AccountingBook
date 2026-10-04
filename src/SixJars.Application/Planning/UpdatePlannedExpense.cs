@@ -26,15 +26,19 @@ internal sealed class UpdatePlannedExpenseHandler(ISixJarsDbContext db, IAuditTr
     {
         var planned = await db.FindPlannedExpenseAsync(request.BookId, request.PlannedExpenseId, cancellationToken);
 
-        // 帳本只用來驗證帳戶與分類，不會被修改。
+        // 帳本只用來驗證帳戶、分類與鎖帳日，不會被修改。
         var book = await db.GetBookAsNoTrackingAsync(request.BookId, cancellationToken);
         var input = request.Input;
+        var budgetMonth = BudgetMonth.FromKey(input.BudgetMonth);
+        // 原本的月份與新的月份都要檢查：不能把預定支出搬進或搬出鎖定的月份（spec §3.1）。
+        book.EnsureUnlocked(planned.BudgetMonth);
+        book.EnsureUnlocked(budgetMonth);
 
         // 修改前的快照必須在 Update 之前取得，否則會拿到修改後的內容。
         var before = PlannedExpenseDto.From(planned, db.GetVersion(planned));
         db.ExpectVersion(planned, request.Version);
         planned.Update(
-            book, BudgetMonth.FromKey(input.BudgetMonth), new CategoryId(input.CategoryId),
+            book, budgetMonth, new CategoryId(input.CategoryId),
             input.AccountId is { } accountId ? new AccountId(accountId) : null, input.EstimatedAmount, input.Note);
         audit.Record(request.BookId, AuditAction.Update, AuditEntityTypes.PlannedExpense, planned.Id.Value,
             before, PlannedExpenseDto.From(planned, AuditSnapshots.UnknownVersion));

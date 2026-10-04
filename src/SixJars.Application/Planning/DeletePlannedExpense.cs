@@ -1,6 +1,7 @@
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using SixJars.Application.Auditing;
+using SixJars.Application.Books;
 using SixJars.Application.Common;
 
 namespace SixJars.Application.Planning;
@@ -18,6 +19,10 @@ internal sealed class DeletePlannedExpenseHandler(ISixJarsDbContext db, TimeProv
     {
         // 已刪除的預定支出被 query filter 擋掉，同樣 404。
         var planned = await db.FindPlannedExpenseAsync(request.BookId, request.PlannedExpenseId, cancellationToken);
+
+        // 帳本只用來檢查鎖帳日，不會被修改。
+        var book = await db.GetBookAsNoTrackingAsync(request.BookId, cancellationToken);
+        book.EnsureUnlocked(planned.BudgetMonth);
 
         // 快照在 Delete 之前取得；DeletedAt 不在 DTO 裡，刪除時間就是稽核記錄的 At。
         var before = PlannedExpenseDto.From(planned, db.GetVersion(planned));

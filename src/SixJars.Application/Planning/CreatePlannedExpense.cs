@@ -20,11 +20,13 @@ internal sealed class CreatePlannedExpenseHandler(ISixJarsDbContext db, IAuditTr
 {
     public async Task<PlannedExpenseDto> Handle(CreatePlannedExpense request, CancellationToken cancellationToken)
     {
-        // 帳本只用來驗證帳戶與分類，不會被修改。
+        // 帳本只用來驗證帳戶、分類與鎖帳日，不會被修改。
         var book = await db.GetBookAsNoTrackingAsync(request.BookId, cancellationToken);
         var input = request.Input;
+        var budgetMonth = BudgetMonth.FromKey(input.BudgetMonth);
+        book.EnsureUnlocked(budgetMonth);
         var planned = PlannedExpense.Create(
-            book, BudgetMonth.FromKey(input.BudgetMonth), new CategoryId(input.CategoryId),
+            book, budgetMonth, new CategoryId(input.CategoryId),
             input.AccountId is { } accountId ? new AccountId(accountId) : null, input.EstimatedAmount, input.Note);
         db.PlannedExpenses.Add(planned);
         audit.Record(request.BookId, AuditAction.Create, AuditEntityTypes.PlannedExpense, planned.Id.Value,
