@@ -1,1 +1,16 @@
+@if (loading.visible()) {
+  <mat-progress-bar class="progress" mode="indeterminate" />
+}
+@if (session.me(); as me) {
+  <mat-toolbar class="app-bar">
+    @if (currentBook.book(); as book) {
+      <span class="book-name">{{ book.name }}</span>
+      <a mat-button [routerLink]="['/books', book.id, 'transactions']" queryParamsHandling="preserve">記帳</a>
+      <a mat-button [routerLink]="['/books', book.id, 'summary']" queryParamsHandling="preserve">總覽</a>
+    }
+    <span class="spacer"></span>
+    <span class="email">{{ me.email }}</span>
+    <button mat-button type="button" (click)="session.logout()">登出</button>
+  </mat-toolbar>
+}
 <router-outlet />
