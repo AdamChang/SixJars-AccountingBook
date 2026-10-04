@@ -15,6 +15,9 @@ public static class SpaHosting
 {
     private static readonly Regex HashedAssetPattern = new(@"-[A-Z2-7]{8}\.[a-z0-9]+$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
+    // Angular 的 lazy chunk 用大小寫混合的 8 字元雜湊，只對 chunk- 前綴放寬，避免 logo-20261004.png 這類自訂檔名被當成雜湊檔。
+    private static readonly Regex ChunkAssetPattern = new(@"^chunk-[A-Za-z0-9_-]{8}\.js$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
     private static readonly string[] BackendPrefixes = ["api", "auth", "health"];
 
     public static WebApplication UseSpaHosting(this WebApplication app)
@@ -80,8 +83,8 @@ public static class SpaHosting
     }
 
     /// <summary>
-    /// 是否為 Angular build 產生的雜湊檔名（例如 main-DISDLN5L.js）：結尾為「-8 碼 base32 字元（A–Z、2–7）.副檔名」。
+    /// 是否為 Angular build 產生的雜湊檔名（例如 main-DISDLN5L.js）：結尾為「-8 碼 base32 字元（A–Z、2–7）.副檔名」，或 lazy chunk（chunk-BvxS2djg.js，雜湊為大小寫混合的 8 字元）。
     /// </summary>
-    /// <remarks>刻意只收 base32 字母表（A–Z、2–7；esbuild 的內容雜湊格式）並區分大小寫：作者自己命名的 logo-20261004.png（含 0、1、8、9）或小寫的 main-abcd2345.js 都不是 build 產物，不應被當成 immutable 快取一年。</remarks>
-    internal static bool IsHashedAsset(string fileName) => HashedAssetPattern.IsMatch(fileName);
+    /// <remarks>其他檔案刻意只收 base32 字母表（A–Z、2–7；esbuild 的內容雜湊格式）並區分大小寫：作者自己命名的 logo-20261004.png（含 0、1、8、9）或小寫的 main-abcd2345.js 都不是 build 產物，不應被當成 immutable 快取一年。</remarks>
+    internal static bool IsHashedAsset(string fileName) => HashedAssetPattern.IsMatch(fileName) || ChunkAssetPattern.IsMatch(fileName);
 }

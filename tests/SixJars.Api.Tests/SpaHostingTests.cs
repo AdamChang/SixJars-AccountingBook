@@ -145,6 +145,12 @@ public class SpaHostingTests(PostgresFixture postgres)
     [InlineData("main-abcd2345.js", false)]
     [InlineData("favicon.ico", false)]
     [InlineData("logo-20261004.png", false)]
-    public void IsHashedAsset_matches_only_base32_8_char_hash(string fileName, bool expected) =>
+    [InlineData("chunk-BvxS2djg.js", true)]
+    [InlineData("chunk-CmnSPI3X.js", true)]
+    [InlineData("chunk-a_b-CdEf.js", true)]
+    [InlineData("chunk-short.js", false)]
+    [InlineData("chunk-BvxS2djg.css", false)]
+    [InlineData("vendor-BvxS2djg.js", false)]
+    public void IsHashedAsset_matches_only_build_hashes(string fileName, bool expected) =>
         SpaHosting.IsHashedAsset(fileName).Should().Be(expected);
 }
