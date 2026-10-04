@@ -32,6 +32,7 @@ public class SpaHostingTests(PostgresFixture postgres)
 
     [Theory]
     [InlineData("/api/nope")]
+    [InlineData("/API/nope")]
     [InlineData("/api")]
     [InlineData("/auth/nope")]
     public async Task Unknown_api_and_auth_paths_are_404_not_html(string url)
@@ -63,7 +64,7 @@ public class SpaHostingTests(PostgresFixture postgres)
         var ct = TestContext.Current.CancellationToken;
         await using var factory = await CreateFactoryWithWebRootAsync(ct);
 
-        var response = await factory.CreateClient(ClientOptions).GetAsync("/main-ABCD1234.js", ct);
+        var response = await factory.CreateClient(ClientOptions).GetAsync("/main-ABCD2345.js", ct);
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         response.Content.Headers.ContentType!.MediaType.Should().Be("text/javascript");
@@ -113,7 +114,7 @@ public class SpaHostingTests(PostgresFixture postgres)
         var ct = TestContext.Current.CancellationToken;
         await using var factory = await CreateFactoryWithWebRootAsync(ct);
 
-        var response = await factory.CreateClient(ClientOptions).GetAsync("/main-ABCD1234.js", ct);
+        var response = await factory.CreateClient(ClientOptions).GetAsync("/main-ABCD2345.js", ct);
 
         var cacheControl = response.Headers.CacheControl!;
         cacheControl.Public.Should().BeTrue();
@@ -136,13 +137,14 @@ public class SpaHostingTests(PostgresFixture postgres)
     }
 
     [Theory]
-    [InlineData("main-ABCD1234.js", true)]
-    [InlineData("chunk-Z9Y8X7W6.js", true)]
+    [InlineData("main-ABCD2345.js", true)]
+    [InlineData("chunk-Z7Y6X5W4.js", true)]
     [InlineData("styles-ABCDEFGH.css", true)]
     [InlineData("ngsw.json", false)]
     [InlineData("ngsw-worker.js", false)]
-    [InlineData("main-abcd1234.js", false)]
+    [InlineData("main-abcd2345.js", false)]
     [InlineData("favicon.ico", false)]
-    public void IsHashedAsset_matches_only_uppercase_8_char_hash(string fileName, bool expected) =>
+    [InlineData("logo-20261004.png", false)]
+    public void IsHashedAsset_matches_only_base32_8_char_hash(string fileName, bool expected) =>
         SpaHosting.IsHashedAsset(fileName).Should().Be(expected);
 }

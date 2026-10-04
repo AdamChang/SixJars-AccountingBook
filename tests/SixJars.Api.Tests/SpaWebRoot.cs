@@ -11,7 +11,7 @@ internal static class SpaWebRoot
         var directory = Path.Combine(Path.GetTempPath(), "sixjars-spa-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
         File.WriteAllText(Path.Combine(directory, "index.html"), $"<!doctype html><html><body>{IndexMarker}</body></html>");
-        File.WriteAllText(Path.Combine(directory, "main-ABCD1234.js"), "console.log('main');");
+        File.WriteAllText(Path.Combine(directory, "main-ABCD2345.js"), "console.log('main');");
         File.WriteAllText(Path.Combine(directory, "ngsw.json"), "{}");
         return directory;
     }
