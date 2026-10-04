@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using SixJars.Application.Auditing;
 using SixJars.Domain.Books;
+using SixJars.Domain.Members;
 using SixJars.Domain.Planning;
 using SixJars.Domain.Transactions;
 
@@ -15,6 +16,9 @@ public interface ISixJarsDbContext
 
     /// <summary>稽核記錄（append-only）；只由 <see cref="IAuditTrail"/> 加入。</summary>
     DbSet<AuditEntry> AuditEntries { get; }
+
+    /// <summary>帳本成員；白名單即此表（ADR 0005）。</summary>
+    DbSet<BookMember> BookMembers { get; }
 
     /// <summary>樂觀並行版本（PostgreSQL xmin）；回應給前端，修改時帶回來。</summary>
     uint GetVersion(object entity);

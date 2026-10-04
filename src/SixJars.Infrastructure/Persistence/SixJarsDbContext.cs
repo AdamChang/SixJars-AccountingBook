@@ -3,6 +3,7 @@ using SixJars.Application.Auditing;
 using SixJars.Application.Common;
 using SixJars.Domain.Books;
 using SixJars.Domain.Common;
+using SixJars.Domain.Members;
 using SixJars.Domain.Planning;
 using SixJars.Domain.Transactions;
 
@@ -15,6 +16,7 @@ public sealed class SixJarsDbContext(DbContextOptions<SixJarsDbContext> options)
     public DbSet<Transaction> Transactions => Set<Transaction>();
     public DbSet<PlannedExpense> PlannedExpenses => Set<PlannedExpense>();
     public DbSet<AuditEntry> AuditEntries => Set<AuditEntry>();
+    public DbSet<BookMember> BookMembers => Set<BookMember>();
 
     public uint GetVersion(object entity) => (uint)Entry(entity).Property("xmin").CurrentValue!;
 
