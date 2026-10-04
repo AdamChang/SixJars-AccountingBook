@@ -24,8 +24,11 @@ builder.Services.AddSixJarsAuthentication(builder.Configuration, builder.Environ
 builder.Services.AddAuthorization();
 // 非 GET 的請求一律驗證 XSRF token（ADR 0005），由 AntiforgeryFilter 掛在 /api 與 /auth/logout。
 builder.Services.AddAntiforgery(AntiforgeryFilter.ConfigureOptions);
+builder.Services.Configure<ForwardedHeadersOptions>(ForwardedHeadersSetup.Configure);
 
 var app = builder.Build();
+// 必須在 authentication 之前：OIDC 的 redirect_uri 與 Secure cookie 都依賴 Request.IsHttps。
+app.UseForwardedHeaders();
 app.UseExceptionHandler();
 app.UseAuthentication();
 app.UseAuthorization();
