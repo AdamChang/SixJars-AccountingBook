@@ -1717,7 +1717,7 @@ Checkpoint E 結束時：總計 **300**、失敗 0、略過 15；build 0 warning
 **Checkpoint E 變異測試**（主控者獨立執行，全部有測試失敗）：拿掉 Role 條件、拿掉 email_verified 檢查、ReturnUrl 允許 `//`。subagent 另外做了：behavior 未註冊、拿掉 sub 條件、behavior 順序對調、拿掉 `OnRedirectToLogin`、拿掉 `ctx.Fail`、拿掉 `PersistKeysToDbContext`、拿掉 `MapInboundClaims = false`、拿掉 `RequireAuthorization()`、拿掉 antiforgery filter、token 不綁定身分，全部被抓到。
 
 **安全審查**（`/security-review` 在此 clone 因沒有 `origin/HEAD` 無法執行，改由獨立的 reviewer agent 審查 `529f4c5^..6b31851`）：沒有 High。
-- **Medium**：DataProtection 金鑰以明文存在資料庫。拿到 DB 讀取權（備份外流、Supabase Data API 金鑰外洩，ADR 0004 沒開 RLS）就能偽造登入 cookie。建議在 Supabase 關閉 Data API 或對這些表 `REVOKE ALL ... FROM anon, authenticated`，並考慮用 KMS／憑證加密金鑰。**待使用者決定**。
+- **Medium**：DataProtection 金鑰以明文存在資料庫。拿到 DB 讀取權（備份外流、Supabase Data API 金鑰外洩，ADR 0004 沒開 RLS）就能偽造登入 cookie。建議在 Supabase 關閉 Data API 或對這些表 `REVOKE ALL ... FROM anon, authenticated`，並考慮用 KMS／憑證加密金鑰。**使用者決定**：正式環境改用 Neon（ADR 0007），Neon 的 Data API 預設不啟用，部署文件註明不可啟用；不另外加密金鑰。
 - **Low**：cookie 14 天加 sliding，伺服器端無法撤銷（被偷的 cookie 只要仍是成員就有效）；`GET /auth/login` 的 login CSRF（攻擊者須本身在白名單，影響小）；企業網域 email 的 Workspace 管理員可在本人首次登入前搶先綁定。
 - 成員被移除後，cookie 仍有效，但 `BookAccessBehavior` 每個請求查 DB，帳本資料立即拿不到。
 
@@ -1907,7 +1907,7 @@ public sealed record BackupMember(string Email, string? GoogleSubject, BookRole 
 
 ---
 
-## Task 44：Dockerfile、Supabase 連線設定、`.env.example`
+## Task 44：Dockerfile、Neon 連線設定、ForwardedHeaders、`.env.example`
 
 **Files**
 - Create: `Dockerfile`、`.dockerignore`、`.env.example`
@@ -1919,11 +1919,12 @@ public sealed record BackupMember(string Email, string? GoogleSubject, BookRole 
   - 執行階段：`mcr.microsoft.com/dotnet/aspnet:10.0`，`USER $APP_UID`（非 root），`ENV ASPNETCORE_HTTP_PORTS=8080`。Cloud Run 預設會注入 `PORT=8080`，兩者一致即可。
   - `ENTRYPOINT ["dotnet", "SixJars.Api.dll"]`。
 - `.dockerignore`：排除 `reference/`（**必須**）、`**/bin`、`**/obj`、`tests/`、`.git`、`docs/`、`.env`。
+- **ForwardedHeaders**（段 E 留下的必要事項）：`Program.cs` 加上 `UseForwardedHeaders`（`X-Forwarded-For`、`X-Forwarded-Proto`），放在 authentication 之前。Cloud Run 在前端終止 TLS，不加的話 OIDC 的 `redirect_uri` 會變成 `http://`，antiforgery（SecurePolicy=Always）也會在非 HTTPS 請求擲例外而回 500。Cloud Run 的 proxy IP 不固定，所以要清空 `KnownProxies`／`KnownNetworks`（或對應的 EF 10 設定）。加一個測試：帶 `X-Forwarded-Proto: https` 的請求，`HttpContext.Request.IsHttps` 為 true。
 - `.env.example`：只放 placeholder，例如：
 
   ```
-  # Supabase：使用 Supavisor session mode（pooler host、port 5432）
-  ConnectionStrings__SixJars=Host=<pooler-host>;Port=5432;Database=postgres;Username=<user>;Password=<password>;SSL Mode=Require
+  # Neon：使用直連 endpoint（不含 -pooler 的 host），ADR 0007
+  ConnectionStrings__SixJars=Host=<neon-host>;Port=5432;Database=<database>;Username=<user>;Password=<password>;SSL Mode=Require
   Authentication__Google__ClientId=<client-id>
   Authentication__Google__ClientSecret=<client-secret>
   MediatR__LicenseKey=<community-license-key>
@@ -1947,28 +1948,29 @@ public sealed record BackupMember(string Email, string? GoogleSubject, BookRole 
 
 文件內容，每個步驟都要附上指令。所有實際操作都由使用者執行，agent 不執行任何部署指令。
 
-1. **Supabase**：
-   - 建立專案，選首爾區域。
-   - 從 Connect 頁面取得 Supavisor 的 **session mode** 連線字串（port 5432）。
+1. **Neon**（ADR 0007）：
+   - 建立專案，選離台灣最近的區域。
+   - 取得**直連 endpoint**（不含 `-pooler`）的連線字串，`SSL Mode=Require`。
    - 建立 app 專用的 DB 角色，只給 DML 權限。DDL 權限只給執行 migration 的帳號。
+   - **不要啟用 Neon Data API**（段 E 安全審查：DataProtection 金鑰以明文存在 DB）。
 2. **Migration**：
    - `dotnet ef migrations bundle --project src/SixJars.Infrastructure --startup-project src/SixJars.Api -o efbundle`。
    - 部署前在本機執行 `./efbundle --connection "<admin 連線字串>"`。
    - **不在 app 啟動時自動 migrate**（spec §8.4）。
 3. **Google OAuth**：
    - 建立 OAuth client（Web application）。
-   - Authorized redirect URI 為 `https://<cloud-run-url>/signin-oidc`。如果 `CallbackPath` 有改，這裡也要一起改。
+   - Authorized redirect URI 為 `https://<cloud-run-url>/auth/callback`（T36 設定的 `CallbackPath`）。
 4. **Secret Manager**：存放連線字串、Google client secret、MediatR license key。部署時以 `--set-secrets` 掛成環境變數。
 5. **Cloud Run**：
    - `gcloud run deploy sixjars --region asia-east1 --source .`，或先 build image 再部署。
    - 設定 `--min-instances 0`，保持免費方案。
-6. **Cloud Scheduler**：每 10 分鐘 `GET https://<url>/health`，讓服務保持 warm，也讓 Supabase 不會因為閒置而暫停。
+6. **不設定 Cloud Scheduler 定時 ping**（ADR 0007，待使用者確認）：Neon 閒置時自動暫停、下次連線自動喚醒；定時 ping 會讓 compute 一直醒著，耗用免費額度。代價是閒置後第一個請求較慢（Cloud Run 與 Neon 各一次冷啟動）。
 7. **搬家**：
    1. `ConnectionStrings__SixJars=... dotnet run --project src/SixJars.Cli -- import-legacy --file reference/2026帳本v1.xlsm --book-name 家庭帳本 --owner-email <email> --dry-run`
    2. 確認報告無誤後，拿掉 `--dry-run` 再執行一次。
 8. **備份**：從 `/api/books/{id}/export/backup.json` 下載備份；還原時用 `restore-backup`。
 
-**Step 6**：commit 訊息：`docs: Cloud Run 與 Supabase 部署步驟`
+**Step 6**：commit 訊息：`docs: Cloud Run 與 Neon 部署步驟`
 
 ### Checkpoint F（P2 後端完成）
 

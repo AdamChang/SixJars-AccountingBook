@@ -7,19 +7,19 @@
 
 ## 1. 目標
 
-讓 P1 的帳務核心可以透過登入後的 HTTP API 使用，並部署到 Cloud Run + Supabase。完成時：
+讓 P1 的帳務核心可以透過登入後的 HTTP API 使用，並部署到 Cloud Run + Neon（ADR 0007，原為 Supabase）。完成時：
 
 1. 擁有者以 Google 帳號登入（白名單），可以讀寫帳本設定、交易、預定支出，並查詢月可用餘額、年累計餘額、可用現金、帳戶餘額與財務規劃帳戶餘額。
 2. 餘額由 **SQL 彙總**算出，對同一份資料，結果與 Domain 計算器完全一致（以 P1 的計算器作為 oracle）。
 3. 每次寫入都留下稽核記錄（修改前與修改後的快照）；刪除是軟刪除；鎖帳日之前（含當日）的資料不可異動。
-4. 可以用 CLI 把舊 xlsm 匯入 Supabase，也可以匯出 JSON 備份（能用 CLI 還原），並匯出交易明細的 CSV／xlsx。
+4. 可以用 CLI 把舊 xlsm 匯入正式資料庫，也可以匯出 JSON 備份（能用 CLI 還原），並匯出交易明細的 CSV／xlsx。
 5. 提供 Dockerfile 與部署文件；實際部署、push、設定 Secret 由使用者執行。
 
 ### 階段歸屬（2026-10-04 使用者確認）
 
 | 功能 | 階段 |
 |---|---|
-| API、SQL 餘額、Supabase、Google OIDC＋白名單、稽核記錄、軟刪除、CLI 匯入、JSON 備份、Cloud Run | **P2** |
+| API、SQL 餘額、Neon（原 Supabase）、Google OIDC＋白名單、稽核記錄、軟刪除、CLI 匯入、JSON 備份、Cloud Run | **P2** |
 | 鎖帳日強制執行、CSV／xlsx 匯出 | **P2**（使用者加入） |
 | 超過 30 天沒備份的提醒、記帳範本 | P3 以後 |
 | 預算、提醒事項、信用卡對帳、房貸試算、月備忘錄、外部資產淨值、報表 | P3 以後（之後分配） |
@@ -128,7 +128,7 @@ P1 的 Domain 是建立後就不能改的。P2 需要支援以下變更，而且
 | GET | `/export/backup.json` | 完整備份 |
 | GET | `/audit?entityId=` | 某一筆資料的修改歷史（唯讀） |
 
-另外有 `GET /health`，**不需要登入**，會執行 `SELECT 1`，供 Cloud Scheduler 定時 ping，讓服務保持 warm、讓 Supabase 不會因閒置而暫停。
+另外有 `GET /health`，**不需要登入**，會執行 `SELECT 1`，供監控或部署後確認使用。原本規劃以 Cloud Scheduler 定時 ping 避免 Supabase 閒置暫停；改用 Neon 後不再需要（ADR 0007）。
 
 - **交易 DTO 用平面結構而不是多型 JSON**：Angular 的表單本來就是平面欄位，切換類型時只要顯示或隱藏欄位。多型 `$type` 會讓前後端都多一層序列化設定。
 - `/summary` 一次回傳所有數字。ADR 0004 提到應用程式與資料庫跨國，每次往返約數十毫秒，所以把**一次請求的資料庫往返次數**也列為測試斷言（以 EF 的命令計數，≤ 6 次：成員授權 1 次、帳本設定 1 次、彙總 4 次。原本預期 ≤ 3，實作後經使用者同意調整）。
@@ -177,16 +177,16 @@ P1 的 Domain 是建立後就不能改的。P2 需要支援以下變更，而且
 - 欄位：日期、歸屬月份、交易類型、帳戶、對方帳戶、主分類、子分類、財務規劃帳戶、金額、本金、利息、備註。只匯出未刪除的交易。
 - CSV 用 UTF-8 with BOM，Excel 開啟繁體中文才不會亂碼。xlsx 的套件候選是 ClosedXML（MIT），在事實查核時確認版本與授權。
 
-### 8.4 Supabase 與部署
+### 8.4 資料庫（Neon，ADR 0007）與部署
 
-- 連線：環境變數 `ConnectionStrings__SixJars`，指向 Supavisor 的 **session mode**（pooler host 的 port 5432）。repo 附上 `.env.example` placeholder，內容不含任何帳密。
+- 連線：環境變數 `ConnectionStrings__SixJars`，指向 Neon 的**直連 endpoint**（不含 `-pooler` 的 host），`SSL Mode=Require`。repo 附上 `.env.example` placeholder，內容不含任何帳密。
 - **Migration**：用 `dotnet ef migrations bundle` 產生執行檔，由使用者在部署前手動執行。**不在 app 啟動時自動 migrate**：Cloud Run 多個 instance 同時啟動會互相競爭，而且 app 的 DB 帳號不需要 DDL 權限。
 - **Dockerfile**：multi-stage、`mcr.microsoft.com/dotnet/aspnet:10.0`、非 root 使用者、監聽 `$PORT`。
 - **部署文件** `docs/deploy.md` 涵蓋：
   - Cloud Run（asia-east1）
   - 以 Secret Manager 提供連線字串、Google client secret 與 MediatR license key
   - Google OAuth client 的 redirect URI
-  - Cloud Scheduler 每 10 分鐘 ping `/health`
+  - 不設定 Cloud Scheduler 定時 ping：Neon 閒置時自動暫停、下次連線自動喚醒，定時 ping 反而會耗用 compute 額度（ADR 0007，待使用者確認）
 - Data Protection key（cookie 加密用）存在 DB 的 `DataProtectionKeys` 表（EF Core 提供者）。否則 Cloud Run instance 一換，所有人就會被登出。
 
 ## 9. 核准時定案的項目（2026-10-04，全部照建議）
@@ -204,7 +204,7 @@ P1 的 Domain 是建立後就不能改的。P2 需要支援以下變更，而且
 | **C** | Api 骨架、`/health`、ProblemDetails、MediatR 與 validation pipeline、帳本設定 API、交易 CRUD（含修改與 `xmin`）、預定支出與付款、SQL 彙總與 oracle 測試。此段的認證先用開發用的 `TestAuthHandler`。 | 在本機，可以透過 HTTP 記帳與查詢餘額 |
 | **D** | 軟刪除、稽核記錄、鎖帳日 | 寫入路徑完整 |
 | **E** | 帳本成員、BFF cookie＋Google OIDC、授權 handler、antiforgery、安全性測試（401、404、缺少 XSRF token） | 可以安全地對外開放 |
-| **F** | CLI（import-legacy、restore-backup、add-member）、JSON 備份往返、CSV／xlsx 匯出、Supabase 組態、Dockerfile、部署文件 | 使用者可以自行部署 |
+| **F** | CLI（import-legacy、restore-backup、add-member）、JSON 備份往返、CSV／xlsx 匯出、Neon 連線設定、Dockerfile、部署文件 | 使用者可以自行部署 |
 
 每段結束時都要全綠、一個 Task 一個 commit，然後停下來讓使用者檢視，並用 `docs(plans):` 回寫偏差。
 
