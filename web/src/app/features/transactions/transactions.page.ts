@@ -105,7 +105,7 @@ export class TransactionsPage {
       .subscribe({
         next: () => {
           this.notifier.show('已刪除');
-          this.stopEditingIfRemoved(transaction);
+          this.endEditingOf(transaction);
           this.reloadList();
         },
         error: (error: ApiError) => this.onDeleteFailed(transaction, error),
@@ -117,11 +117,12 @@ export class TransactionsPage {
     switch (error.kind) {
       case 'conflict':
         this.notifier.show(CONFLICT_MESSAGE);
+        this.endEditingOf(transaction);
         this.reloadList();
         break;
       case 'notFound':
         this.notifier.show(NOT_FOUND_MESSAGE);
-        this.stopEditingIfRemoved(transaction);
+        this.endEditingOf(transaction);
         this.reloadList();
         break;
       case 'domain':
@@ -130,7 +131,8 @@ export class TransactionsPage {
     }
   }
 
-  private stopEditingIfRemoved(transaction: TransactionDto): void {
+  // 刪除成功、已不存在或已被其他裝置修改：編輯中的版本都已過期，結束編輯
+  private endEditingOf(transaction: TransactionDto): void {
     if (this.editing()?.id === transaction.id) {
       this.editing.set(null);
     }

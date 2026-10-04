@@ -155,4 +155,17 @@ describe('TransactionsPage', () => {
     expect(page.form().editing()).toBeNull();
     await page.flushList(202603, []);
   });
+
+  it('stops_editing_on_delete_conflict_for_edited_row', async () => {
+    const page = await setup('/books/book-1/transactions?month=202603');
+    await page.flushList(202603, [TX]);
+    await page.clickRow();
+    expect(page.form().editing()).toBe(TX);
+    await page.clickDelete();
+    page.httpTesting.expectOne({ method: 'DELETE', url: DELETE_URL }).flush(null, { status: 409, statusText: 'Conflict' });
+    await page.stable();
+    expect(page.notifier.show).toHaveBeenCalledWith(CONFLICT_MESSAGE);
+    expect(page.form().editing()).toBeNull();
+    await page.flushList(202603, [TX]);
+  });
 });
