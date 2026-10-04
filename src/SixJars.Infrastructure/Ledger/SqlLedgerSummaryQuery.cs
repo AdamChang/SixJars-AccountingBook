@@ -11,6 +11,10 @@ namespace SixJars.Infrastructure.Ledger;
 /// 以 EF LINQ 在 PostgreSQL 端彙總（spec §6），每個方法各翻成單一條 <c>GROUP BY</c>（月可用餘額為兩條）。
 /// 規則照搬 P1 的 <c>BalanceCalculator</c> 與 <c>DisposableBalanceCalculator</c>，由 oracle 測試鎖住。
 /// </summary>
+/// <remarks>
+/// 已刪除的交易與預定支出靠 EF 的 global query filter 排除，因為這裡全部經由 <c>DbSet</c> 查詢。
+/// <b>如果將來改用 <c>FromSql</c> 等 raw SQL，filter 不會套用，必須自行加上 <c>"DeletedAt" IS NULL</c></b>（ADR 0006）。
+/// </remarks>
 public sealed class SqlLedgerSummaryQuery(SixJarsDbContext db) : ILedgerSummaryQuery
 {
     public async Task<IReadOnlyDictionary<AccountId, decimal>> PostingTotalsAsync(

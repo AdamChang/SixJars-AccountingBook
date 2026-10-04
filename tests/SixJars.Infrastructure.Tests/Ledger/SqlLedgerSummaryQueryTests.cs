@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Microsoft.EntityFrameworkCore;
 using SixJars.Application.Ledger;
 using SixJars.Domain.Books;
 using SixJars.Domain.Common;
@@ -161,6 +162,65 @@ public class SqlLedgerSummaryQueryTests(PostgresFixture postgres)
                 .Should().Be(balances.FundBalanceAsOf(fund.Id, new DateOnly(2026, 2, 28)), fund.Name);
             (fund.OpeningBalance + fundsByMonth.GetValueOrDefault(fund.Id))
                 .Should().Be(balances.FundBalanceThroughBudgetMonth(fund.Id, February), fund.Name);
+        }
+
+        monthly[January].Should().Be(disposable.Monthly(January));
+        monthly[February].Should().Be(disposable.Monthly(February));
+    }
+
+    /// <summary>
+    /// 軟刪除（spec §3.3、ADR 0006）：已刪除的交易與預定支出不參與任何彙總。
+    /// 快照經過 query filter，oracle 本來就看不到已刪除的資料；SQL 版若改用 raw SQL 卻漏了 <c>"DeletedAt" IS NULL</c>，數字就會不同。
+    /// </summary>
+    [Fact]
+    public async Task Deleted_transactions_and_plans_are_excluded()
+    {
+        var createContext = await postgres.CreateDatabaseAsync(Ct);
+        var scenario = new Scenario();
+        var book = scenario.Sample.Book;
+        await using (var db = createContext())
+        {
+            scenario.AddTo(db);
+            await db.SaveChangesAsync(Ct);
+        }
+
+        // 1/5 的薪資動到銀行餘額與 1 月月可用餘額；1 月未付的保險費動到 1 月月可用餘額。
+        var deletedIncome = scenario.Transactions.Single(t => t.Kind == TransactionKind.Income && t.Amount == 50000m).Id;
+        var deletedPlan = scenario.PlannedExpenses.Single(p => p.BudgetMonth == January).Id;
+        await using (var db = createContext())
+        {
+            var deletedAt = new DateTimeOffset(2026, 3, 1, 0, 0, 0, TimeSpan.Zero);
+            (await db.Transactions.SingleAsync(t => t.Id == deletedIncome, Ct)).Delete(deletedAt);
+            (await db.PlannedExpenses.SingleAsync(p => p.Id == deletedPlan, Ct)).Delete(deletedAt);
+            await db.SaveChangesAsync(Ct);
+        }
+
+        await using var readDb = createContext();
+        var ledger = await new LedgerSnapshotLoader(readDb).LoadAsync(book.Id, Ct);
+        // 少了 query filter 時，oracle 與 SQL 會一起看到已刪除的資料而仍然相等；所以先鎖住 oracle 本身確實排除了它們。
+        ledger.Transactions.Select(t => t.Id).Should().NotContain(deletedIncome).And.HaveCount(scenario.Transactions.Count - 1);
+        ledger.PlannedExpenses.Select(p => p.Id).Should().NotContain(deletedPlan).And.HaveCount(scenario.PlannedExpenses.Count - 1);
+        var query = new SqlLedgerSummaryQuery(readDb);
+        var balances = new BalanceCalculator(ledger);
+        var disposable = new DisposableBalanceCalculator(ledger);
+        var asOf = new DateOnly(2026, 2, 28);
+
+        var byDate = await query.PostingTotalsAsync(book.Id, new BalanceCutoff.AsOf(asOf), Ct);
+        var byMonth = await query.PostingTotalsAsync(book.Id, new BalanceCutoff.ThroughBudgetMonth(February), Ct);
+        var funds = await query.FundDeltaTotalsAsync(book.Id, new BalanceCutoff.AsOf(asOf), Ct);
+        var monthly = await query.MonthlyDisposableAsync(book, January, February, Ct);
+
+        foreach (var account in book.Accounts)
+        {
+            (account.OpeningBalance + byDate.GetValueOrDefault(account.Id))
+                .Should().Be(balances.AccountBalanceAsOf(account.Id, asOf), account.Name);
+            (account.OpeningBalance + byMonth.GetValueOrDefault(account.Id))
+                .Should().Be(balances.AccountBalanceThroughBudgetMonth(account.Id, February), account.Name);
+        }
+
+        foreach (var fund in book.PlanningFunds)
+        {
+            (fund.OpeningBalance + funds.GetValueOrDefault(fund.Id)).Should().Be(balances.FundBalanceAsOf(fund.Id, asOf), fund.Name);
         }
 
         monthly[January].Should().Be(disposable.Monthly(January));

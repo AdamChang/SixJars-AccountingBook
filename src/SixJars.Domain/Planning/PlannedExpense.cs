@@ -33,6 +33,9 @@ public sealed class PlannedExpense
     public string? Note { get; private set; }
     public TransactionId? PaidTransactionId { get; private set; }
     public bool IsPaid => PaidTransactionId is not null;
+    /// <summary>軟刪除的時間（ADR 0006）；null 表示未刪除。已刪除的預定支出不再占用月可用餘額。</summary>
+    public DateTimeOffset? DeletedAt { get; private set; }
+    public bool IsDeleted => DeletedAt is not null;
 
     public static PlannedExpense Create(Book book, BudgetMonth budgetMonth, CategoryId categoryId, AccountId? accountId, decimal estimatedAmount, string? note = null)
     {
@@ -43,6 +46,8 @@ public sealed class PlannedExpense
     /// <summary>修改未付的預定支出。付款後金額以實際交易為準，所以禁止修改。</summary>
     public void Update(Book book, BudgetMonth budgetMonth, CategoryId categoryId, AccountId? accountId, decimal estimatedAmount, string? note)
     {
+        EnsureNotDeleted();
+
         if (IsPaid)
         {
             throw new DomainException($"預定支出 {Id.Value} 已付款，金額以實際交易為準，不可修改。");
@@ -63,6 +68,8 @@ public sealed class PlannedExpense
 
     public void MarkPaid(Transaction transaction)
     {
+        EnsureNotDeleted();
+
         if (IsPaid)
         {
             throw new DomainException($"預定支出 {Id.Value} 已付款，不可重複標記。");
@@ -74,6 +81,24 @@ public sealed class PlannedExpense
         }
 
         PaidTransactionId = transaction.Id;
+    }
+
+    /// <summary>
+    /// 軟刪除（spec §3.3）。已付款的也可以刪除：刪除的是「計畫」本身，已建立的付款交易不受影響，連結也保留。
+    /// 已刪除的預定支出不能再刪除、修改或付款。
+    /// </summary>
+    public void Delete(DateTimeOffset at)
+    {
+        EnsureNotDeleted();
+        DeletedAt = at;
+    }
+
+    private void EnsureNotDeleted()
+    {
+        if (IsDeleted)
+        {
+            throw new DomainException($"預定支出 {Id.Value} 已刪除，不可修改。");
+        }
     }
 
     /// <summary>分類必須是固定、貸款或特別支出；有指定帳戶時，帳戶必須屬於這本帳本。</summary>

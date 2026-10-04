@@ -68,6 +68,10 @@ public sealed class Transaction
     public string? Note { get; private set; }
     public IReadOnlyList<Posting> Postings => _postings;
 
+    /// <summary>軟刪除的時間（ADR 0006）；null 表示未刪除。已刪除的交易不參與任何餘額與報表計算，但仍保留在備份中。</summary>
+    public DateTimeOffset? DeletedAt { get; private set; }
+    public bool IsDeleted => DeletedAt is not null;
+
     /// <summary>對財務規劃帳戶的影響：入新資金與資金回流為正、出資金為負。</summary>
     public decimal FundDelta => Kind switch
     {
@@ -87,6 +91,8 @@ public sealed class Transaction
     /// </param>
     public void ReplaceWith(Transaction draft)
     {
+        EnsureNotDeleted();
+
         if (draft.BookId != BookId)
         {
             throw new DomainException("不可用其他帳本的交易內容修改這筆交易。");
@@ -104,5 +110,20 @@ public sealed class Transaction
         Note = draft.Note;
         _postings.Clear();
         _postings.AddRange(draft.Postings);
+    }
+
+    /// <summary>軟刪除（spec §3.3）：分錄保留不動，由 query filter 排除在計算之外。已刪除的交易不能再刪除、修改或還原。</summary>
+    public void Delete(DateTimeOffset at)
+    {
+        EnsureNotDeleted();
+        DeletedAt = at;
+    }
+
+    private void EnsureNotDeleted()
+    {
+        if (IsDeleted)
+        {
+            throw new DomainException($"交易 {Id.Value} 已刪除，不可修改。");
+        }
     }
 }
