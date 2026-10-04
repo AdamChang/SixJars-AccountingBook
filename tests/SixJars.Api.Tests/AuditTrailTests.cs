@@ -139,6 +139,19 @@ public class AuditTrailTests(PostgresFixture postgres)
     }
 
     [Fact]
+    public async Task Actor_is_the_signed_in_user()
+    {
+        // 其他測試都用 DefaultSubject 登入，寫死操作者也會通過；換一個使用者才鎖得住。
+        await using var factory = await CreateFactoryAsync();
+        var book = await factory.SeedBookAsync(Ct);
+        var client = factory.CreateSignedInClient("spouse-sub");
+
+        var created = await CreateTransactionAsync(client, book, LunchInput(book, -100m, "午餐"));
+
+        (await EntriesAsync(factory)).Single(e => e.EntityId == created.Id).ActorSubject.Should().Be("spouse-sub");
+    }
+
+    [Fact]
     public async Task History_lists_entries_oldest_first()
     {
         // 用系統時鐘：每次請求的 At 不同，才看得出排序（固定時鐘下只剩 Id 排序）。
