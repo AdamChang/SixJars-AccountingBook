@@ -1954,7 +1954,7 @@ public sealed record BackupMember(string Email, string? GoogleSubject, BookRole 
    - 建立 app 專用的 DB 角色，只給 DML 權限。DDL 權限只給執行 migration 的帳號。
    - **不要啟用 Neon Data API**（段 E 安全審查：DataProtection 金鑰以明文存在 DB）。
 2. **Migration**：
-   - `dotnet ef migrations bundle --project src/SixJars.Infrastructure --startup-project src/SixJars.Api -o efbundle`。
+   - `dotnet ef migrations bundle --project src/SixJars.Infrastructure --startup-project src/SixJars.Infrastructure -o efbundle`（原寫 `src/SixJars.Api`，Api 沒有參考 EF Design，見段 F 執行紀錄）。
    - 部署前在本機執行 `./efbundle --connection "<admin 連線字串>"`。
    - **不在 app 啟動時自動 migrate**（spec §8.4）。
 3. **Google OAuth**：
@@ -1983,6 +1983,65 @@ public sealed record BackupMember(string Email, string? GoogleSubject, BookRole 
   - 備份時不使用 `IgnoreQueryFilters`，往返測試必須失敗。
   - 還原時不呼叫 `Delete`，往返測試也必須失敗。
 - 用 `docs(plans):` 回寫偏差，停下來讓使用者檢視。push 與部署交由使用者執行。
+
+### 段 F 執行紀錄（2026-10-04，雲端 container）
+
+**開始前，使用者的決定**：正式環境資料庫改用 **Neon**（ADR 0007，`f4f7dab`），取代 Supabase。T44／T45 改為 Neon 直連 endpoint、不啟用 Neon Data API、預設不設定 Cloud Scheduler 定時 ping（**待使用者確認**）；T44 補上 `UseForwardedHeaders`（段 E 留下的必要事項）。
+
+執行方式：每批一個 subagent，依序為 T39–40｜T41–42｜T43–45；每批交付後主控者重跑測試、比對 diff、做變異測試。
+
+Checkpoint F 結束時：總計 **344**、失敗 0、略過 18（`reference/` 不存在：P1 的 12 個、T27 的 3 個、T40 的 3 個）；build 0 warning；新增的 commit 沒有 `.env`、沒有 `reference/`，`.env.example` 只有 placeholder。
+
+| Task | Commit | 計畫 | 實際 | 差異的來源 |
+|---|---|---|---|---|
+| T39 | `2899a08` | 218 | 308 | CLI 測試 6 個（計畫 2 個）；慣例測試加 2 個（CLI 專用 request 不可 public、Application 的 internal 只開給 Cli 與測試） |
+| T40 | `9d02ed8` | 224 | 318 | `ImportLegacyBookTests` 5 個（多 dry run、中途失敗）；mapper 命名 1 個；CLI 檔案不存在 1 個 |
+| T41 | `f6cf9f6` | 226 | 321 | 加 1 個：帳本不存在回 404 |
+| T42 | `fa87265` | 230 | 335 | 損毀備份 Theory 8 個 case、中途失敗、CLI 失敗情境 |
+| T43 | `907b587` | 233 | 342 | 日期區間 Theory 2 個 case、公式注入、交易類型中文名稱完整性 |
+| T44 | `fd25832` | 233 | 344 | ForwardedHeaders 2 個（OIDC redirect_uri、antiforgery token） |
+| T45 | `12d63f8` | 233 | 344 | — |
+
+**與計畫的偏離**（以 committed code 為準）
+- **T39**：
+  - 新增標記介面 `ICliOnlyRequest`。慣例測試改成：帶 `Guid BookId` 的 request 必須恰好實作 `IBookScoped` 與 `ICliOnlyRequest` 其中一個；CLI 專用 request 一律 internal，Application 的 `InternalsVisibleTo` 只開給 `SixJars.Cli` 與 `*.Tests`，所以 Api 在編譯時就無法使用它們。
+  - `add-member` 先檢查重複 email，給出清楚的錯誤；唯一索引仍是最後防線。
+  - exit code：0 成功；1 業務或輸入錯誤、報告有錯、DB 錯誤；2 缺連線字串。錯誤訊息遮蔽連線字串與密碼，不印 stack trace。
+  - CLI 呼叫 `AddLogging()`（MediatR 14 需要 `ILoggerFactory`），刻意不加任何 log provider。
+- **T40**：
+  - 帳本命名選「mapper 接受名稱參數」：`Map(workbook, bookName = DefaultBookName)`，P1 呼叫端不變。
+  - `ImportLegacyBook` 多一個 `FileName` 參數；稽核記錄只存檔名（兩種路徑分隔字元都切掉）。`ImportLegacyBook` 也是 `ICliOnlyRequest`。
+  - 匯入分三次 SaveChanges，整段包在 `BeginTransactionAsync`；稽核記錄 EntityType 為 `Book`。
+  - 同時執行兩個 import 時，同名檢查有競態（Books.Name 沒有唯一索引）；一次性的搬家工具，不處理。
+- **T41**：新增 `Common/TaipeiTime.cs`，`/summary` 與匯出檔名共用；新增 `AuditEntryDto.From`。
+- **T42**：
+  - `BackupMember` 多了 `Guid Id`；`Book` 多一個 EF 專用的 private 無參數建構子。
+  - Infrastructure.Tests 參考 `SixJars.Api` 與 `Mvc.Testing`，往返測試經由 API 建資料。
+  - `BackupJson.Options` 開啟 `RespectNullableAnnotations` 與 `RespectRequiredConstructorParameters`；FormatVersion ≠ 1 由 validator 擋（400 類）。
+  - 還原多了一致性檢查：Domain 重建的結果（帳本設定、交易 `ToInput()`、預定支出 DTO、付款連結）與備份不同時一律拒絕，不默默修正。
+  - `MarkPaid` 不拒絕已刪除的交易；還原時依實際順序：先 MarkPaid，再刪除預定支出，最後刪除交易。
+  - 「匯出稽核拿掉 BookId 條件」往返測試抓不到（別本帳的記錄會被改掛到這本帳，A 與 B 仍相同），由 T41 的測試負責。
+- **T43**：
+  - 文字欄位以 `= + - @`、tab、CR 開頭時中和：CSV 前置 `'`，xlsx 一律寫成文字並設 `IncludeQuotePrefix`；金額維持數字。
+  - `ApiExceptionHandler` 新增 `BadHttpRequestException` → 它自帶的狀態碼。Development 環境下 minimal API 參數綁定失敗原本會變成 500，現在與 Production 一樣回 400，對所有 endpoint 生效。
+  - ClosedXML 0.105.1（MIT），間接相依皆為 MIT，SixLabors.Fonts 1.0.0 為 Apache-2.0。
+- **T44**：
+  - `ForwardedHeadersSetup`：`XForwardedFor | XForwardedProto`，清空 `KnownProxies` 與 `KnownIPNetworks`，`ForwardLimit` 維持 1；註解寫明信任前提（container 只能經由 Google 前端連到；日後若可直連 app，必須改回只信任該 proxy）。
+  - **Docker image 未在雲端驗證**：`docker build` 在 `dotnet restore` 失敗（build 容器不信任雲端 proxy 的 CA，`NU1301 UntrustedRoot`），與程式碼無關。依使用者先前的指示改由使用者在本機驗證，步驟寫在 `docs/deploy.md` 第 2 節。
+  - **`aspnet:10.0` 是否內建 tzdata 未確認**：沒有的話 `/summary` 與匯出檔名會 500，`docs/deploy.md` 附了補安裝的做法。
+- **T45**：
+  - 指令以 PowerShell 撰寫（使用者本機為 Windows）。
+  - 計畫外的強化：app 角色對 `AuditEntries` 撤銷 UPDATE／DELETE（append-only）；日後若要清理稽核記錄，要調整這條授權。
+  - **migration bundle 的 startup project**：計畫與 subagent 原本寫 `--startup-project src/SixJars.Api`，但 Api 沒有參考 `Microsoft.EntityFrameworkCore.Design`，會失敗。主控者改為 `--startup-project src/SixJars.Infrastructure`（與 `migrations add` 相同），並在雲端以暫時的 `postgres:17-alpine` 實測：7 個 migration 全部套用，第二次執行回報「already up to date」。
+
+**Checkpoint F 變異測試**（主控者獨立執行，全部有測試失敗）：匯出交易不使用 `IgnoreQueryFilters`（4 個失敗）、還原時不呼叫交易的 `Delete`（2 個失敗）。subagent 另外做了：import 拿掉 DB transaction、AddOwner 誤標 `IBookScoped`、還原不沿用 Id、不設鎖帳日、匯出拿掉 BookId 條件、拿掉公式中和、拿掉 `UseForwardedHeaders`、不清空 KnownProxies 等，全部被抓到。唯一抓不到的是 CLI 錯誤訊息的 `Redact`：目前的例外訊息本來就不含密碼，屬於純防禦。
+
+**待使用者在本機驗證**
+1. 有 `reference/` 時執行 `dotnet test`：略過應為 0、失敗 0。這包含 P1 與 T27 的 Excel 驗收、T40 的 CLI 匯入驗收（雲端從未跑過）。
+2. `docs/deploy.md` 第 2 節的 Docker image 驗證：build、`Asia/Taipei` 時區、image 內沒有 `reference` 與 `.xlsm`、`/health` 回 200。
+3. 本計畫 Checkpoint F 原列的手動驗證：真實 xlsm 的 `import-legacy --dry-run` 與正式匯入、`/summary` 1–3 月與 Excel 一致。Google 登入待前端完成後一起驗證。
+
+**待使用者決定**：是否設定 Cloud Scheduler 定時 ping（ADR 0007 預設不設定）。
 
 ---
 

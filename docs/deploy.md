@@ -200,7 +200,7 @@ CREATE TABLE should_fail (id int);
 ```powershell
 # 產生自含執行檔（Windows；在 Linux／macOS 上把 -r 改成 linux-x64／osx-arm64）
 dotnet ef migrations bundle `
-  --project src/SixJars.Infrastructure --startup-project src/SixJars.Api `
+  --project src/SixJars.Infrastructure --startup-project src/SixJars.Infrastructure `
   --self-contained -r win-x64 -o efbundle.exe --force
 
 # 以 migrator 角色套用到 Neon（連線字串只放在這個 PowerShell session 的變數中）
