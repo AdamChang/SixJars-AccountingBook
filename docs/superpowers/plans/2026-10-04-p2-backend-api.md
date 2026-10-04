@@ -1413,6 +1413,59 @@ public void EnsureUnlocked(BudgetMonth month) =>
   - 把 Update 的 `before` 快照改到 `ReplaceWith` 之後才取得。
 - 用 `docs(plans):` 回寫偏差，停下來讓使用者檢視。
 
+### 段 D 執行紀錄（2026-10-04，雲端 container）
+
+**開始前，先依使用者對段 C 待決事項的決定修正**（`46e7b20`）：
+- validation 錯誤 `errors` 的 key 改成 body 欄位名稱：拿掉 `Input.` 前綴，每段轉 camelCase（`ApiExceptionHandler.ToBodyFieldName`）。新增與修改共用同一套 key。
+- 新增 `GET /planned-expenses/{id}`，建立時回傳的 `Location` 可讀；別本帳回 404。
+- 付款 API 的設計（201、貸款欄位的 422 規則）使用者確認照現狀。
+
+執行方式：每批一個 subagent，依序為 T28–29｜T30–31｜T32–33；每批交付後主控者重跑測試、比對 diff、做變異測試、補缺漏的測試。
+
+Checkpoint D 結束時：總計 **243**、失敗 0、略過 15；build 0 warning；機密掃描乾淨，沒有 `reference/` 檔案。段 E 起的 Expected 一律以「計畫值 + 49」為準，例如 T34 的 Expected 要加 49。
+
+| Task | 計畫 | 實際 | 差異的來源 |
+|---|---|---|---|
+| 段 C 收尾 | — | 193 | 錯誤 key、單筆 GET 共 3 個 |
+| T28 | 164 | 201 | subagent 加 2 個：已刪除的預定支出不可修改、不可付款 |
+| T29 | 169 | 211 | subagent 加 6 個（`MarkUnpaid` 兩種擲例外、跨帳本刪除 404 等）；審查補 1 個：刪除預定支出時版本過舊回 409 |
+| T30–31 | 182 | 227 | subagent 加 2 個（失敗寫入的 409 case、快照序列化單元測試）；審查補 1 個：操作者取自登入的使用者 |
+| T32–33 | 194 | 243 | subagent 加 4 個：清除鎖帳日、預定支出搬進已鎖月份、付款日期已鎖但月份開放、刪除連結到已鎖月份預定支出的付款交易 |
+
+**審查時抓到、已補測的缺口**
+- 拿掉 `DeletePlannedExpense` 的 `ExpectVersion`，原本沒有測試失敗（`8273c0c`）。
+- 把 `AuditTrail` 的 `ActorSubject` 寫死成 `DefaultSubject`，原本沒有測試失敗，因為所有測試都用預設使用者登入（`3cf0ef7`）。
+
+**Checkpoint D 變異測試**（主控者獨立執行，全部有測試失敗）：拿掉 Transaction 的 query filter（4 個失敗）、拿掉修改交易時的原日期檢查、`before` 改到 `ReplaceWith` 之後取得、鎖帳日邊界 `<=` 改成 `<`（6 個失敗）。subagent 另外對每個鎖帳日檢查點各做一次變異，全部被抓到。
+
+**等價變異**（不是測試缺口）
+- `DeleteTransaction` 解除連結時拿掉 `p.BookId == bookId`：交易 Id 全域唯一，付款時也已要求同一本帳，保留當防護。
+- 鎖帳日檢查挪到修改或 `audit.Record` 之後：例外發生在 `SaveChanges` 之前，DbContext 又是 scoped，從 HTTP 層觀察不到差別，只靠程式碼順序保證。
+- 拿掉 `AuditSnapshots` 的 `UnsafeRelaxedJsonEscaping`：jsonb 存檔時會把 `\uXXXX` 還原成字元，API 測試抓不到；改由 `AuditSnapshotsTests` 單元測試把關。
+
+**與計畫的偏離**（以 committed code 為準）
+- **T28／T29 的 Domain 規則**：
+  - 已刪除的預定支出不可付款（`MarkPaid` 也擋）。
+  - `MarkUnpaid` 在已刪除或本來就未付時擲例外。
+  - 已付款的預定支出刪除後，付款交易與 `PaidTransactionId` 都保留。
+- **DELETE** 版本由 `?version=` 帶入，成功回 204；沒帶 `version` 時由 minimal API 綁定回 400（未寫測試）。
+- **T30 稽核**：
+  - 新增 `AuditEntityTypes` 常數類別，`AccountDto`／`PlanningFundDto`／`CategoryDto` 各加 `From`。
+  - 新增與修改後的快照 `version` 一律記 0（`AuditSnapshots.UnknownVersion`），因為 xmin 要到 `SaveChanges` 才產生；修改前的快照帶讀到的版本。
+  - 刪除付款交易時（O2），預定支出另外記一筆 Update。
+  - `AuditEntries` 沒有 FK 指向 Books；欄位長度自訂：ActorSubject 255、Action 32、EntityType 64。
+  - 同一次 `SaveChanges` 的多筆記錄 `At` 相同，彼此依 Id 排序；單一實體的歷史不受影響。
+- **T31**：`GET /audit?entityId=` 依路由的 BookId 過濾，別本帳的路徑回空陣列。
+- **T32**：`BookConfiguration.cs` 沒有修改，EF 依慣例對應 `DateOnly?`。
+- **T33**：
+  - `PUT /lock-date` 回 204、沒有樂觀並行控制（Book 沒有 xmin），同時設定時以最後一次為準。
+  - **衍生規則**：刪除付款交易時，若連結的預定支出所在月份已鎖，回 422 `locked`，即使交易日期是開放的。**待使用者確認。**
+  - `DeleteTransaction` 與 `DeletePlannedExpense` 各多一次載入帳本的資料庫往返。
+  - 錯誤優先順序：資料已鎖時，即使版本過舊或輸入有其他業務錯誤，都回 422 `locked`。
+
+**待使用者決定**
+- **鎖帳日只看交易日期，不看歸屬月份**：依 CONTEXT.md，鎖帳日是「此日（含）以前的**交易**」。所以鎖到 1/31 後，仍可新增日期為 2/3、歸屬月份為 2026-01 的交易，或修改 2/5 付款的 1 月預定支出交易金額，1 月的月可用餘額因此還會變動。是否要再加上「歸屬月份已鎖時也不可異動」，需要使用者決定。
+
 ---
 ## 段 E：帳本成員、Google 登入、授權、antiforgery（ADR 0005）
 
