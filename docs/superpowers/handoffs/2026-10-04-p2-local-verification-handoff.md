@@ -4,7 +4,7 @@
 
 ## 1. 目前狀態
 
-- **分支**：`claude/p2-planning-83al3h`，最後一個 commit 為 `74cace0`（`docs(plans): 回寫段 F 執行紀錄…`），已 push。尚未建立 PR。
+- **分支**：`claude/p2-planning-83al3h`，程式與計畫的最後一個 commit 為 `74cace0`（`docs(plans): 回寫段 F 執行紀錄…`），之後只多了這份交接文件（`d72ffa5`），都已 push。尚未建立 PR。
 - **計畫**：`docs/superpowers/plans/2026-10-04-p2-backend-api.md` 的 T17–T45 全部完成，四個 Checkpoint（C、D、E、F）都通過。各段的偏差、變異測試與決定，見計畫內的「段 C／D／E／F 執行紀錄」。
 - **雲端的測試結果**：總計 344、失敗 0、略過 18，build 0 warning。
   - 略過的 18 個都需要 `reference/`（真實的財務資料，雲端沒有）：P1 的 Excel 驗收 12 個、T27 的 SQL 版 Excel 驗收 3 個、T40 的 CLI 匯入驗收 3 個。**這 18 個測試從來沒有跑過**。
