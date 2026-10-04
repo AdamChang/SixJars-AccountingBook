@@ -117,6 +117,10 @@ docker logs sixjars-api-check
 
 預期：`HTTP/1.1 200 OK`。PostgreSQL 剛啟動的幾秒內可能回 503，稍等後再試一次。
 
+`docker logs` 裡可能看到的訊息（2026-10-04 本機實測）：
+- `fail: ... relation "DataProtectionKeys" does not exist`：這一步刻意不跑 migration，app 啟動時讀不到 Data Protection 的 key 表。跑過 migration 的資料庫不會出現。
+- `warn: ... XmlKeyManager[35] No XML encryptor configured`：Data Protection 的 key 以未加密的形式存在資料庫，只在產生新 key 時出現。
+
 清除：
 
 ```powershell
