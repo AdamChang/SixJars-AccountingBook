@@ -115,6 +115,9 @@ curl.exe -i http://localhost:8080/books/x/transactions
 curl.exe -s http://localhost:8080/ | Select-String -Pattern '(main|styles)-[A-Za-z0-9]+\.(js|css)'
 curl.exe -I http://localhost:8080/main-<hash>.js
 
+# 2b. 壓縮檢查：看回應有沒有 Content-Encoding
+curl.exe -sI -H "Accept-Encoding: gzip, br" http://localhost:8080/main-<hash>.js
+
 # 3. 入口與 service worker 檔必須 no-cache
 curl.exe -I http://localhost:8080/ngsw.json
 curl.exe -I http://localhost:8080/index.html
@@ -125,6 +128,7 @@ curl.exe -I http://localhost:8080/index.html
 - 雜湊檔（`main-*.js`、`styles-*.css`，以及 lazy chunk `chunk-*.js`）：`Cache-Control: public, max-age=31536000, immutable`。
 - `index.html`、`ngsw.json`（其他非雜湊檔如 `ngsw-worker.js` 同理）：`Cache-Control: no-cache`。
 - 打錯的 API 路徑（例如 `/api/nope`）維持 404，不會回 `index.html`。
+- 壓縮：ASP.NET Core 的 static files 本身不會壓縮，本機容器預期沒有 `Content-Encoding`。部署到 Cloud Run 後用同一條指令對 `<url>/<main-hash>.js` 再檢查一次；若 Cloud Run 也沒有補上壓縮，首次載入約 590 kB 原始大小（之後由 service worker 快取提供）。請把實測結果記在這裡；目前不實作壓縮。
 
 ### 2.5 `/health`
 
@@ -371,6 +375,8 @@ curl.exe -i "$url/health"
 預期：`200 OK`。若是 503，代表連不上資料庫：檢查連線字串（直連 host、`SSL Mode=Require`）與 secret 權限。若 revision 根本起不來，用 `gcloud run services logs read sixjars --region asia-east1` 查看；缺少 Google 設定時，啟動訊息會指出缺少哪個環境變數。
 
 接著回到第 5 節，把 `$url/auth/callback` 加進 OAuth client 的 redirect URI，再以瀏覽器開啟 `$url/auth/login` 驗證登入（真實的 Google 登入只能手動驗證）。
+
+最後檢查 service worker 不會干擾登入：首次造訪後，service worker 應已註冊（DevTools → Application → Service Workers）。接著重新整理頁面、登出、再登入一次，`/auth/callback` 與 `/denied` 的轉址都必須正常運作，不可被快取的 `index.html` 直接回應。
 
 ---
 

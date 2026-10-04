@@ -1,59 +1,25 @@
 # Web
 
-This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 22.2.1.
+SixJars 前端：Angular 22 PWA（zoneless、Angular Material）。
 
-## Development server
-
-To start a local development server, run:
+## 開發
 
 ```bash
-ng serve
+npm start            # ng serve
+npx ng build         # 產出 dist/
 ```
 
-Once the server is running, open your browser and navigate to `https://localhost:4300/`. The application will automatically reload whenever you modify any of the source files.
-
-## Code scaffolding
-
-Angular CLI includes powerful code scaffolding tools. To generate a new component, run:
+## 單元測試
 
 ```bash
-ng generate component component-name
+npx ng test --watch=false
 ```
 
-For a complete list of available schematics (such as `components`, `directives`, or `pipes`), run:
+## E2E 測試
+
+Playwright，API 以 mock 取代，並自動啟動 `ng serve`（http://localhost:4301）。第一次使用先安裝瀏覽器：
 
 ```bash
-ng generate --help
+npx playwright install chromium
+npm run e2e
 ```
-
-## Building
-
-To build the project run:
-
-```bash
-ng build
-```
-
-This will compile your project and store the build artifacts in the `dist/` directory. By default, the production build optimizes your application for performance and speed.
-
-## Running unit tests
-
-To execute unit tests with the [Vitest](https://vitest.dev/) test runner, use the following command:
-
-```bash
-ng test
-```
-
-## Running end-to-end tests
-
-For end-to-end (e2e) testing, run:
-
-```bash
-ng e2e
-```
-
-Angular CLI does not come with an end-to-end testing framework by default. You can choose one that suits your needs.
-
-## Additional Resources
-
-For more information on using the Angular CLI, including detailed command references, visit the [Angular CLI Overview and Command Reference](https://angular.dev/tools/cli) page.
