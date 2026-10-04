@@ -1,0 +1,129 @@
+<form class="transaction-form" [formGroup]="form" (ngSubmit)="onSubmit()">
+  <mat-form-field>
+    <mat-label>日期</mat-label>
+    <input matInput [matDatepicker]="datePicker" formControlName="date" autocomplete="off" />
+    <mat-datepicker-toggle matIconSuffix [for]="datePicker" />
+    <mat-datepicker #datePicker />
+    <mat-error>請輸入日期</mat-error>
+  </mat-form-field>
+
+  <div class="kinds">
+    <mat-button-toggle-group formControlName="kind" aria-label="交易類型" hideSingleSelectionIndicator>
+      @for (kind of primaryKinds; track kind) {
+        <mat-button-toggle [value]="kind">{{ rules[kind].label }}</mat-button-toggle>
+      }
+    </mat-button-toggle-group>
+    <button mat-stroked-button type="button" class="more-kinds" [matMenuTriggerFor]="moreMenu">{{ moreLabel() }}</button>
+    <mat-menu #moreMenu>
+      @for (kind of moreKinds; track kind) {
+        <button mat-menu-item type="button" (click)="selectKind(kind)">{{ rules[kind].label }}</button>
+      }
+    </mat-menu>
+  </div>
+
+  <mat-form-field>
+    <mat-label>{{ rule().account.label }}</mat-label>
+    <mat-select formControlName="accountId">
+      @for (account of accountChoices(); track account.id) {
+        <mat-option [value]="account.id">{{ account.name }}</mat-option>
+      }
+    </mat-select>
+    <mat-error>請選擇{{ rule().account.label }}</mat-error>
+  </mat-form-field>
+
+  @if (rule().counter; as counter) {
+    <mat-form-field>
+      <mat-label>{{ counter.label }}</mat-label>
+      <mat-select formControlName="counterAccountId">
+        @if (!counter.required) {
+          <mat-option [value]="null">（不指定）</mat-option>
+        }
+        @for (account of counterChoices(); track account.id) {
+          <mat-option [value]="account.id">{{ account.name }}</mat-option>
+        }
+      </mat-select>
+      <mat-error>請選擇{{ counter.label }}</mat-error>
+    </mat-form-field>
+  }
+
+  <div class="amount-row">
+    <mat-form-field>
+      <mat-label>金額</mat-label>
+      <input matInput #amountInput type="text" inputmode="decimal" formControlName="amount" autocomplete="off" />
+      @if (form.controls.amount.hasError('required')) {
+        <mat-error>請輸入金額</mat-error>
+      } @else {
+        <mat-error>金額須大於 0，最多 2 位小數</mat-error>
+      }
+    </mat-form-field>
+    @if (rule().signed) {
+      <mat-checkbox formControlName="refund">退款／沖回</mat-checkbox>
+    }
+  </div>
+
+  @if (rule().loanPrincipal) {
+    <div class="loan-row">
+      <mat-form-field>
+        <mat-label>本金</mat-label>
+        <input matInput type="text" inputmode="decimal" formControlName="loanPrincipal" autocomplete="off" />
+        @if (form.controls.loanPrincipal.hasError('required')) {
+          <mat-error>請輸入本金</mat-error>
+        } @else {
+          <mat-error>本金須 ≥ 0，最多 2 位小數</mat-error>
+        }
+      </mat-form-field>
+      <mat-form-field>
+        <mat-label>利息</mat-label>
+        <input matInput class="interest" readonly tabindex="-1" [value]="interest()" />
+      </mat-form-field>
+    </div>
+  }
+
+  @if (rule().category) {
+    <mat-form-field>
+      <mat-label>分類</mat-label>
+      <input matInput type="text" formControlName="categoryId" [matAutocomplete]="categoryAuto" />
+      <mat-autocomplete #categoryAuto [displayWith]="categoryLabel" autoActiveFirstOption>
+        @for (option of filteredCategories(); track option.id) {
+          <mat-option [value]="option.id">{{ option.label }}</mat-option>
+        }
+      </mat-autocomplete>
+      @if (form.controls.categoryId.hasError('required')) {
+        <mat-error>請選擇分類</mat-error>
+      } @else {
+        <mat-error>請從清單選擇分類</mat-error>
+      }
+    </mat-form-field>
+  }
+
+  @if (rule().planningFund) {
+    <mat-form-field>
+      <mat-label>財務規劃帳戶</mat-label>
+      <mat-select formControlName="planningFundId">
+        @for (fund of book().planningFunds; track fund.id) {
+          <mat-option [value]="fund.id">{{ fund.name }}</mat-option>
+        }
+      </mat-select>
+      <mat-error>請選擇財務規劃帳戶</mat-error>
+    </mat-form-field>
+  }
+
+  <mat-form-field>
+    <mat-label>備註</mat-label>
+    <input matInput type="text" formControlName="note" autocomplete="off" />
+  </mat-form-field>
+
+  <mat-expansion-panel class="advanced">
+    <mat-expansion-panel-header>
+      <mat-panel-title>進階</mat-panel-title>
+    </mat-expansion-panel-header>
+    <mat-form-field>
+      <mat-label>歸屬月份</mat-label>
+      <input matInput type="text" inputmode="numeric" formControlName="budgetMonth" autocomplete="off" />
+      <mat-hint>YYYYMM，預設為日期所在月份</mat-hint>
+      <mat-error>請輸入 YYYYMM 格式的月份</mat-error>
+    </mat-form-field>
+  </mat-expansion-panel>
+
+  <button mat-flat-button type="submit" class="submit" [disabled]="pending()">儲存</button>
+</form>
