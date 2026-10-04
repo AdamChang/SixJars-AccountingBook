@@ -84,6 +84,22 @@ public sealed class PlannedExpense
     }
 
     /// <summary>
+    /// 解除付款連結，回到未付（spec §9 O2）：付款交易被刪除時使用，月可用餘額改回以預估金額計算。
+    /// 已刪除的預定支出不能修改，所以同樣擲出例外；刪除付款交易時 query filter 本來就查不到它，連結會原樣保留。
+    /// </summary>
+    public void MarkUnpaid()
+    {
+        EnsureNotDeleted();
+
+        if (!IsPaid)
+        {
+            throw new DomainException($"預定支出 {Id.Value} 尚未付款，沒有可解除的付款連結。");
+        }
+
+        PaidTransactionId = null;
+    }
+
+    /// <summary>
     /// 軟刪除（spec §3.3）。已付款的也可以刪除：刪除的是「計畫」本身，已建立的付款交易不受影響，連結也保留。
     /// 已刪除的預定支出不能再刪除、修改或付款。
     /// </summary>

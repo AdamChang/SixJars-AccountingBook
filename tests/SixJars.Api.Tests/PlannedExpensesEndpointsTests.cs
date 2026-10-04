@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using FluentAssertions;
+using SixJars.Application.Ledger;
 using SixJars.Application.Planning;
 using SixJars.Application.Transactions;
 using SixJars.Domain.Books;
@@ -345,6 +346,77 @@ public class PlannedExpensesEndpointsTests(PostgresFixture postgres)
         await ShouldBeUnpaidWithoutTransactionsAsync(client, book);
     }
 
+    /// <summary>spec §9 O2：刪除付款交易時，預定支出自動回到未付，月可用餘額改回以預估金額計算。</summary>
+    [Fact]
+    public async Task Deleting_payment_transaction_reverts_plan_to_unpaid()
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var book = await factory.SeedBookAsync(Ct);
+        var client = factory.CreateSignedInClient();
+        var planned = await CreateAsync(client, book, InsuranceInput(book, 202602, -3000m, "保險費"));
+        // 實際金額與預估金額不同，才分辨得出月可用餘額是以哪一個計算。
+        var paid = await PayAsync(client, book, planned,
+            new { version = planned.Version, date = "2026-02-20", accountId = book.FindAccount("國泰世華銀行")!.Id.Value, amount = -2950m });
+        (await SummaryAsync(client, book)).MonthlyDisposable.Should().Be(-2950m);
+
+        var response = await client.DeleteAsync(
+            $"/api/books/{book.Id.Value}/transactions/{paid.Transaction.Id}?version={paid.Transaction.Version}", Ct);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        var reverted = (await ListAsync(client, book, "")).Single();
+        reverted.IsPaid.Should().BeFalse();
+        reverted.PaidTransactionId.Should().BeNull();
+        reverted.EstimatedAmount.Should().Be(-3000m);
+        reverted.Version.Should().NotBe(paid.PlannedExpense.Version, "預定支出與交易在同一次 SaveChanges 寫入");
+        (await client.GetFromJsonAsync<List<TransactionDto>>($"/api/books/{book.Id.Value}/transactions", ApiJson.Options, Ct))
+            .Should().BeEmpty();
+        (await SummaryAsync(client, book)).MonthlyDisposable.Should().Be(-3000m);
+        // 回到未付之後可以再付一次。
+        await PayAsync(client, book, reverted,
+            new { version = reverted.Version, date = "2026-02-21", accountId = book.FindAccount("國泰世華銀行")!.Id.Value, amount = -2900m });
+    }
+
+    [Fact]
+    public async Task Delete_planned_expense_is_204()
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var book = await factory.SeedBookAsync(Ct);
+        var client = factory.CreateSignedInClient();
+        var unpaid = await CreateAsync(client, book, InsuranceInput(book, 202602, -3000m, "未付"));
+        var toPay = await CreateAsync(client, book, InsuranceInput(book, 202602, -500m, "已付"));
+        var paid = await PayAsync(client, book, toPay,
+            new { version = toPay.Version, date = "2026-02-20", accountId = book.FindAccount("國泰世華銀行")!.Id.Value, amount = -450m });
+        (await SummaryAsync(client, book)).MonthlyDisposable.Should().Be(-3450m);
+
+        var deleteUnpaid = await client.DeleteAsync($"{Url(book)}/{unpaid.Id}?version={unpaid.Version}", Ct);
+        // 已付款的也可以刪除：刪除的是計畫本身，付款交易保留。
+        var deletePaid = await client.DeleteAsync($"{Url(book)}/{toPay.Id}?version={paid.PlannedExpense.Version}", Ct);
+
+        deleteUnpaid.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        deletePaid.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        (await ListAsync(client, book, "")).Should().BeEmpty();
+        (await client.GetAsync($"{Url(book)}/{unpaid.Id}", Ct)).StatusCode.Should().Be(HttpStatusCode.NotFound);
+        (await client.GetFromJsonAsync<List<TransactionDto>>($"/api/books/{book.Id.Value}/transactions", ApiJson.Options, Ct))!
+            .Select(t => t.Id).Should().Equal(paid.Transaction.Id);
+        (await SummaryAsync(client, book)).MonthlyDisposable.Should().Be(-450m);
+        (await client.DeleteAsync($"{Url(book)}/{unpaid.Id}?version={unpaid.Version}", Ct)).StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task Delete_planned_expense_of_another_book_is_404_and_leaves_it()
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var mine = await factory.SeedBookAsync(Ct);
+        var other = await factory.SeedBookAsync(Ct);
+        var client = factory.CreateSignedInClient();
+        var theirs = await CreateAsync(client, other, InsuranceInput(other, 202602, -3000m, "別人的"));
+
+        var response = await client.DeleteAsync($"{Url(mine)}/{theirs.Id}?version={theirs.Version}", Ct);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        (await ListAsync(client, other, "")).Should().ContainSingle().Which.Should().BeEquivalentTo(theirs);
+    }
+
     [Theory]
     [InlineData("planned-expenses")]
     [InlineData("transactions")]
@@ -372,6 +444,10 @@ public class PlannedExpensesEndpointsTests(PostgresFixture postgres)
         response.StatusCode.Should().Be(HttpStatusCode.Created);
         return (await response.Content.ReadFromJsonAsync<PayPlannedExpenseResult>(ApiJson.Options, Ct))!;
     }
+
+    private static async Task<LedgerSummaryDto> SummaryAsync(HttpClient client, Book book) =>
+        (await client.GetFromJsonAsync<LedgerSummaryDto>(
+            $"/api/books/{book.Id.Value}/summary?budgetMonth=202602&asOf=2026-02-28", ApiJson.Options, Ct))!;
 
     private static async Task ShouldBeUnpaidWithoutTransactionsAsync(HttpClient client, Book book)
     {

@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using FluentAssertions;
+using SixJars.Application.Ledger;
 using SixJars.Application.Transactions;
 using SixJars.Domain.Books;
 using SixJars.Domain.Transactions;
@@ -336,6 +337,67 @@ public class TransactionsEndpointsTests(PostgresFixture postgres)
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
         var after = await client.GetFromJsonAsync<TransactionDto>($"/api/books/{other.Id.Value}/transactions/{theirs.Id}", ApiJson.Options, Ct);
         after.Should().BeEquivalentTo(theirs);
+    }
+
+    [Fact]
+    public async Task Delete_transaction_is_204_and_disappears_from_list_and_summary()
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var book = await factory.SeedBookAsync(Ct);
+        var client = factory.CreateSignedInClient();
+        var kept = await CreateDtoAsync(client, book, LunchInput(book, "2026-01-05", "留著"));
+        var deleted = await CreateDtoAsync(client, book, LunchInput(book, "2026-01-06", "要刪除"));
+        var url = $"/api/books/{book.Id.Value}/transactions/{deleted.Id}";
+        var summaryUrl = $"/api/books/{book.Id.Value}/summary?budgetMonth=202601&asOf=2026-01-31";
+        var before = await client.GetFromJsonAsync<LedgerSummaryDto>(summaryUrl, ApiJson.Options, Ct);
+        before!.MonthlyDisposable.Should().Be(-240m);
+
+        var response = await client.DeleteAsync($"{url}?version={deleted.Version}", Ct);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        (await ListAsync(client, book, "")).Select(t => t.Id).Should().Equal(kept.Id);
+        (await client.GetAsync(url, Ct)).StatusCode.Should().Be(HttpStatusCode.NotFound);
+        var after = await client.GetFromJsonAsync<LedgerSummaryDto>(summaryUrl, ApiJson.Options, Ct);
+        after!.MonthlyDisposable.Should().Be(-120m);
+        after.Accounts.Single(a => a.Name == "現金").Balance.Should().Be(1000m - 120m);
+        // 已刪除的交易不能再刪一次，也不能修改：query filter 查不到，一律 404。
+        (await client.DeleteAsync($"{url}?version={deleted.Version}", Ct)).StatusCode.Should().Be(HttpStatusCode.NotFound);
+        (await client.PutAsJsonAsync(url, new { version = deleted.Version, input = LunchInput(book, "2026-01-06", "復活") }, ApiJson.Options, Ct))
+            .StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task Delete_transaction_with_stale_version_is_409()
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var book = await factory.SeedBookAsync(Ct);
+        var client = factory.CreateSignedInClient();
+        var created = await CreateDtoAsync(client, book, LunchInput(book, "2026-01-05", "午餐"));
+        var url = $"/api/books/{book.Id.Value}/transactions/{created.Id}";
+        // 另一台裝置先改過，版本因此前進。
+        (await client.PutAsJsonAsync(url, new { version = created.Version, input = LunchInput(book, "2026-01-05", "改過") }, ApiJson.Options, Ct))
+            .StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var response = await client.DeleteAsync($"{url}?version={created.Version}", Ct);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        (await client.GetFromJsonAsync<TransactionDto>(url, ApiJson.Options, Ct))!.Note.Should().Be("改過");
+    }
+
+    [Fact]
+    public async Task Delete_transaction_of_another_book_is_404_and_leaves_it()
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var mine = await factory.SeedBookAsync(Ct);
+        var other = await factory.SeedBookAsync(Ct);
+        var client = factory.CreateSignedInClient();
+        var theirs = await CreateDtoAsync(client, other, LunchInput(other, "2026-01-05", "別人的午餐"));
+
+        // 用自己帳本的路徑去刪別本帳的交易：只用交易 Id 查詢就會刪到。
+        var response = await client.DeleteAsync($"/api/books/{mine.Id.Value}/transactions/{theirs.Id}?version={theirs.Version}", Ct);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        (await ListAsync(client, other, "")).Should().ContainSingle().Which.Should().BeEquivalentTo(theirs);
     }
 
     private static object LunchInput(Book book, string date, string note) => new

@@ -5,7 +5,7 @@ namespace SixJars.Api.Endpoints;
 
 internal static class TransactionsEndpoints
 {
-    /// <summary>交易的新增、讀取與修改；掛在 <c>/books/{bookId}</c> 群組底下。</summary>
+    /// <summary>交易的新增、讀取、修改與刪除；掛在 <c>/books/{bookId}</c> 群組底下。</summary>
     public static RouteGroupBuilder MapTransactionsEndpoints(this RouteGroupBuilder book)
     {
         // body 是平面的 TransactionInput（spec §5），帳本 Id 取自路由。
@@ -22,6 +22,13 @@ internal static class TransactionsEndpoints
         book.MapPut("/transactions/{transactionId:guid}",
             (Guid bookId, Guid transactionId, UpdateTransactionBody body, ISender sender, CancellationToken ct) =>
                 sender.Send(new UpdateTransaction(bookId, transactionId, body.Version, body.Input), ct));
+        // DELETE 不帶 body，版本由 query string 的 ?version= 帶入。
+        book.MapDelete("/transactions/{transactionId:guid}",
+            async (Guid bookId, Guid transactionId, uint version, ISender sender, CancellationToken ct) =>
+            {
+                await sender.Send(new DeleteTransaction(bookId, transactionId, version), ct);
+                return Results.NoContent();
+            });
         return book;
     }
 }

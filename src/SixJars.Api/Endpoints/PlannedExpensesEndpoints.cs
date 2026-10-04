@@ -5,7 +5,7 @@ namespace SixJars.Api.Endpoints;
 
 internal static class PlannedExpensesEndpoints
 {
-    /// <summary>預定支出的新增、清單、讀取單筆、修改與付款；掛在 <c>/books/{bookId}</c> 群組底下。</summary>
+    /// <summary>預定支出的新增、清單、讀取單筆、修改、刪除與付款；掛在 <c>/books/{bookId}</c> 群組底下。</summary>
     public static RouteGroupBuilder MapPlannedExpensesEndpoints(this RouteGroupBuilder book)
     {
         // 帳本 Id 取自路由。
@@ -21,6 +21,13 @@ internal static class PlannedExpensesEndpoints
         book.MapPut("/planned-expenses/{plannedExpenseId:guid}",
             (Guid bookId, Guid plannedExpenseId, UpdatePlannedExpenseBody body, ISender sender, CancellationToken ct) =>
                 sender.Send(new UpdatePlannedExpense(bookId, plannedExpenseId, body.Version, body.Input), ct));
+        // DELETE 不帶 body，版本由 query string 的 ?version= 帶入。
+        book.MapDelete("/planned-expenses/{plannedExpenseId:guid}",
+            async (Guid bookId, Guid plannedExpenseId, uint version, ISender sender, CancellationToken ct) =>
+            {
+                await sender.Send(new DeletePlannedExpense(bookId, plannedExpenseId, version), ct);
+                return Results.NoContent();
+            });
         book.MapPost("/planned-expenses/{plannedExpenseId:guid}/pay",
             async (Guid bookId, Guid plannedExpenseId, PayPlannedExpenseBody body, ISender sender, CancellationToken ct) =>
             {
