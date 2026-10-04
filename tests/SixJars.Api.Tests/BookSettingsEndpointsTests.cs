@@ -40,7 +40,7 @@ public class BookSettingsEndpointsTests(PostgresFixture postgres)
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
         var problem = await ReadProblemAsync(response);
-        problem.GetProperty("errors").TryGetProperty("Name", out _).Should().BeTrue();
+        problem.GetProperty("errors").TryGetProperty("name", out _).Should().BeTrue();
     }
 
     [Fact]
@@ -54,7 +54,7 @@ public class BookSettingsEndpointsTests(PostgresFixture postgres)
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
         var problem = await ReadProblemAsync(response);
-        problem.GetProperty("errors").TryGetProperty("Nature", out _).Should().BeTrue();
+        problem.GetProperty("errors").TryGetProperty("nature", out _).Should().BeTrue();
     }
 
     [Fact]

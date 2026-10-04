@@ -104,7 +104,8 @@ public class TransactionsEndpointsTests(PostgresFixture postgres)
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
         var problem = await ReadProblemAsync(response);
-        problem.GetProperty("errors").TryGetProperty("Input.CounterAccountId", out _).Should().BeTrue();
+        // key 與 body 欄位同名：camelCase、沒有 command 的 Input. 前綴，前端可直接對應表單欄位。
+        problem.GetProperty("errors").EnumerateObject().Select(e => e.Name).Should().Equal("counterAccountId");
     }
 
     [Fact]
@@ -230,6 +231,28 @@ public class TransactionsEndpointsTests(PostgresFixture postgres)
         var list = await ListAsync(client, book, "");
 
         list.Select(t => t.Id).Should().Equal(earlier.Id, later);
+    }
+
+    [Fact]
+    public async Task Invalid_update_reports_input_fields_without_prefix()
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var book = await factory.SeedBookAsync(Ct);
+        var client = factory.CreateSignedInClient();
+        var created = await CreateDtoAsync(client, book, LunchInput(book, "2026-01-05", "午餐"));
+
+        var response = await client.PutAsJsonAsync($"/api/books/{book.Id.Value}/transactions/{created.Id}",
+            new
+            {
+                version = created.Version,
+                input = new { kind = "Transfer", date = "2026-01-06", amount = 500m, accountId = book.FindAccount("國泰世華銀行")!.Id.Value },
+            },
+            ApiJson.Options, Ct);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var problem = await ReadProblemAsync(response);
+        // 新增與修改用同一套 key，前端的表單只需一種對應方式。
+        problem.GetProperty("errors").EnumerateObject().Select(e => e.Name).Should().Equal("counterAccountId");
     }
 
     [Fact]

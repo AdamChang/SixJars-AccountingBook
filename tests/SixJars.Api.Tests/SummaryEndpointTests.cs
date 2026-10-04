@@ -91,7 +91,7 @@ public class SummaryEndpointTests(PostgresFixture postgres)
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
         var problem = await ReadProblemAsync(response);
-        problem.GetProperty("errors").TryGetProperty("BudgetMonth", out _).Should().BeTrue();
+        problem.GetProperty("errors").TryGetProperty("budgetMonth", out _).Should().BeTrue();
     }
 
     [Fact]

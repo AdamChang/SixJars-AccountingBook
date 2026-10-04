@@ -93,6 +93,34 @@ public class PlannedExpensesEndpointsTests(PostgresFixture postgres)
     }
 
     [Fact]
+    public async Task Location_of_created_planned_expense_can_be_read()
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var book = await factory.SeedBookAsync(Ct);
+        var client = factory.CreateSignedInClient();
+        var response = await client.PostAsJsonAsync(Url(book), InsuranceInput(book, 202602, -3000m, "年繳"), ApiJson.Options, Ct);
+        var created = (await response.Content.ReadFromJsonAsync<PlannedExpenseDto>(ApiJson.Options, Ct))!;
+
+        var read = await client.GetAsync(response.Headers.Location, Ct);
+
+        read.StatusCode.Should().Be(HttpStatusCode.OK);
+        (await read.Content.ReadFromJsonAsync<PlannedExpenseDto>(ApiJson.Options, Ct)).Should().BeEquivalentTo(created);
+    }
+
+    [Fact]
+    public async Task Get_planned_expense_of_another_book_is_404()
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var mine = await factory.SeedBookAsync(Ct);
+        var other = await factory.SeedBookAsync(Ct);
+        var client = factory.CreateSignedInClient();
+        var theirs = await CreateAsync(client, other, InsuranceInput(other, 202602, -3000m, "別人的"));
+
+        (await client.GetAsync($"{Url(mine)}/{theirs.Id}", Ct)).StatusCode.Should().Be(HttpStatusCode.NotFound);
+        (await client.GetAsync($"{Url(mine)}/{Guid.NewGuid()}", Ct)).StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
     public async Task Update_planned_expense_of_another_book_is_404_and_leaves_it_unchanged()
     {
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);

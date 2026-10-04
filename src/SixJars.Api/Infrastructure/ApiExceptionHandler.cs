@@ -1,3 +1,4 @@
+using System.Text.Json;
 using FluentValidation;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
@@ -15,7 +16,7 @@ internal sealed class ApiExceptionHandler(IProblemDetailsService problemDetails)
         ProblemDetails? problem = exception switch
         {
             ValidationException validation => new ValidationProblemDetails(validation.Errors
-                .GroupBy(e => e.PropertyName)
+                .GroupBy(e => ToBodyFieldName(e.PropertyName))
                 .ToDictionary(g => g.Key, g => g.Select(e => e.ErrorMessage).ToArray()))
             {
                 Status = StatusCodes.Status400BadRequest,
@@ -47,5 +48,17 @@ internal sealed class ApiExceptionHandler(IProblemDetailsService problemDetails)
             ProblemDetails = problem,
             Exception = exception,
         });
+    }
+
+    /// <summary>
+    /// 把 FluentValidation 的屬性路徑換成 body 欄位名稱：拿掉 command 包裝輸入用的 <c>Input.</c>，
+    /// 每一段轉成 camelCase（例：<c>Input.CounterAccountId</c> → <c>counterAccountId</c>）。
+    /// 新增與修改因此回同一套 key，前端可直接對應表單欄位。
+    /// </summary>
+    internal static string ToBodyFieldName(string propertyName)
+    {
+        const string inputPrefix = "Input.";
+        var path = propertyName.StartsWith(inputPrefix, StringComparison.Ordinal) ? propertyName[inputPrefix.Length..] : propertyName;
+        return string.Join('.', path.Split('.').Select(JsonNamingPolicy.CamelCase.ConvertName));
     }
 }
