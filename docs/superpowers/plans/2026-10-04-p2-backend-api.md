@@ -2041,6 +2041,23 @@ Checkpoint F 結束時：總計 **344**、失敗 0、略過 18（`reference/` �
 2. `docs/deploy.md` 第 2 節的 Docker image 驗證：build、`Asia/Taipei` 時區、image 內沒有 `reference` 與 `.xlsm`、`/health` 回 200。
 3. 本計畫 Checkpoint F 原列的手動驗證：真實 xlsm 的 `import-legacy --dry-run` 與正式匯入、`/summary` 1–3 月與 Excel 一致。Google 登入待前端完成後一起驗證。
 
+**本機驗證結果**（2026-10-04，使用者的 Windows 本機，.NET SDK 10.0.401、Docker 29.8.1）
+1. **通過**：總計 344、失敗 0、略過 0，build 0 warning。跳過機制是 `Assert.SkipUnless`，所以略過 0 代表雲端從未跑過的 18 個 Excel 驗收全部實際執行並通過。
+2. Docker image（`docs/deploy.md` 第 2 節）：
+   - 2.1 **通過**：build 成功，image 250MB。
+   - 2.2 **通過**：`aspnet:10.0` 內建 `/usr/share/zoneinfo/Asia/Taipei`，Dockerfile 不需要補裝 tzdata。
+   - 2.3 **通過**：`/app` 只有發佈成果，`find` 找不到 `reference` 與 `.xlsm`。
+   - 2.4 **通過**：`/health` 回 200。log 有三種訊息：
+     - `DataProtectionKeys` 不存在：因為 2.4 刻意不跑 migration。對已 migrate 的資料庫重測後不再出現，已在 `deploy.md` 2.4 註明（`3998c37`）。
+     - `XmlKeyManager[35]`：key 未加密存放的標準提醒，已在 `deploy.md` 註明。
+     - `Cannot load library libgssapi_krb5.so.2`：Npgsql 預設先試 GSS 加密，image 裡沒有該函式庫。使用者選擇在程式中關閉（`ee36a05`）：新增 `SixJarsConnectionString.ForNpgsql`，DbContext 一律使用 `GSS Encryption Mode=Disable`。Npgsql 依連線字串分連線池，第一版只改 DI，造成 `ApiFactory` 清錯連線池、Api 測試 28 個 `53300 too many clients`；`ApiFactory` 與 `PostgresFixture` 改用同一個轉換後修正。重 build image 後 log 不再出現此訊息。
+   - 修正後：總計 **345**（多 1 個 `ConnectionStringTests`）、失敗 0、略過 0，連跑兩次穩定。
+3. **通過**：
+   - 本機 `postgres:17-alpine` 套用 migration bundle（7 個 migration）。
+   - `import-legacy --dry-run`：exit 0；交易 375、預定支出 17、警告 1 個（2 月一筆有支出日、沒有付款方式，視為未付的預定支出）、自動修正 2 個（1 月兩列 `2026-12-31` 修正為 `2025-12-31`）。dry run 後 `Books`、`Transactions` 都是 0 筆，確認沒有寫入。使用者逐條確認報告無誤。
+   - 正式匯入：exit 0，印出 BookId。
+   - `/summary` 1–3 月與 Excel 一致：由 `CliImportAcceptanceTests` 自動比對（第 1 點已通過）。本機無法經由 API 驗證，因為沒有 Google 設定時不能登入。
+
 **使用者的決定**（2026-10-04）：不設定 Cloud Scheduler 定時 ping（ADR 0007 的選項 A）。接受閒置後第一個請求較慢，換取不耗用 Neon 的 compute 額度。
 
 ---
