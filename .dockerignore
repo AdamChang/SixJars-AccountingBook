@@ -3,8 +3,8 @@
 reference/
 **/*.xlsm
 **/*.xlsx
-.env
-.env.*
+**/.env
+**/.env.*
 **/bin/
 **/obj/
 tests/
