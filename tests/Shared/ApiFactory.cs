@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
+using SixJars.Infrastructure.Persistence;
 
 namespace SixJars.Tests.Shared;
 
@@ -51,13 +52,14 @@ public sealed class ApiFactory(
     /// <summary>
     /// 每個測試一個資料庫，Npgsql 就為每個連線字串各留一個連線池，閒置連線預設 5 分鐘才關閉；
     /// 測試一多就超過 PostgreSQL 的 max_connections（100）。factory 結束時直接清掉這個資料庫的連線池。
+    /// app 用的是 <see cref="SixJarsConnectionString.ForNpgsql"/> 轉換後的字串，清連線池時也要用同一個字串。
     /// </summary>
     public override async ValueTask DisposeAsync()
     {
         await base.DisposeAsync();
         if (connectionString is not null)
         {
-            await using var connection = new NpgsqlConnection(connectionString);
+            await using var connection = new NpgsqlConnection(SixJarsConnectionString.ForNpgsql(connectionString));
             NpgsqlConnection.ClearPool(connection);
         }
     }

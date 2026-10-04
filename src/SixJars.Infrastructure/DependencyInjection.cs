@@ -19,7 +19,7 @@ public static class DependencyInjection
     public static IServiceCollection AddSixJarsInfrastructure(this IServiceCollection services, string connectionString)
     {
         services.AddDbContext<SixJarsDbContext>((sp, options) => options
-            .UseNpgsql(connectionString)
+            .UseNpgsql(SixJarsConnectionString.ForNpgsql(connectionString))
             .AddInterceptors(sp.GetServices<IInterceptor>()));
         services.AddScoped<ISixJarsDbContext>(sp => sp.GetRequiredService<SixJarsDbContext>());
         services.AddScoped<ILedgerSummaryQuery, SqlLedgerSummaryQuery>();

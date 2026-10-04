@@ -33,6 +33,7 @@ public sealed class PostgresFixture : IAsyncLifetime
         return () => new SixJarsDbContext(options);
     }
 
+    /// <summary>與 app 用同一個轉換後的連線字串，才會共用連線池，讓 <see cref="ApiFactory"/> 一次清乾淨。</summary>
     private static DbContextOptions<SixJarsDbContext> Options(string connectionString) =>
-        new DbContextOptionsBuilder<SixJarsDbContext>().UseNpgsql(connectionString).Options;
+        new DbContextOptionsBuilder<SixJarsDbContext>().UseNpgsql(SixJarsConnectionString.ForNpgsql(connectionString)).Options;
 }
