@@ -193,7 +193,7 @@ public async Task Unhashed_files_are_no_cache(string url)
 - [ ] **Step 2：確認失敗**：快取的測試失敗（沒有 `Cache-Control` header，`CacheControl` 為 null）；`IsHashedAsset` 的測試以編譯錯誤失敗（方法尚未存在），先加一個 `throw new NotImplementedException()` 的空殼，讓失敗原因變成斷言失敗。
 - [ ] **Step 3：實作**：`UseStaticFiles(new StaticFileOptions { OnPrepareResponse = ctx => … })`，依 `ctx.File.Name`：`index.html` 或 `IsHashedAsset` 為 false 時設 `no-cache`；`IsHashedAsset` 為 true 時設 `public, max-age=31536000, immutable`。用 `ctx.Context.Response.GetTypedHeaders().CacheControl`。
 - [ ] **Step 4：跑單一類別**：全部通過。
-- [ ] **Step 5：跑全部測試**：總計約 **367**、失敗 0、略過 0（Task 1 的 355，加上 5 個快取 case 與 7 個 `IsHashedAsset` case）。數字是預測值，以實際為準並回寫。
+- [ ] **Step 5：跑全部測試**：總計約 **367**、失敗 0、略過 0（Task 1 的 355，加上 5 個快取 case 與 7 個 `IsHashedAsset` case）。**實際：367**（8c00a3e）；整體審查的修正輪（ed8adcb）再加 `/API/nope` 與 `logo-20261004.png` 兩個 case，最終 **369**。
 - [ ] **Step 6：Commit**
 
 ```bash
@@ -228,7 +228,7 @@ git commit -m "feat(api): 登入失敗轉址到前端的 /denied，移除 /auth/
 ## 完成後的驗證
 
 - [ ] `dotnet build`：0 warning。
-- [ ] `dotnet test`：總計約 367（以 Task 2 回寫的實際數字為準）、失敗 0、略過 0。
+- [ ] `dotnet test`：總計 **369**、失敗 0、略過 0（2026-10-04 主控者實測：Task 3 後 367，整體審查修正輪後 369）。
 - [ ] 變異測試（主控者獨立執行，每項都要有測試失敗，做完還原）：
   - `IsFrontendRoute` 不排除 `api` → `Unknown_api_and_auth_paths_are_404_not_html` 失敗。
   - 拿掉「最後一段有副檔名就不改寫」→ `Missing_file_with_extension_is_404` 失敗。
@@ -261,4 +261,4 @@ git commit -m "feat(api): 登入失敗轉址到前端的 /denied，移除 /auth/
 | `src/SixJars.Api/wwwroot` | 不存在 | `Test-Path` 為 False | 「沒有 web root」的測試直接用 Api 專案的預設值 |
 | 各 Create 檔案不存在；各 Modify 檔案存在 | ✓ | `Test-Path`；Modify 的行號已核對 | — |
 | `SixJars.Api` 的 `InternalsVisibleTo` | ✓ | `SixJars.Api.csproj:6` 已開給 `SixJars.Api.Tests` | Task 2 不需修改 csproj |
-| Angular 雜湊檔名格式 `-[A-Z2-7]{8}`（base32） | ✓ | Angular CLI 22.2.1 的 production build（scratchpad spike）：`main-DISDLN5L.js`、`styles-OPUTW5UJ.css`；`ngsw-worker.js`、`ngsw.json`、`manifest.webmanifest`、`safety-worker.js`、`worker-basic.min.js` 不帶雜湊 | 規則不變；前端 plan 段 I 再以 `web/` 的實際 build 確認一次 |
+| Angular 雜湊檔名格式 `-[A-Z2-7]{8}`（base32） | ✓ | Angular CLI 22.2.1 的 production build（scratchpad spike）：`main-DISDLN5L.js`、`styles-OPUTW5UJ.css`；`ngsw-worker.js`、`ngsw.json`、`manifest.webmanifest`、`safety-worker.js`、`worker-basic.min.js` 不帶雜湊 | 原規則 `[A-Z0-9]` 在整體審查後收緊為 base32 `[A-Z2-7]`（ed8adcb），避免 `logo-20261004.png` 這類人工檔名被長期快取；前端 plan 段 I 再以 `web/` 的實際 build 確認一次 |

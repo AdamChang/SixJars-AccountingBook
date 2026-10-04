@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- 前端放在 `web/`，Angular 專案名稱 `web`，production 輸出在 `web/dist/web/browser`。`dotnet build`／`dotnet test` 不可依賴 Node。
+- 前端放在 `web/`，Angular 專案名稱 `web`，production 輸出在 `web/dist/web/browser`，**不可以輸出到 `src/SixJars.Api/wwwroot`**（後端的 `Without_web_root_frontend_paths_are_404_and_health_still_works` 依賴該目錄不存在；image 內由 Dockerfile 複製到 `/app/wwwroot`）。`dotnet build`／`dotnet test` 不可依賴 Node。
 - 本機開發：`ng serve` 用 `https://localhost:4300`（`--ssl`），proxy 把 `/api`、`/auth` 轉給 `https://localhost:5001`（`secure: false`）。Google redirect URI 為 `https://localhost:4300/auth/callback`。
 - 單元測試一律在 `TZ=Asia/Taipei` 下執行（由 `web/src/test-setup.ts` 設定）；Playwright 用 `timezoneId: 'Asia/Taipei'`。
 - **日期轉 `yyyy-MM-dd` 一律用本地時間的年月日組字串，禁止 `toISOString()`。**
@@ -58,7 +58,7 @@
 
 ### 基準線
 
-- 後端：後端前置 plan 完成時的 `dotnet test` 總數（約 367，以實際數字為準），失敗 0。
+- 後端：後端前置 plan 完成時的 `dotnet test` 總數（**369**，2026-10-04 實測），失敗 0。
 - 前端：G1 完成時記錄 `ng test` 的數字，之後每個 Task 只增不減。
 
 ### 絕對不要碰的東西
@@ -596,7 +596,7 @@ isLocked(date: string, lockDate: string | null): boolean           // date <= lo
 **Interfaces:**
 - Consumes：後端前置 plan 的 `UseSpaHosting`（讀 `/app/wwwroot`）；I2 的 build 輸出。
 
-- [ ] **Step 1：確認雜湊檔名**：`npx ng build` 後列出 `dist/web/browser`，每個 `.js`／`.css`（`ngsw-worker.js`、`safety-worker.js`、`worker-basic.min.js` 除外）都符合 `-[A-Z0-9]{8}\.[a-z0-9]+$`。不符合時停下來回報（要回頭改後端 `SpaHosting.IsHashedAsset`）。
+- [ ] **Step 1：確認雜湊檔名**：`npx ng build` 後列出 `dist/web/browser`，每個 `.js`／`.css`（`ngsw-worker.js`、`safety-worker.js`、`worker-basic.min.js` 除外）都符合 `-[A-Z2-7]{8}\.[a-z0-9]+$`（esbuild 的 base32 雜湊）。不符合時停下來回報（要回頭改後端 `SpaHosting.IsHashedAsset`）。
 - [ ] **Step 2：Dockerfile** 加一個 stage：
 
 ```dockerfile
