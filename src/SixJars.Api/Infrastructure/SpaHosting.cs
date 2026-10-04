@@ -1,3 +1,6 @@
+using System.Text.RegularExpressions;
+using Microsoft.Net.Http.Headers;
+
 namespace SixJars.Api.Infrastructure;
 
 /// <summary>
@@ -10,6 +13,8 @@ namespace SixJars.Api.Infrastructure;
 /// </remarks>
 public static class SpaHosting
 {
+    private static readonly Regex HashedAssetPattern = new(@"-[A-Z0-9]{8}\.[a-z0-9]+$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
     private static readonly string[] BackendPrefixes = ["api", "auth", "health"];
 
     public static WebApplication UseSpaHosting(this WebApplication app)
@@ -28,8 +33,30 @@ public static class SpaHosting
             await next();
         });
 
-        // 靜態檔放在這一個地方，之後要加快取 header 只需在此補上 StaticFileOptions。
-        app.UseStaticFiles();
+        // 快取策略依「實際提供的檔名」決定，而不是依請求路徑：deep link 已被上面改寫成 /index.html，
+        // 所以 /books/x/transactions 這類請求也會拿到 index.html 的 no-cache，不會被瀏覽器長期快取。
+        app.UseStaticFiles(new StaticFileOptions
+        {
+            OnPrepareResponse = context =>
+            {
+                var cacheControl = new CacheControlHeaderValue();
+                if (IsHashedAsset(context.File.Name))
+                {
+                    // 檔名含內容雜湊，內容變了檔名就變，可安心長期快取。
+                    cacheControl.Public = true;
+                    cacheControl.MaxAge = TimeSpan.FromDays(365);
+                    cacheControl.Extensions.Add(new NameValueHeaderValue("immutable"));
+                }
+                else
+                {
+                    // index.html、ngsw.json、ngsw-worker.js 等入口與 service worker 檔必須每次向伺服器驗證，
+                    // 否則使用者拿不到新版本（ngsw.json 若長期快取，PWA 更新會失效）。
+                    cacheControl.NoCache = true;
+                }
+
+                context.Context.Response.GetTypedHeaders().CacheControl = cacheControl;
+            },
+        });
         return app;
     }
 
@@ -51,4 +78,10 @@ public static class SpaHosting
         return !BackendPrefixes.Contains(segments[0], StringComparer.OrdinalIgnoreCase)
             && !segments[^1].Contains('.');
     }
+
+    /// <summary>
+    /// 是否為 Angular build 產生的雜湊檔名（例如 main-DISDLN5L.js）：結尾為「-8 碼大寫英數.副檔名」。
+    /// </summary>
+    /// <remarks>刻意區分大小寫：Angular 的雜湊為大寫，小寫的 main-abcd1234.js 不是 build 產物，不應長期快取。</remarks>
+    internal static bool IsHashedAsset(string fileName) => HashedAssetPattern.IsMatch(fileName);
 }

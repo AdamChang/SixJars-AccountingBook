@@ -1,6 +1,7 @@
 using System.Net;
 using FluentAssertions;
 using Microsoft.AspNetCore.Mvc.Testing;
+using SixJars.Api.Infrastructure;
 using SixJars.Tests.Shared;
 using Xunit;
 
@@ -90,4 +91,58 @@ public class SpaHostingTests(PostgresFixture postgres)
         (await client.GetAsync("/books/x", ct)).StatusCode.Should().Be(HttpStatusCode.NotFound);
         (await client.GetAsync("/health", ct)).StatusCode.Should().Be(HttpStatusCode.OK);
     }
+
+    [Theory]
+    [InlineData("/")]
+    [InlineData("/books/x/transactions")]
+    [InlineData("/index.html")]
+    public async Task Index_is_no_cache_for_root_and_deep_link(string url)
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var factory = await CreateFactoryWithWebRootAsync(ct);
+
+        var response = await factory.CreateClient(ClientOptions).GetAsync(url, ct);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        response.Headers.CacheControl!.NoCache.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Hashed_assets_are_immutable()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var factory = await CreateFactoryWithWebRootAsync(ct);
+
+        var response = await factory.CreateClient(ClientOptions).GetAsync("/main-ABCD1234.js", ct);
+
+        var cacheControl = response.Headers.CacheControl!;
+        cacheControl.Public.Should().BeTrue();
+        cacheControl.MaxAge.Should().Be(TimeSpan.FromDays(365));
+        cacheControl.ToString().Should().Contain("immutable");
+    }
+
+    [Theory]
+    [InlineData("/ngsw.json")]
+    public async Task Unhashed_files_are_no_cache(string url)
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var factory = await CreateFactoryWithWebRootAsync(ct);
+
+        var response = await factory.CreateClient(ClientOptions).GetAsync(url, ct);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        response.Headers.CacheControl!.NoCache.Should().BeTrue();
+        response.Headers.CacheControl.MaxAge.Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData("main-ABCD1234.js", true)]
+    [InlineData("chunk-Z9Y8X7W6.js", true)]
+    [InlineData("styles-ABCDEFGH.css", true)]
+    [InlineData("ngsw.json", false)]
+    [InlineData("ngsw-worker.js", false)]
+    [InlineData("main-abcd1234.js", false)]
+    [InlineData("favicon.ico", false)]
+    public void IsHashedAsset_matches_only_uppercase_8_char_hash(string fileName, bool expected) =>
+        SpaHosting.IsHashedAsset(fileName).Should().Be(expected);
 }
