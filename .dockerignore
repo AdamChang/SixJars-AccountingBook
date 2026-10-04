@@ -1,0 +1,20 @@
+# build context 只需要 src/ 與根目錄的 build 設定；其餘一律排除。
+# reference/ 是舊 Excel 帳本（個資），絕對不可進 image。
+reference/
+**/*.xlsm
+**/*.xlsx
+.env
+.env.*
+**/bin/
+**/obj/
+tests/
+docs/
+.git/
+.github/
+.claude/
+.vs/
+TestResults/
+**/TestResults/
+*.user
+Dockerfile
+.dockerignore

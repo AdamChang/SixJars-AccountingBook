@@ -4,7 +4,11 @@ using SixJars.Domain.Common;
 namespace SixJars.Domain.Transactions;
 
 /// <summary>依交易類型驗證帳戶與分類，並把交易展開成分錄。</summary>
-public sealed class TransactionFactory(Book book)
+/// <param name="fixedId">
+/// 只有還原備份（T42）時指定：產生的交易沿用這個 Id，驗證與展開規則完全相同。
+/// 指定時一個 factory 只能建立一筆交易（每筆交易各建一個 factory），否則 Id 會重複。
+/// </param>
+public sealed class TransactionFactory(Book book, TransactionId? fixedId = null)
 {
     private static readonly AccountType[] FundAccountTypes = [AccountType.Cash, AccountType.Bank, AccountType.EWallet];
 
@@ -181,7 +185,8 @@ public sealed class TransactionFactory(Book book)
         IEnumerable<Posting> postings,
         PlanningFundId? planningFundId = null,
         decimal? loanPrincipal = null) =>
-        new(book.Id, kind, date, budgetMonth ?? BudgetMonth.Of(date), amount, accountId, counterAccountId, categoryId, planningFundId, loanPrincipal, note, postings);
+        new(book.Id, kind, date, budgetMonth ?? BudgetMonth.Of(date), amount, accountId, counterAccountId, categoryId, planningFundId, loanPrincipal, note, postings,
+            fixedId);
 
     private Account RequireAccount(AccountId id, params AccountType[] allowed)
     {

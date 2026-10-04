@@ -36,9 +36,11 @@ public sealed class Transaction
         PlanningFundId? planningFundId,
         decimal? loanPrincipal,
         string? note,
-        IEnumerable<Posting> postings)
+        IEnumerable<Posting> postings,
+        TransactionId? id = null)
     {
-        Id = TransactionId.New();
+        // id 只有還原備份時由 factory 帶入（見 TransactionFactory 的 fixedId）。
+        Id = id ?? TransactionId.New();
         BookId = bookId;
         Kind = kind;
         Date = date;
@@ -68,6 +70,10 @@ public sealed class Transaction
     public string? Note { get; private set; }
     public IReadOnlyList<Posting> Postings => _postings;
 
+    /// <summary>軟刪除的時間（ADR 0006）；null 表示未刪除。已刪除的交易不參與任何餘額與報表計算，但仍保留在備份中。</summary>
+    public DateTimeOffset? DeletedAt { get; private set; }
+    public bool IsDeleted => DeletedAt is not null;
+
     /// <summary>對財務規劃帳戶的影響：入新資金與資金回流為正、出資金為負。</summary>
     public decimal FundDelta => Kind switch
     {
@@ -77,4 +83,49 @@ public sealed class Transaction
     };
 
     public decimal? LoanInterest => Kind == TransactionKind.LoanPayment ? Amount - LoanPrincipal : null;
+
+    /// <summary>
+    /// 以 <paramref name="draft"/> 的內容修改本交易：Id 不變，欄位與分錄整組換成 draft 的（可改交易類型）。
+    /// </summary>
+    /// <param name="draft">
+    /// 必須由 <see cref="TransactionFactory"/> 依新內容產生，展開規則因此只存在 factory 一處（spec §3.2）；
+    /// draft 本身用完即丟，不可再加入帳本。
+    /// </param>
+    public void ReplaceWith(Transaction draft)
+    {
+        EnsureNotDeleted();
+
+        if (draft.BookId != BookId)
+        {
+            throw new DomainException("不可用其他帳本的交易內容修改這筆交易。");
+        }
+
+        Kind = draft.Kind;
+        Date = draft.Date;
+        BudgetMonth = draft.BudgetMonth;
+        Amount = draft.Amount;
+        AccountId = draft.AccountId;
+        CounterAccountId = draft.CounterAccountId;
+        CategoryId = draft.CategoryId;
+        PlanningFundId = draft.PlanningFundId;
+        LoanPrincipal = draft.LoanPrincipal;
+        Note = draft.Note;
+        _postings.Clear();
+        _postings.AddRange(draft.Postings);
+    }
+
+    /// <summary>軟刪除（spec §3.3）：分錄保留不動，由 query filter 排除在計算之外。已刪除的交易不能再刪除、修改或還原。</summary>
+    public void Delete(DateTimeOffset at)
+    {
+        EnsureNotDeleted();
+        DeletedAt = at;
+    }
+
+    private void EnsureNotDeleted()
+    {
+        if (IsDeleted)
+        {
+            throw new DomainException($"交易 {Id.Value} 已刪除，不可修改。");
+        }
+    }
 }

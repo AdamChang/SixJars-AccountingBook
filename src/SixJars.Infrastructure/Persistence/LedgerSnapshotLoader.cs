@@ -10,7 +10,10 @@ public sealed class LedgerSnapshotLoader(SixJarsDbContext db)
     public async Task<LedgerSnapshot> LoadAsync(BookId bookId, CancellationToken cancellationToken)
     {
         var book = await db.Books.AsNoTracking().SingleAsync(b => b.Id == bookId, cancellationToken);
-        var transactions = await db.Transactions.AsNoTracking().Where(t => t.BookId == bookId).ToListAsync(cancellationToken);
+        // 計算器依序處理交易，所以固定順序：日期、再依 Id（CreateVersion7，即建立順序）。
+        var transactions = await db.Transactions.AsNoTracking().Where(t => t.BookId == bookId)
+            .OrderBy(t => t.Date).ThenBy(t => t.Id)
+            .ToListAsync(cancellationToken);
         var planned = await db.PlannedExpenses.AsNoTracking().Where(p => p.BookId == bookId).ToListAsync(cancellationToken);
         return new LedgerSnapshot(book, transactions, planned);
     }

@@ -33,25 +33,52 @@ public sealed class PlannedExpense
     public string? Note { get; private set; }
     public TransactionId? PaidTransactionId { get; private set; }
     public bool IsPaid => PaidTransactionId is not null;
+    /// <summary>軟刪除的時間（ADR 0006）；null 表示未刪除。已刪除的預定支出不再占用月可用餘額。</summary>
+    public DateTimeOffset? DeletedAt { get; private set; }
+    public bool IsDeleted => DeletedAt is not null;
 
-    public static PlannedExpense Create(Book book, BudgetMonth budgetMonth, CategoryId categoryId, AccountId? accountId, decimal estimatedAmount, string? note = null)
+    /// <param name="id">只有還原備份（T42）時指定，保留原本的 Id；一般新增時省略，自動產生。驗證規則完全相同。</param>
+    public static PlannedExpense Create(
+        Book book, BudgetMonth budgetMonth, CategoryId categoryId, AccountId? accountId, decimal estimatedAmount, string? note = null,
+        PlannedExpenseId? id = null)
     {
-        var category = book.GetCategory(categoryId);
-        if (category.Kind != CategoryKind.Expense || category.Nature is not (ExpenseNature.Fixed or ExpenseNature.Loan or ExpenseNature.Special))
+        Validate(book, categoryId, accountId);
+        var planned = new PlannedExpense(book.Id, budgetMonth, categoryId, accountId, estimatedAmount, note);
+        if (id is { } fixedId)
         {
-            throw new DomainException($"預定支出只限固定、貸款、特別支出：「{category.Name}」。");
+            planned.Id = fixedId;
         }
 
-        if (accountId is { } id)
+        return planned;
+    }
+
+    /// <summary>修改未付的預定支出。付款後金額以實際交易為準，所以禁止修改。</summary>
+    public void Update(Book book, BudgetMonth budgetMonth, CategoryId categoryId, AccountId? accountId, decimal estimatedAmount, string? note)
+    {
+        EnsureNotDeleted();
+
+        if (IsPaid)
         {
-            book.GetAccount(id);
+            throw new DomainException($"預定支出 {Id.Value} 已付款，金額以實際交易為準，不可修改。");
         }
 
-        return new PlannedExpense(book.Id, budgetMonth, categoryId, accountId, estimatedAmount, note);
+        if (book.Id != BookId)
+        {
+            throw new DomainException("帳本與預定支出不屬於同一本帳本。");
+        }
+
+        Validate(book, categoryId, accountId);
+        BudgetMonth = budgetMonth;
+        CategoryId = categoryId;
+        AccountId = accountId;
+        EstimatedAmount = estimatedAmount;
+        Note = note;
     }
 
     public void MarkPaid(Transaction transaction)
     {
+        EnsureNotDeleted();
+
         if (IsPaid)
         {
             throw new DomainException($"預定支出 {Id.Value} 已付款，不可重複標記。");
@@ -63,5 +90,54 @@ public sealed class PlannedExpense
         }
 
         PaidTransactionId = transaction.Id;
+    }
+
+    /// <summary>
+    /// 解除付款連結，回到未付（spec §9 O2）：付款交易被刪除時使用，月可用餘額改回以預估金額計算。
+    /// 已刪除的預定支出不能修改，所以同樣擲出例外；刪除付款交易時 query filter 本來就查不到它，連結會原樣保留。
+    /// </summary>
+    public void MarkUnpaid()
+    {
+        EnsureNotDeleted();
+
+        if (!IsPaid)
+        {
+            throw new DomainException($"預定支出 {Id.Value} 尚未付款，沒有可解除的付款連結。");
+        }
+
+        PaidTransactionId = null;
+    }
+
+    /// <summary>
+    /// 軟刪除（spec §3.3）。已付款的也可以刪除：刪除的是「計畫」本身，已建立的付款交易不受影響，連結也保留。
+    /// 已刪除的預定支出不能再刪除、修改或付款。
+    /// </summary>
+    public void Delete(DateTimeOffset at)
+    {
+        EnsureNotDeleted();
+        DeletedAt = at;
+    }
+
+    private void EnsureNotDeleted()
+    {
+        if (IsDeleted)
+        {
+            throw new DomainException($"預定支出 {Id.Value} 已刪除，不可修改。");
+        }
+    }
+
+    /// <summary>分類必須是固定、貸款或特別支出；有指定帳戶時，帳戶必須屬於這本帳本。</summary>
+    private static void Validate(Book book, CategoryId categoryId, AccountId? accountId)
+    {
+        var category = book.GetCategory(categoryId);
+        if (category.Kind != CategoryKind.Expense || category.Nature is not (ExpenseNature.Fixed or ExpenseNature.Loan or ExpenseNature.Special))
+        {
+            throw new DomainException($"預定支出只限固定、貸款、特別支出：「{category.Name}」。");
+        }
+
+        if (accountId is { } id)
+        {
+            book.GetAccount(id);
+        }
     }
 }

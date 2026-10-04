@@ -10,3 +10,5 @@ src/count-dashboard/test-results/
 playwright-report/
 TestResults/
 *.user
+# 真實的連線字串與金鑰；repo 只放 .env.example
+.env

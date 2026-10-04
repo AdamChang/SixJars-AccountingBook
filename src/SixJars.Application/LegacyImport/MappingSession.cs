@@ -9,7 +9,7 @@ namespace SixJars.Application.LegacyImport;
 /// 一次匯入的狀態。流水帳（MappingSession.Journal.cs）與制式表格（MappingSession.Templates.cs）分檔實作。
 /// 每一列各自 try-catch 是刻意的：批次匯入需要收集「全部」錯誤後一起回報。
 /// </summary>
-internal sealed partial class MappingSession(LegacyWorkbook workbook)
+internal sealed partial class MappingSession(LegacyWorkbook workbook, string bookName)
 {
     private readonly ImportReport _report = new();
     private readonly List<Transaction> _transactions = [];
@@ -21,7 +21,7 @@ internal sealed partial class MappingSession(LegacyWorkbook workbook)
 
     public LegacyImportResult Run()
     {
-        _book = new Book("我的帳本", OpeningDate());
+        _book = new Book(bookName, OpeningDate());
         _factory = new TransactionFactory(_book);
         AddAccounts();
         AddPlanningFunds();
