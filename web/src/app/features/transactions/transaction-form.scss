@@ -29,6 +29,21 @@
   margin-bottom: 16px;
 }
 
-.submit {
+.editing-badge {
   align-self: flex-start;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: var(--mat-sys-secondary-container);
+  color: var(--mat-sys-on-secondary-container);
+}
+
+.form-errors {
+  margin: 0 0 8px;
+  padding-left: 20px;
+  color: var(--mat-sys-error);
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
 }
