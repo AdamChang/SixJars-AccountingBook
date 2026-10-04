@@ -138,6 +138,40 @@ public class AuditTrailTests(PostgresFixture postgres)
         entry.After.Should().Contain("午餐便當<加蛋>");
     }
 
+    [Fact]
+    public async Task History_lists_entries_oldest_first()
+    {
+        // 用系統時鐘：每次請求的 At 不同，才看得出排序（固定時鐘下只剩 Id 排序）。
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var book = await factory.SeedBookAsync(Ct);
+        var other = await factory.SeedBookAsync(Ct);
+        var client = factory.CreateSignedInClient();
+        var created = await CreateTransactionAsync(client, book, LunchInput(book, -100m, "午餐"));
+        var url = $"/api/books/{book.Id.Value}/transactions/{created.Id}";
+        var updated = await client.PutAsJsonAsync(url, new { version = created.Version, input = LunchInput(book, -150m, "午餐") }, ApiJson.Options, Ct);
+        var version = (await updated.Content.ReadFromJsonAsync<TransactionDto>(ApiJson.Options, Ct))!.Version;
+        (await client.DeleteAsync($"{url}?version={version}", Ct)).StatusCode.Should().Be(HttpStatusCode.NoContent);
+        // 同一本帳的其他資料不會混進來。
+        await CreateTransactionAsync(client, book, LunchInput(book, -80m, "晚餐"));
+
+        var history = await client.GetFromJsonAsync<JsonElement>($"/api/books/{book.Id.Value}/audit?entityId={created.Id}", ApiJson.Options, Ct);
+
+        history.EnumerateArray().Select(e => e.GetProperty("action").GetString()).Should().Equal("Create", "Update", "Delete");
+        var entries = history.EnumerateArray().ToList();
+        entries.Should().OnlyContain(e => e.GetProperty("entityId").GetGuid() == created.Id
+            && e.GetProperty("entityType").GetString() == "Transaction"
+            && e.GetProperty("actorSubject").GetString() == ApiFactory.DefaultSubject);
+        // 快照以 JSON 物件回傳，不是跳脫過的字串。
+        entries[0].GetProperty("before").ValueKind.Should().Be(JsonValueKind.Null);
+        entries[1].GetProperty("before").ValueKind.Should().Be(JsonValueKind.Object);
+        entries[1].GetProperty("after").ValueKind.Should().Be(JsonValueKind.Object);
+        entries[1].GetProperty("after").GetProperty("amount").GetDecimal().Should().Be(-150m);
+        entries[2].GetProperty("after").ValueKind.Should().Be(JsonValueKind.Null);
+        // 帳本取自路由：用別本帳的路徑查，看不到這本帳的記錄。
+        (await client.GetFromJsonAsync<JsonElement>($"/api/books/{other.Id.Value}/audit?entityId={created.Id}", ApiJson.Options, Ct))
+            .GetArrayLength().Should().Be(0);
+    }
+
     private Task<ApiFactory> CreateFactoryAsync() =>
         ApiFactory.CreateAsync(postgres, Ct, services => services.AddSingleton<TimeProvider>(new FixedTimeProvider(Now)));
 
