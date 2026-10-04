@@ -141,14 +141,25 @@ export function accountsFor(accounts: AccountDto[], slot: AccountSlot): AccountD
   return accounts.filter(account => slot.types.includes(account.type));
 }
 
+function labelOf(category: CategoryDto, nameById: Map<string, string>): string {
+  const parentName = category.parentId === null ? undefined : nameById.get(category.parentId);
+  return parentName === undefined ? category.name : `${parentName} / ${category.name}`;
+}
+
 export function categoryOptions(categories: CategoryDto[], kind: CategoryKind): { id: string; label: string }[] {
   const nameById = new Map(categories.map(category => [category.id, category.name]));
   return categories
     .filter(category => category.kind === kind)
-    .map(category => {
-      const parentName = category.parentId === null ? undefined : nameById.get(category.parentId);
-      return { id: category.id, label: parentName === undefined ? category.name : `${parentName} / ${category.name}` };
-    });
+    .map(category => ({ id: category.id, label: labelOf(category, nameById) }));
+}
+
+// 列表用：沒有分類（或找不到）時回空字串
+export function categoryLabel(categories: CategoryDto[], categoryId: string | null): string {
+  const category = categories.find(candidate => candidate.id === categoryId);
+  if (category === undefined) {
+    return '';
+  }
+  return labelOf(category, new Map(categories.map(candidate => [candidate.id, candidate.name])));
 }
 
 // yyyy-MM-dd 字串可直接字典序比較

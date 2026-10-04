@@ -1,6 +1,6 @@
 import { AccountDto, AccountType, CategoryDto, TransactionDto, TransactionKind } from '../../core/api/dto';
 import {
-  KIND_RULES, MORE_KINDS, PRIMARY_KINDS, TransactionFormValue, accountsFor, categoryOptions,
+  KIND_RULES, MORE_KINDS, PRIMARY_KINDS, TransactionFormValue, accountsFor, categoryLabel, categoryOptions,
   categoryKindOf, fromTransaction, isLocked, signedAmount, toTransactionInput,
 } from './transaction-rules';
 
@@ -200,6 +200,23 @@ describe('categoryOptions', () => {
 
   it('kind 不符的分類不出現', () => {
     expect(categoryOptions(categories, 'Income')).toEqual([{ id: 'c3', label: '薪資' }]);
+  });
+});
+
+describe('categoryLabel', () => {
+  const categories: CategoryDto[] = [
+    { id: 'c1', name: '食', kind: 'Expense', nature: 'Floating', parentId: null },
+    { id: 'c2', name: '早餐', kind: 'Expense', nature: 'Floating', parentId: 'c1' },
+  ];
+
+  it('主分類回傳名稱、子分類回傳「主 / 子」', () => {
+    expect(categoryLabel(categories, 'c1')).toBe('食');
+    expect(categoryLabel(categories, 'c2')).toBe('食 / 早餐');
+  });
+
+  it('null 或找不到的分類回傳空字串', () => {
+    expect(categoryLabel(categories, null)).toBe('');
+    expect(categoryLabel(categories, 'missing')).toBe('');
   });
 });
 
