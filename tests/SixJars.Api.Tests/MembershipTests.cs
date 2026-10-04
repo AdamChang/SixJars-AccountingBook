@@ -32,7 +32,7 @@ public partial class MembershipTests(PostgresFixture postgres)
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         // 帳本存在、而且有擁有者，404 才是因為登入者不是成員，而不是因為帳本不存在。
         var book = await factory.SeedBookAsync(Ct);
-        var client = factory.CreateSignedInClient(StrangerSubject);
+        var client = await factory.CreateMemberClientAsync(StrangerSubject);
         var endpoints = factory.Services.GetRequiredService<EndpointDataSource>().Endpoints
             .OfType<RouteEndpoint>()
             .Where(e => e.RoutePattern.RawText!.StartsWith("/api/books/{bookId", StringComparison.Ordinal))
@@ -69,7 +69,7 @@ public partial class MembershipTests(PostgresFixture postgres)
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         var book = await factory.SeedBookAsync(Ct);
 
-        var response = await factory.CreateSignedInClient().GetAsync($"/api/books/{book.Id.Value}", Ct);
+        var response = await (await factory.CreateMemberClientAsync()).GetAsync($"/api/books/{book.Id.Value}", Ct);
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
@@ -80,7 +80,7 @@ public partial class MembershipTests(PostgresFixture postgres)
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         var mine = await factory.SeedBookAsync(Ct);
         await factory.SeedBookAsync(Ct, ownerSubject: "someone-else-sub");
-        var client = factory.CreateSignedInClient();
+        var client = await factory.CreateMemberClientAsync();
 
         var me = await client.GetFromJsonAsync<MeDto>("/api/me", ApiJson.Options, Ct);
         var books = await client.GetFromJsonAsync<List<BookSummaryDto>>("/api/books", ApiJson.Options, Ct);
@@ -111,7 +111,7 @@ public partial class MembershipTests(PostgresFixture postgres)
                 """, Ct);
         }
 
-        var client = factory.CreateSignedInClient();
+        var client = await factory.CreateMemberClientAsync();
 
         (await client.GetAsync($"/api/books/{book.Id.Value}", Ct)).StatusCode.Should().Be(HttpStatusCode.NotFound);
         (await client.GetFromJsonAsync<MeDto>("/api/me", ApiJson.Options, Ct))!.Books.Should().BeEmpty();

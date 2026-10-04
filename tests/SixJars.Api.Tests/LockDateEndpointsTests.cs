@@ -27,7 +27,7 @@ public class LockDateEndpointsTests(PostgresFixture postgres)
     {
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         var book = await factory.SeedBookAsync(Ct);
-        var client = factory.CreateSignedInClient();
+        var client = await factory.CreateMemberClientAsync();
 
         await SetLockDateAsync(client, book, LockDate);
 
@@ -47,7 +47,7 @@ public class LockDateEndpointsTests(PostgresFixture postgres)
         // 鎖帳日可以清除（spec §9 O3）；清除也是一次變更，留下稽核記錄。
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         var book = await factory.SeedBookAsync(Ct);
-        var client = factory.CreateSignedInClient();
+        var client = await factory.CreateMemberClientAsync();
         await SetLockDateAsync(client, book, LockDate);
 
         await SetLockDateAsync(client, book, null);
@@ -65,7 +65,7 @@ public class LockDateEndpointsTests(PostgresFixture postgres)
     {
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         var book = await factory.SeedBookAsync(Ct);
-        var client = factory.CreateSignedInClient();
+        var client = await factory.CreateMemberClientAsync();
         await SetLockDateAsync(client, book, LockDate);
         var baseline = await AuditTrailTests.EntriesAsync(factory);
 
@@ -83,7 +83,7 @@ public class LockDateEndpointsTests(PostgresFixture postgres)
     {
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         var book = await factory.SeedBookAsync(Ct);
-        var client = factory.CreateSignedInClient();
+        var client = await factory.CreateMemberClientAsync();
         var created = await AuditTrailTests.CreateTransactionAsync(client, book, Lunch(book, "2026-02-05"));
         await SetLockDateAsync(client, book, LockDate);
 
@@ -96,7 +96,7 @@ public class LockDateEndpointsTests(PostgresFixture postgres)
         // 交易要在設定鎖帳日之前建立；新日期是開放的，只有檢查「原日期」才擋得住。
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         var book = await factory.SeedBookAsync(Ct);
-        var client = factory.CreateSignedInClient();
+        var client = await factory.CreateMemberClientAsync();
         var created = await AuditTrailTests.CreateTransactionAsync(client, book, Lunch(book, "2026-01-20"));
         await SetLockDateAsync(client, book, LockDate);
 
@@ -108,7 +108,7 @@ public class LockDateEndpointsTests(PostgresFixture postgres)
     {
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         var book = await factory.SeedBookAsync(Ct);
-        var client = factory.CreateSignedInClient();
+        var client = await factory.CreateMemberClientAsync();
         var created = await AuditTrailTests.CreateTransactionAsync(client, book, Lunch(book, "2026-01-20"));
         await SetLockDateAsync(client, book, LockDate);
         var baseline = await AuditTrailTests.EntriesAsync(factory);
@@ -126,7 +126,7 @@ public class LockDateEndpointsTests(PostgresFixture postgres)
         // 刪除付款交易會讓預定支出回到未付（spec §9 O2），等於修改了已鎖月份的預定支出；即使交易本身的日期是開放的也要擋下。
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         var book = await factory.SeedBookAsync(Ct);
-        var client = factory.CreateSignedInClient();
+        var client = await factory.CreateMemberClientAsync();
         var planned = await PlannedExpensesEndpointsTests.CreateAsync(client, book, Insurance(book, 202601));
         var paid = await PayAsync(client, book, planned, "2026-02-05");
         await SetLockDateAsync(client, book, LockDate);
@@ -147,7 +147,7 @@ public class LockDateEndpointsTests(PostgresFixture postgres)
         // 預定支出歸屬 2026-01；新的月份與付款日期都是開放的，只有檢查「原本的歸屬月份」才擋得住。
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         var book = await factory.SeedBookAsync(Ct);
-        var client = factory.CreateSignedInClient();
+        var client = await factory.CreateMemberClientAsync();
         var planned = await PlannedExpensesEndpointsTests.CreateAsync(client, book, Insurance(book, 202601));
         await SetLockDateAsync(client, book, LockDate);
         var baseline = await AuditTrailTests.EntriesAsync(factory);
@@ -171,7 +171,7 @@ public class LockDateEndpointsTests(PostgresFixture postgres)
     {
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         var book = await factory.SeedBookAsync(Ct);
-        var client = factory.CreateSignedInClient();
+        var client = await factory.CreateMemberClientAsync();
         var planned = await PlannedExpensesEndpointsTests.CreateAsync(client, book, Insurance(book, 202602));
         await SetLockDateAsync(client, book, LockDate);
         var baseline = await AuditTrailTests.EntriesAsync(factory);
@@ -190,7 +190,7 @@ public class LockDateEndpointsTests(PostgresFixture postgres)
         // 預定支出歸屬開放的 2026-02，但付款日期落在鎖帳日以前：付款會新增一筆鎖定期間的交易。
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         var book = await factory.SeedBookAsync(Ct);
-        var client = factory.CreateSignedInClient();
+        var client = await factory.CreateMemberClientAsync();
         var planned = await PlannedExpensesEndpointsTests.CreateAsync(client, book, Insurance(book, 202602));
         await SetLockDateAsync(client, book, LockDate);
         var baseline = await AuditTrailTests.EntriesAsync(factory);

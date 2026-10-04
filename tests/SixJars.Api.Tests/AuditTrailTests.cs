@@ -36,7 +36,7 @@ public class AuditTrailTests(PostgresFixture postgres)
     {
         await using var factory = await CreateFactoryAsync();
         var book = await factory.SeedBookAsync(Ct);
-        var client = factory.CreateSignedInClient();
+        var client = await factory.CreateMemberClientAsync();
         // 前置資料（例如修改前要先有一筆交易）也會留下記錄，所以先準備好，再取基準點。
         var act = await PrepareAsync(operation, client, book);
         var baseline = await EntriesAsync(factory);
@@ -84,7 +84,7 @@ public class AuditTrailTests(PostgresFixture postgres)
     {
         await using var factory = await CreateFactoryAsync();
         var book = await factory.SeedBookAsync(Ct);
-        var client = factory.CreateSignedInClient();
+        var client = await factory.CreateMemberClientAsync();
         var created = await CreateTransactionAsync(client, book, LunchInput(book, -100m, "午餐"));
         var url = $"/api/books/{book.Id.Value}/transactions/{created.Id}";
         // 409：先改一次讓版本前進，再用舊版本修改；422：轉帳到信用卡違反業務規則。
@@ -114,7 +114,7 @@ public class AuditTrailTests(PostgresFixture postgres)
     {
         await using var factory = await CreateFactoryAsync();
         var book = await factory.SeedBookAsync(Ct);
-        var client = factory.CreateSignedInClient();
+        var client = await factory.CreateMemberClientAsync();
         var created = await CreateTransactionAsync(client, book, LunchInput(book, -100m, "午餐便當"));
 
         var response = await client.PutAsJsonAsync($"/api/books/{book.Id.Value}/transactions/{created.Id}",
@@ -146,7 +146,7 @@ public class AuditTrailTests(PostgresFixture postgres)
         var book = await factory.SeedBookAsync(Ct);
         // 第二位擁有者（ADR 0005：只有成員能存取帳本）。
         await factory.AddOwnerAsync(book.Id, "spouse-sub", Ct);
-        var client = factory.CreateSignedInClient("spouse-sub");
+        var client = await factory.CreateMemberClientAsync("spouse-sub");
 
         var created = await CreateTransactionAsync(client, book, LunchInput(book, -100m, "午餐"));
 
@@ -160,7 +160,7 @@ public class AuditTrailTests(PostgresFixture postgres)
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         var book = await factory.SeedBookAsync(Ct);
         var other = await factory.SeedBookAsync(Ct);
-        var client = factory.CreateSignedInClient();
+        var client = await factory.CreateMemberClientAsync();
         var created = await CreateTransactionAsync(client, book, LunchInput(book, -100m, "午餐"));
         var url = $"/api/books/{book.Id.Value}/transactions/{created.Id}";
         var updated = await client.PutAsJsonAsync(url, new { version = created.Version, input = LunchInput(book, -150m, "午餐") }, ApiJson.Options, Ct);

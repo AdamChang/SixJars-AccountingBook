@@ -22,7 +22,7 @@ public class PlannedExpensesEndpointsTests(PostgresFixture postgres)
     {
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         var book = await factory.SeedBookAsync(Ct);
-        var client = factory.CreateSignedInClient();
+        var client = await factory.CreateMemberClientAsync();
 
         var response = await client.PostAsJsonAsync(Url(book), InsuranceInput(book, 202602, -3000m, "年繳"), ApiJson.Options, Ct);
 
@@ -45,7 +45,7 @@ public class PlannedExpensesEndpointsTests(PostgresFixture postgres)
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         var mine = await factory.SeedBookAsync(Ct);
         var other = await factory.SeedBookAsync(Ct);
-        var client = factory.CreateSignedInClient();
+        var client = await factory.CreateMemberClientAsync();
         await CreateAsync(client, mine, InsuranceInput(mine, 202601, -1000m, "1 月"));
         var february = await CreateAsync(client, mine, InsuranceInput(mine, 202602, -2000m, "2 月"));
         await CreateAsync(client, mine, InsuranceInput(mine, 202603, -3000m, "3 月"));
@@ -62,7 +62,7 @@ public class PlannedExpensesEndpointsTests(PostgresFixture postgres)
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         var book = await factory.SeedBookAsync(Ct);
 
-        var response = await factory.CreateSignedInClient().PostAsJsonAsync(Url(book),
+        var response = await (await factory.CreateMemberClientAsync()).PostAsJsonAsync(Url(book),
             new { budgetMonth = 202602, categoryId = book.FindCategory("主食", "午餐")!.Id.Value, estimatedAmount = -3000m },
             ApiJson.Options, Ct);
 
@@ -75,7 +75,7 @@ public class PlannedExpensesEndpointsTests(PostgresFixture postgres)
     {
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         var book = await factory.SeedBookAsync(Ct);
-        var client = factory.CreateSignedInClient();
+        var client = await factory.CreateMemberClientAsync();
         var created = await CreateAsync(client, book, InsuranceInput(book, 202602, -3000m, "原本"));
         var url = $"{Url(book)}/{created.Id}";
 
@@ -99,7 +99,7 @@ public class PlannedExpensesEndpointsTests(PostgresFixture postgres)
     {
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         var book = await factory.SeedBookAsync(Ct);
-        var client = factory.CreateSignedInClient();
+        var client = await factory.CreateMemberClientAsync();
         var response = await client.PostAsJsonAsync(Url(book), InsuranceInput(book, 202602, -3000m, "年繳"), ApiJson.Options, Ct);
         var created = (await response.Content.ReadFromJsonAsync<PlannedExpenseDto>(ApiJson.Options, Ct))!;
 
@@ -115,7 +115,7 @@ public class PlannedExpensesEndpointsTests(PostgresFixture postgres)
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         var mine = await factory.SeedBookAsync(Ct);
         var other = await factory.SeedBookAsync(Ct);
-        var client = factory.CreateSignedInClient();
+        var client = await factory.CreateMemberClientAsync();
         var theirs = await CreateAsync(client, other, InsuranceInput(other, 202602, -3000m, "別人的"));
 
         (await client.GetAsync($"{Url(mine)}/{theirs.Id}", Ct)).StatusCode.Should().Be(HttpStatusCode.NotFound);
@@ -128,7 +128,7 @@ public class PlannedExpensesEndpointsTests(PostgresFixture postgres)
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         var mine = await factory.SeedBookAsync(Ct);
         var other = await factory.SeedBookAsync(Ct);
-        var client = factory.CreateSignedInClient();
+        var client = await factory.CreateMemberClientAsync();
         var theirs = await CreateAsync(client, other, InsuranceInput(other, 202602, -3000m, "別人的"));
 
         // 用自己帳本的路徑、自己帳本的分類，去改別本帳的預定支出：只用預定支出 Id 查詢就會改到。
@@ -144,7 +144,7 @@ public class PlannedExpensesEndpointsTests(PostgresFixture postgres)
     {
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         var book = await factory.SeedBookAsync(Ct);
-        var client = factory.CreateSignedInClient();
+        var client = await factory.CreateMemberClientAsync();
         var bank = book.FindAccount("國泰世華銀行")!.Id.Value;
         var planned = await CreateAsync(client, book, InsuranceInput(book, 202602, -3000m, "年繳"));
 
@@ -173,7 +173,7 @@ public class PlannedExpensesEndpointsTests(PostgresFixture postgres)
     {
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         var book = await factory.SeedBookAsync(Ct);
-        var client = factory.CreateSignedInClient();
+        var client = await factory.CreateMemberClientAsync();
         var planned = await CreateAsync(client, book, InsuranceInput(book, 202602, -3000m, "2 月的保險費"));
 
         // 付款日期在 3 月，但交易的歸屬月份必須是預定支出的 2 月，而不是付款日期所在的月份。
@@ -192,7 +192,7 @@ public class PlannedExpensesEndpointsTests(PostgresFixture postgres)
     {
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         var book = await factory.SeedBookAsync(Ct);
-        var client = factory.CreateSignedInClient();
+        var client = await factory.CreateMemberClientAsync();
         var bank = book.FindAccount("國泰世華銀行")!.Id.Value;
         var loan = book.FindAccount("房屋貸款")!.Id.Value;
         var planned = await CreateAsync(client, book, MortgageInput(book));
@@ -223,7 +223,7 @@ public class PlannedExpensesEndpointsTests(PostgresFixture postgres)
     {
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         var book = await factory.SeedBookAsync(Ct);
-        var client = factory.CreateSignedInClient();
+        var client = await factory.CreateMemberClientAsync();
         var planned = await CreateAsync(client, book, MortgageInput(book));
 
         var response = await client.PostAsJsonAsync($"{Url(book)}/{planned.Id}/pay", new
@@ -244,7 +244,7 @@ public class PlannedExpensesEndpointsTests(PostgresFixture postgres)
     {
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         var book = await factory.SeedBookAsync(Ct);
-        var client = factory.CreateSignedInClient();
+        var client = await factory.CreateMemberClientAsync();
         var planned = await CreateAsync(client, book, InsuranceInput(book, 202602, -3000m, "保險費"));
 
         // 非貸款性質用不到這兩個欄位；沿用交易輸入的慣例，送了沒有作用的欄位就拒絕，避免前端以為已經存檔。
@@ -263,7 +263,7 @@ public class PlannedExpensesEndpointsTests(PostgresFixture postgres)
     {
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         var book = await factory.SeedBookAsync(Ct);
-        var client = factory.CreateSignedInClient();
+        var client = await factory.CreateMemberClientAsync();
         var bank = book.FindAccount("國泰世華銀行")!.Id.Value;
         var planned = await CreateAsync(client, book, InsuranceInput(book, 202602, -3000m, "保險費"));
         var first = await PayAsync(client, book, planned,
@@ -284,7 +284,7 @@ public class PlannedExpensesEndpointsTests(PostgresFixture postgres)
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         var mine = await factory.SeedBookAsync(Ct);
         var other = await factory.SeedBookAsync(Ct);
-        var client = factory.CreateSignedInClient();
+        var client = await factory.CreateMemberClientAsync();
         var theirs = await CreateAsync(client, other, InsuranceInput(other, 202602, -3000m, "別人的"));
 
         // 用自己帳本的路徑、自己帳本的帳戶，去付別本帳的預定支出：只用預定支出 Id 查詢就會付到。
@@ -303,7 +303,7 @@ public class PlannedExpensesEndpointsTests(PostgresFixture postgres)
     {
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         var book = await factory.SeedBookAsync(Ct);
-        var client = factory.CreateSignedInClient();
+        var client = await factory.CreateMemberClientAsync();
         var bank = book.FindAccount("國泰世華銀行")!.Id.Value;
         var planned = await CreateAsync(client, book, InsuranceInput(book, 202602, -3000m, "保險費"));
 
@@ -332,7 +332,7 @@ public class PlannedExpensesEndpointsTests(PostgresFixture postgres)
     {
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         var book = await factory.SeedBookAsync(Ct);
-        var client = factory.CreateSignedInClient();
+        var client = await factory.CreateMemberClientAsync();
         var planned = await CreateAsync(client, book, InsuranceInput(book, 202602, -3000m, "保險費"));
         // 另一台裝置先改了預估金額，版本因此前進
         (await client.PutAsJsonAsync($"{Url(book)}/{planned.Id}",
@@ -353,7 +353,7 @@ public class PlannedExpensesEndpointsTests(PostgresFixture postgres)
     {
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         var book = await factory.SeedBookAsync(Ct);
-        var client = factory.CreateSignedInClient();
+        var client = await factory.CreateMemberClientAsync();
         var planned = await CreateAsync(client, book, InsuranceInput(book, 202602, -3000m, "保險費"));
         // 實際金額與預估金額不同，才分辨得出月可用餘額是以哪一個計算。
         var paid = await PayAsync(client, book, planned,
@@ -389,7 +389,7 @@ public class PlannedExpensesEndpointsTests(PostgresFixture postgres)
     {
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         var book = await factory.SeedBookAsync(Ct);
-        var client = factory.CreateSignedInClient();
+        var client = await factory.CreateMemberClientAsync();
         var unpaid = await CreateAsync(client, book, InsuranceInput(book, 202602, -3000m, "未付"));
         var toPay = await CreateAsync(client, book, InsuranceInput(book, 202602, -500m, "已付"));
         var paid = await PayAsync(client, book, toPay,
@@ -415,7 +415,7 @@ public class PlannedExpensesEndpointsTests(PostgresFixture postgres)
     {
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         var book = await factory.SeedBookAsync(Ct);
-        var client = factory.CreateSignedInClient();
+        var client = await factory.CreateMemberClientAsync();
         var created = await CreateAsync(client, book, InsuranceInput(book, 202602, -3000m, "年繳"));
         // 另一台裝置先改過，版本因此前進。
         (await client.PutAsJsonAsync($"{Url(book)}/{created.Id}",
@@ -434,7 +434,7 @@ public class PlannedExpensesEndpointsTests(PostgresFixture postgres)
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         var mine = await factory.SeedBookAsync(Ct);
         var other = await factory.SeedBookAsync(Ct);
-        var client = factory.CreateSignedInClient();
+        var client = await factory.CreateMemberClientAsync();
         var theirs = await CreateAsync(client, other, InsuranceInput(other, 202602, -3000m, "別人的"));
 
         var response = await client.DeleteAsync($"{Url(mine)}/{theirs.Id}?version={theirs.Version}", Ct);
@@ -451,7 +451,7 @@ public class PlannedExpensesEndpointsTests(PostgresFixture postgres)
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         var book = await factory.SeedBookAsync(Ct);
 
-        var response = await factory.CreateSignedInClient().GetAsync($"/api/books/{book.Id.Value}/{resource}?budgetMonth=202613", Ct);
+        var response = await (await factory.CreateMemberClientAsync()).GetAsync($"/api/books/{book.Id.Value}/{resource}?budgetMonth=202613", Ct);
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }

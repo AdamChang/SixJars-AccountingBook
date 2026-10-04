@@ -30,7 +30,7 @@ public class AuthEndpointsTests(PostgresFixture postgres)
     {
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
 
-        var response = await factory.CreateSignedInClient().PostAsync("/auth/logout", content: null, Ct);
+        var response = await (await factory.CreateMemberClientAsync()).PostAsync("/auth/logout", content: null, Ct);
 
         response.StatusCode.Should().Be(HttpStatusCode.NoContent);
         response.Headers.GetValues("Set-Cookie").Should().Contain(c =>

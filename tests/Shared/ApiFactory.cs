@@ -26,11 +26,25 @@ public sealed class ApiFactory(
         PostgresFixture postgres, CancellationToken cancellationToken, Action<IServiceCollection>? testServices = null) =>
         new(await postgres.CreateConnectionStringAsync(cancellationToken), testServices);
 
-    /// <summary>已登入（<see cref="DefaultSubject"/>）的 client。T37 之後會改由 CreateMemberClientAsync 取代。</summary>
+    /// <summary>
+    /// 已登入、但<b>沒有</b> XSRF token 的 client：只用來測試 antiforgery 本身與唯讀請求；一般測試用 <see cref="CreateMemberClientAsync"/>。
+    /// </summary>
+    /// <remarks>cookie 一律由測試明確設定（<see cref="ApiXsrfTokens.ApplyTo"/>），不讓 client 自動保存，否則會與手動設定的 Cookie header 重複。</remarks>
     public HttpClient CreateSignedInClient(string subject = DefaultSubject)
     {
-        var client = CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://localhost") });
+        var client = CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://localhost"), HandleCookies = false });
         client.DefaultRequestHeaders.Add(TestAuthHandler.SubjectHeader, subject);
+        return client;
+    }
+
+    /// <summary>
+    /// 已登入、而且帶好 XSRF token 的 client（ADR 0005：非 GET 的 API 都要驗證）：
+    /// 以該身分呼叫 <c>/api/antiforgery/token</c>，再把取得的 cookie 與 <c>X-XSRF-TOKEN</c> header 設為預設值。
+    /// </summary>
+    public async Task<HttpClient> CreateMemberClientAsync(string subject = DefaultSubject)
+    {
+        var client = CreateSignedInClient(subject);
+        (await ApiXsrfTokens.FetchAsync(client)).ApplyTo(client);
         return client;
     }
 

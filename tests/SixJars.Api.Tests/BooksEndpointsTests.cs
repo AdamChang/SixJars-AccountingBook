@@ -17,7 +17,7 @@ public class BooksEndpointsTests(PostgresFixture postgres)
         await using var factory = await ApiFactory.CreateAsync(postgres, ct);
         var book = await factory.SeedBookAsync(ct);
 
-        var dto = await factory.CreateSignedInClient().GetFromJsonAsync<BookDto>($"/api/books/{book.Id.Value}", ApiJson.Options, ct);
+        var dto = await (await factory.CreateMemberClientAsync()).GetFromJsonAsync<BookDto>($"/api/books/{book.Id.Value}", ApiJson.Options, ct);
 
         dto!.Name.Should().Be("測試帳本");
         dto.Accounts.Should().ContainSingle(a => a.Name == "悠遊卡" && a.Type == AccountType.EWallet);
@@ -32,7 +32,7 @@ public class BooksEndpointsTests(PostgresFixture postgres)
         var ct = TestContext.Current.CancellationToken;
         await using var factory = await ApiFactory.CreateAsync(postgres, ct);
 
-        var response = await factory.CreateSignedInClient().GetAsync($"/api/books/{Guid.NewGuid()}", ct);
+        var response = await (await factory.CreateMemberClientAsync()).GetAsync($"/api/books/{Guid.NewGuid()}", ct);
 
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
         response.Content.Headers.ContentType!.MediaType.Should().Be("application/problem+json");

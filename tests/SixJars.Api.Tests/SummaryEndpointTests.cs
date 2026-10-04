@@ -24,7 +24,7 @@ public class SummaryEndpointTests(PostgresFixture postgres)
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         var book = await factory.SeedBookAsync(Ct);
         var other = await factory.SeedBookAsync(Ct);
-        var client = factory.CreateSignedInClient();
+        var client = await factory.CreateMemberClientAsync();
         await RecordLedgerAsync(client, book);
         // 別本帳的同月資料：不可混進來。
         await RecordLedgerAsync(client, other);
@@ -48,7 +48,7 @@ public class SummaryEndpointTests(PostgresFixture postgres)
         var clock = new FixedTimeProvider(new DateTimeOffset(2026, 2, 28, 17, 0, 0, TimeSpan.Zero));
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct, services => services.AddSingleton<TimeProvider>(clock));
         var book = await factory.SeedBookAsync(Ct);
-        var client = factory.CreateSignedInClient();
+        var client = await factory.CreateMemberClientAsync();
         await CreateTransactionAsync(client, book, new
         {
             kind = "Expense", date = "2026-03-01", amount = -100m,
@@ -69,7 +69,7 @@ public class SummaryEndpointTests(PostgresFixture postgres)
         var counter = new CommandCounter();
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct, services => services.AddSingleton<IInterceptor>(counter));
         var book = await factory.SeedBookAsync(Ct);
-        var client = factory.CreateSignedInClient();
+        var client = await factory.CreateMemberClientAsync();
         await RecordLedgerAsync(client, book);
 
         counter.Reset();
@@ -88,7 +88,7 @@ public class SummaryEndpointTests(PostgresFixture postgres)
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         var book = await factory.SeedBookAsync(Ct);
 
-        var response = await factory.CreateSignedInClient().GetAsync($"/api/books/{book.Id.Value}/summary{query}", Ct);
+        var response = await (await factory.CreateMemberClientAsync()).GetAsync($"/api/books/{book.Id.Value}/summary{query}", Ct);
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
         var problem = await ReadProblemAsync(response);
@@ -101,7 +101,7 @@ public class SummaryEndpointTests(PostgresFixture postgres)
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         var unknown = Guid.NewGuid();
 
-        var response = await factory.CreateSignedInClient().GetAsync($"/api/books/{unknown}/summary?budgetMonth=202602", Ct);
+        var response = await (await factory.CreateMemberClientAsync()).GetAsync($"/api/books/{unknown}/summary?budgetMonth=202602", Ct);
 
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
         // 確認是 handler 找不到帳本，不是路由不存在（路由不存在也是 404，但沒有 ProblemDetails）。

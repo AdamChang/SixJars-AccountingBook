@@ -22,6 +22,8 @@ builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Ad
 // cookie＋Google OIDC，白名單即帳本成員表（ADR 0005）。API 未登入時回 401，不轉址到 Google。
 builder.Services.AddSixJarsAuthentication(builder.Configuration, builder.Environment);
 builder.Services.AddAuthorization();
+// 非 GET 的請求一律驗證 XSRF token（ADR 0005），由 AntiforgeryFilter 掛在 /api 與 /auth/logout。
+builder.Services.AddAntiforgery(AntiforgeryFilter.ConfigureOptions);
 
 var app = builder.Build();
 app.UseExceptionHandler();
@@ -30,8 +32,8 @@ app.UseAuthorization();
 
 app.MapHealthEndpoints();
 app.MapAuthEndpoints();
-var api = app.MapGroup("/api").RequireAuthorization();
-api.MapMeEndpoints();
+var api = app.MapGroup("/api").RequireAuthorization().AddEndpointFilter<AntiforgeryFilter>();
+api.MapAntiforgeryEndpoints().MapMeEndpoints();
 api.MapBooksEndpoints().MapTransactionsEndpoints().MapPlannedExpensesEndpoints().MapSummaryEndpoints().MapAuditEndpoints();
 app.Run();
 

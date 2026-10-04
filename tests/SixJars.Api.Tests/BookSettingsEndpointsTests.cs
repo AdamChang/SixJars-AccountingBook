@@ -18,7 +18,7 @@ public class BookSettingsEndpointsTests(PostgresFixture postgres)
     {
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         var book = await factory.SeedBookAsync(Ct);
-        var client = factory.CreateSignedInClient();
+        var client = await factory.CreateMemberClientAsync();
 
         var response = await client.PostAsJsonAsync($"/api/books/{book.Id.Value}/accounts",
             new { name = "郵局", type = "Bank", openingBalance = 123m }, ApiJson.Options, Ct);
@@ -35,7 +35,7 @@ public class BookSettingsEndpointsTests(PostgresFixture postgres)
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         var book = await factory.SeedBookAsync(Ct);
 
-        var response = await factory.CreateSignedInClient().PostAsJsonAsync($"/api/books/{book.Id.Value}/accounts",
+        var response = await (await factory.CreateMemberClientAsync()).PostAsJsonAsync($"/api/books/{book.Id.Value}/accounts",
             new { name = "", type = "Bank", openingBalance = 0m }, ApiJson.Options, Ct);
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
@@ -49,7 +49,7 @@ public class BookSettingsEndpointsTests(PostgresFixture postgres)
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         var book = await factory.SeedBookAsync(Ct);
 
-        var response = await factory.CreateSignedInClient().PostAsJsonAsync($"/api/books/{book.Id.Value}/categories",
+        var response = await (await factory.CreateMemberClientAsync()).PostAsJsonAsync($"/api/books/{book.Id.Value}/categories",
             new { name = "交通", kind = "Expense" }, ApiJson.Options, Ct);
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
@@ -63,7 +63,7 @@ public class BookSettingsEndpointsTests(PostgresFixture postgres)
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         var book = await factory.SeedBookAsync(Ct);
 
-        var response = await factory.CreateSignedInClient().PostAsJsonAsync($"/api/books/{book.Id.Value}/accounts",
+        var response = await (await factory.CreateMemberClientAsync()).PostAsJsonAsync($"/api/books/{book.Id.Value}/accounts",
             new { name = "現金", type = "Cash", openingBalance = 0m }, ApiJson.Options, Ct);
 
         response.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
@@ -77,7 +77,7 @@ public class BookSettingsEndpointsTests(PostgresFixture postgres)
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         var book = await factory.SeedBookAsync(Ct);
         var food = book.FindCategory("主食")!;
-        var client = factory.CreateSignedInClient();
+        var client = await factory.CreateMemberClientAsync();
 
         var response = await client.PostAsJsonAsync($"/api/books/{book.Id.Value}/categories",
             new { name = "晚餐", kind = "Expense", parentId = food.Id.Value }, ApiJson.Options, Ct);
@@ -92,7 +92,7 @@ public class BookSettingsEndpointsTests(PostgresFixture postgres)
     {
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         var book = await factory.SeedBookAsync(Ct);
-        var client = factory.CreateSignedInClient();
+        var client = await factory.CreateMemberClientAsync();
 
         var response = await client.PostAsJsonAsync($"/api/books/{book.Id.Value}/planning-funds",
             new { name = "旅遊基金", openingBalance = 0m }, ApiJson.Options, Ct);

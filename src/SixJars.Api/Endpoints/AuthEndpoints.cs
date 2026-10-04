@@ -16,12 +16,12 @@ internal static class AuthEndpoints
         auth.MapGet("/login", (string? returnUrl) => Results.Challenge(
             new AuthenticationProperties { RedirectUri = ReturnUrl.Sanitize(returnUrl) }, [AuthenticationSetup.GoogleScheme]));
 
-        // T37：這裡要掛上 antiforgery filter（.AddEndpointFilter<AntiforgeryFilter>()），否則別的網站可以用 form POST 強迫使用者登出。
+        // 掛上 antiforgery filter，否則別的網站可以用 form POST 強迫使用者登出。
         auth.MapPost("/logout", async (HttpContext httpContext) =>
         {
             await httpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
             return Results.NoContent();
-        });
+        }).AddEndpointFilter<AntiforgeryFilter>();
 
         auth.MapGet("/denied", () => Results.Problem(statusCode: StatusCodes.Status403Forbidden, title: "此 Google 帳號不在白名單"));
     }

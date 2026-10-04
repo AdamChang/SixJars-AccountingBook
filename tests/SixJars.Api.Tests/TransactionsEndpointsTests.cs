@@ -22,7 +22,7 @@ public class TransactionsEndpointsTests(PostgresFixture postgres)
         var book = await factory.SeedBookAsync(Ct);
         var cash = book.FindAccount("現金")!.Id.Value;
         var lunch = book.FindCategory("主食", "午餐")!.Id.Value;
-        var client = factory.CreateSignedInClient();
+        var client = await factory.CreateMemberClientAsync();
 
         var response = await client.PostAsJsonAsync($"/api/books/{book.Id.Value}/transactions",
             new { kind = "Expense", date = "2026-01-05", amount = -120m, accountId = cash, categoryId = lunch }, ApiJson.Options, Ct);
@@ -45,7 +45,7 @@ public class TransactionsEndpointsTests(PostgresFixture postgres)
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         var mine = await factory.SeedBookAsync(Ct);
         var other = await factory.SeedBookAsync(Ct);
-        var client = factory.CreateSignedInClient();
+        var client = await factory.CreateMemberClientAsync();
         var created = await client.PostAsJsonAsync($"/api/books/{other.Id.Value}/transactions",
             new
             {
@@ -67,7 +67,7 @@ public class TransactionsEndpointsTests(PostgresFixture postgres)
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         var book = await factory.SeedBookAsync(Ct);
 
-        var response = await factory.CreateSignedInClient().GetAsync($"/api/books/{book.Id.Value}/transactions/{Guid.NewGuid()}", Ct);
+        var response = await (await factory.CreateMemberClientAsync()).GetAsync($"/api/books/{book.Id.Value}/transactions/{Guid.NewGuid()}", Ct);
 
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
@@ -78,7 +78,7 @@ public class TransactionsEndpointsTests(PostgresFixture postgres)
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         var book = await factory.SeedBookAsync(Ct);
 
-        var response = await factory.CreateSignedInClient().PostAsJsonAsync($"/api/books/{book.Id.Value}/transactions",
+        var response = await (await factory.CreateMemberClientAsync()).PostAsJsonAsync($"/api/books/{book.Id.Value}/transactions",
             new
             {
                 kind = "Transfer",
@@ -99,7 +99,7 @@ public class TransactionsEndpointsTests(PostgresFixture postgres)
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         var book = await factory.SeedBookAsync(Ct);
 
-        var response = await factory.CreateSignedInClient().PostAsJsonAsync($"/api/books/{book.Id.Value}/transactions",
+        var response = await (await factory.CreateMemberClientAsync()).PostAsJsonAsync($"/api/books/{book.Id.Value}/transactions",
             new { kind = "Transfer", date = "2026-01-05", amount = 500m, accountId = book.FindAccount("國泰世華銀行")!.Id.Value },
             ApiJson.Options, Ct);
 
@@ -114,7 +114,7 @@ public class TransactionsEndpointsTests(PostgresFixture postgres)
     {
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         var book = await factory.SeedBookAsync(Ct);
-        var client = factory.CreateSignedInClient();
+        var client = await factory.CreateMemberClientAsync();
         var tenth = await CreateLunchAsync(client, book, "2026-01-10", "1/10");
         var fifth = await CreateLunchAsync(client, book, "2026-01-05", "先建立");
         var fifthLater = await CreateLunchAsync(client, book, "2026-01-05", "後建立");
@@ -129,7 +129,7 @@ public class TransactionsEndpointsTests(PostgresFixture postgres)
     {
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         var book = await factory.SeedBookAsync(Ct);
-        var client = factory.CreateSignedInClient();
+        var client = await factory.CreateMemberClientAsync();
         await CreateLunchAsync(client, book, "2026-01-15", "1 月");
         var salary = await CreateAsync(client, book, new
         {
@@ -148,7 +148,7 @@ public class TransactionsEndpointsTests(PostgresFixture postgres)
     {
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         var book = await factory.SeedBookAsync(Ct);
-        var client = factory.CreateSignedInClient();
+        var client = await factory.CreateMemberClientAsync();
         var cash = book.FindAccount("現金")!.Id.Value;
         var bank = book.FindAccount("國泰世華銀行")!.Id.Value;
         var expense = await CreateLunchAsync(client, book, "2026-01-05", "現金午餐");
@@ -171,7 +171,7 @@ public class TransactionsEndpointsTests(PostgresFixture postgres)
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         var mine = await factory.SeedBookAsync(Ct);
         var other = await factory.SeedBookAsync(Ct);
-        var client = factory.CreateSignedInClient();
+        var client = await factory.CreateMemberClientAsync();
         await CreateLunchAsync(client, mine, "2026-01-05", "我的");
         await CreateLunchAsync(client, other, "2026-01-05", "別人的");
 
@@ -186,7 +186,7 @@ public class TransactionsEndpointsTests(PostgresFixture postgres)
     {
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         var book = await factory.SeedBookAsync(Ct);
-        var client = factory.CreateSignedInClient();
+        var client = await factory.CreateMemberClientAsync();
         await CreateLunchAsync(client, book, "2026-01-09", "區間前");
         var first = await CreateLunchAsync(client, book, "2026-01-10", "下限當天");
         var last = await CreateLunchAsync(client, book, "2026-01-20", "上限當天");
@@ -202,7 +202,7 @@ public class TransactionsEndpointsTests(PostgresFixture postgres)
     {
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         var book = await factory.SeedBookAsync(Ct);
-        var client = factory.CreateSignedInClient();
+        var client = await factory.CreateMemberClientAsync();
         var bank = book.FindAccount("國泰世華銀行")!.Id.Value;
         var earmark = await CreateDtoAsync(client, book, new
         {
@@ -221,7 +221,7 @@ public class TransactionsEndpointsTests(PostgresFixture postgres)
     {
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         var book = await factory.SeedBookAsync(Ct);
-        var client = factory.CreateSignedInClient();
+        var client = await factory.CreateMemberClientAsync();
         var earlier = await CreateDtoAsync(client, book, LunchInput(book, "2026-01-05", "先建立"));
         var later = await CreateLunchAsync(client, book, "2026-01-05", "後建立");
         // UPDATE 會把列搬到資料表尾端；沒有 ThenBy(Id) 時，同一天的順序就會跟著實體儲存順序變動
@@ -239,7 +239,7 @@ public class TransactionsEndpointsTests(PostgresFixture postgres)
     {
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         var book = await factory.SeedBookAsync(Ct);
-        var client = factory.CreateSignedInClient();
+        var client = await factory.CreateMemberClientAsync();
         var created = await CreateDtoAsync(client, book, LunchInput(book, "2026-01-05", "午餐"));
 
         var response = await client.PutAsJsonAsync($"/api/books/{book.Id.Value}/transactions/{created.Id}",
@@ -261,7 +261,7 @@ public class TransactionsEndpointsTests(PostgresFixture postgres)
     {
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         var book = await factory.SeedBookAsync(Ct);
-        var client = factory.CreateSignedInClient();
+        var client = await factory.CreateMemberClientAsync();
         var cash = book.FindAccount("現金")!.Id.Value;
         var bank = book.FindAccount("國泰世華銀行")!.Id.Value;
         var created = await CreateDtoAsync(client, book, LunchInput(book, "2026-01-05", "午餐"));
@@ -293,7 +293,7 @@ public class TransactionsEndpointsTests(PostgresFixture postgres)
     {
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         var book = await factory.SeedBookAsync(Ct);
-        var client = factory.CreateSignedInClient();
+        var client = await factory.CreateMemberClientAsync();
         var created = await CreateDtoAsync(client, book, LunchInput(book, "2026-01-05", "午餐"));
         var url = $"/api/books/{book.Id.Value}/transactions/{created.Id}";
 
@@ -315,7 +315,7 @@ public class TransactionsEndpointsTests(PostgresFixture postgres)
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         var book = await factory.SeedBookAsync(Ct);
 
-        var response = await factory.CreateSignedInClient().PutAsJsonAsync($"/api/books/{book.Id.Value}/transactions/{Guid.NewGuid()}",
+        var response = await (await factory.CreateMemberClientAsync()).PutAsJsonAsync($"/api/books/{book.Id.Value}/transactions/{Guid.NewGuid()}",
             new { version = 1u, input = LunchInput(book, "2026-01-05", "午餐") }, ApiJson.Options, Ct);
 
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
@@ -327,7 +327,7 @@ public class TransactionsEndpointsTests(PostgresFixture postgres)
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         var mine = await factory.SeedBookAsync(Ct);
         var other = await factory.SeedBookAsync(Ct);
-        var client = factory.CreateSignedInClient();
+        var client = await factory.CreateMemberClientAsync();
         var theirs = await CreateDtoAsync(client, other, LunchInput(other, "2026-01-05", "別人的午餐"));
 
         // 用自己帳本的路徑、自己帳本的帳戶與分類，去改別本帳的交易：只用交易 Id 查詢就會改到。
@@ -344,7 +344,7 @@ public class TransactionsEndpointsTests(PostgresFixture postgres)
     {
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         var book = await factory.SeedBookAsync(Ct);
-        var client = factory.CreateSignedInClient();
+        var client = await factory.CreateMemberClientAsync();
         var kept = await CreateDtoAsync(client, book, LunchInput(book, "2026-01-05", "留著"));
         var deleted = await CreateDtoAsync(client, book, LunchInput(book, "2026-01-06", "要刪除"));
         var url = $"/api/books/{book.Id.Value}/transactions/{deleted.Id}";
@@ -371,7 +371,7 @@ public class TransactionsEndpointsTests(PostgresFixture postgres)
     {
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         var book = await factory.SeedBookAsync(Ct);
-        var client = factory.CreateSignedInClient();
+        var client = await factory.CreateMemberClientAsync();
         var created = await CreateDtoAsync(client, book, LunchInput(book, "2026-01-05", "午餐"));
         var url = $"/api/books/{book.Id.Value}/transactions/{created.Id}";
         // 另一台裝置先改過，版本因此前進。
@@ -390,7 +390,7 @@ public class TransactionsEndpointsTests(PostgresFixture postgres)
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         var mine = await factory.SeedBookAsync(Ct);
         var other = await factory.SeedBookAsync(Ct);
-        var client = factory.CreateSignedInClient();
+        var client = await factory.CreateMemberClientAsync();
         var theirs = await CreateDtoAsync(client, other, LunchInput(other, "2026-01-05", "別人的午餐"));
 
         // 用自己帳本的路徑去刪別本帳的交易：只用交易 Id 查詢就會刪到。
