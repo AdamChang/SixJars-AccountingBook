@@ -29,10 +29,12 @@ export interface MockApiOptions {
 export interface MockApi {
   // 依序記錄收到的 POST /transactions request body
   posts: Record<string, unknown>[];
+  // 與 posts 對應的 X-XSRF-TOKEN request header
+  xsrfTokens: (string | undefined)[];
 }
 
 export async function mockApi(page: Page, options: MockApiOptions = {}): Promise<MockApi> {
-  const api: MockApi = { posts: [] };
+  const api: MockApi = { posts: [], xsrfTokens: [] };
 
   await page.route('**/api/me', options.me ?? (route =>
     route.fulfill({ json: { subject: 'e2e', email: null, books: [{ id: BOOK_ID, name: BOOK.name }] } })));
@@ -54,6 +56,7 @@ export async function mockApi(page: Page, options: MockApiOptions = {}): Promise
     }
     const input = request.postDataJSON() as Record<string, unknown>;
     api.posts.push(input);
+    api.xsrfTokens.push(request.headers()['x-xsrf-token']);
     if (options.postDelayMs) {
       await new Promise(resolve => setTimeout(resolve, options.postDelayMs));
     }

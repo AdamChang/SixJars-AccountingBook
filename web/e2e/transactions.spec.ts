@@ -26,25 +26,34 @@ async function enterExpense(page: Page, amount: string): Promise<void> {
 }
 
 test('keyboard_only_continuous_entry', async ({ page }) => {
-  const api = await mockApi(page);
+  // 延遲回應：若有多送的請求，會在進行中而被記錄到
+  const api = await mockApi(page, { postDelayMs: 300 });
   await page.goto(PAGE_URL);
   await selectAccountWithKeyboard(page);
   await page.keyboard.press('Tab');
 
   await enterExpense(page, '100');
   await page.keyboard.press('Enter');             // 選取選項，不應送出
+  // 面板關閉且儲存鈕仍可按（沒進入 pending）後，才斷言沒有 POST
+  await expect(page.getByRole('option', { name: '飲食 / 早餐' })).toBeHidden();
   await expect(page.getByRole('combobox', { name: '分類' })).toHaveValue('飲食 / 早餐');
+  await expect(page.getByRole('button', { name: '儲存' })).toBeEnabled();
   expect(api.posts).toHaveLength(0);
 
   await page.keyboard.press('Enter');             // 送出
-  await expect.poll(() => api.posts.length).toBe(1);
+  await expect(page.getByLabel('金額')).toBeFocused();   // 儲存完成後焦點回到金額
+  expect(api.posts).toHaveLength(1);
   expect(api.posts[0]).toMatchObject({ kind: 'Expense', amount: -100, categoryId: 'cat-breakfast' });
-  await expect(page.getByLabel('金額')).toBeFocused();
+  expect(api.xsrfTokens[0]).toBe('e2e-token');
 
   await enterExpense(page, '60');
   await page.keyboard.press('Enter');
+  await expect(page.getByRole('option', { name: '飲食 / 早餐' })).toBeHidden();
+  await expect(page.getByRole('button', { name: '儲存' })).toBeEnabled();
+  expect(api.posts).toHaveLength(1);
   await page.keyboard.press('Enter');
-  await expect.poll(() => api.posts.length).toBe(2);
+  await expect(page.getByLabel('金額')).toBeFocused();
+  expect(api.posts).toHaveLength(2);
   expect(api.posts[1]).toMatchObject({ amount: -60 });
 });
 
