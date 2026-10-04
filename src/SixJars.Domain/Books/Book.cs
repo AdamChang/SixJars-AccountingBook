@@ -21,6 +21,9 @@ public sealed class Book
     /// <summary>期初餘額的基準日；所有帳戶的期初餘額都視為此日結束時的餘額。</summary>
     public DateOnly OpeningDate { get; private set; }
 
+    /// <summary>此日（含）以前的交易不可再新增、修改或刪除（CONTEXT.md 鎖帳日）。可前移、後移或清除（spec §9 O3）。</summary>
+    public DateOnly? LockDate { get; private set; }
+
     public IReadOnlyList<Account> Accounts => _accounts;
     public IReadOnlyList<PlanningFund> PlanningFunds => _planningFunds;
     public IReadOnlyList<Category> Categories => _categories;
@@ -73,6 +76,21 @@ public sealed class Book
         _categories.Add(category);
         return category;
     }
+
+    public void SetLockDate(DateOnly? lockDate) => LockDate = lockDate;
+
+    /// <summary>交易日期落在鎖帳日（含）以前時擲出 <see cref="DomainException"/>，code 為 <see cref="DomainException.LockedCode"/>。</summary>
+    public void EnsureUnlocked(DateOnly date)
+    {
+        if (LockDate is { } lockDate && date <= lockDate)
+        {
+            throw new DomainException($"{date:yyyy-MM-dd} 在鎖帳日 {lockDate:yyyy-MM-dd}（含）以前，不可異動。", DomainException.LockedCode);
+        }
+    }
+
+    /// <summary>預定支出以歸屬月份的最後一天判斷（spec §3.1）。</summary>
+    public void EnsureUnlocked(BudgetMonth month) =>
+        EnsureUnlocked(new DateOnly(month.Year, month.Month, DateTime.DaysInMonth(month.Year, month.Month)));
 
     public Account GetAccount(AccountId id) =>
         _accounts.Find(a => a.Id == id) ?? throw new DomainException($"找不到帳戶 {id.Value}。");

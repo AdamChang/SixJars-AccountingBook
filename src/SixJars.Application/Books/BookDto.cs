@@ -6,12 +6,11 @@ namespace SixJars.Application.Books;
 public sealed record BookDto(Guid Id, string Name, DateOnly OpeningDate, DateOnly? LockDate,
     IReadOnlyList<AccountDto> Accounts, IReadOnlyList<PlanningFundDto> PlanningFunds, IReadOnlyList<CategoryDto> Categories)
 {
-    // LockDate 在 T32 之前一律為 null，T32 再接上 Book.LockDate。
     public static BookDto From(Book book) => new(
         book.Id.Value,
         book.Name,
         book.OpeningDate,
-        LockDate: null,
+        book.LockDate,
         [.. book.Accounts.Select(AccountDto.From)],
         [.. book.PlanningFunds.Select(PlanningFundDto.From)],
         [.. book.Categories.Select(CategoryDto.From)]);
