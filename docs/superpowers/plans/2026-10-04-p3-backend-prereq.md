@@ -15,7 +15,7 @@
 - 不新增任何 endpoint：`SecurityConventionTests` 的兩個測試與 `ApiEndpoints` 不可修改。
 - `wwwroot` 不存在時（只跑 API 測試、沒有 build 前端）app 必須正常啟動，`/health` 仍回 200。
 - 前端路徑是指：不以 `/api`、`/auth`、`/health` 為第一個路徑段，且最後一段沒有副檔名。只改寫 GET 與 HEAD。
-- 快取：`index.html` 一律 `Cache-Control: no-cache`；檔名符合 Angular 的雜湊格式（`-` 加 8 個大寫英數字再接副檔名，例如 `main-ABCD1234.js`）的檔案設 `public, max-age=31536000, immutable`；其他靜態檔（`ngsw.json`、`ngsw-worker.js`、`manifest.webmanifest`、`favicon.ico`）設 `no-cache`。
+- 快取：`index.html` 一律 `Cache-Control: no-cache`；檔名符合 Angular 的雜湊格式（`-` 加 8 個 base32 字元（A–Z、2–7；esbuild 內容雜湊的字母表）再接副檔名，例如 `main-ABCD2345.js`）的檔案設 `public, max-age=31536000, immutable`；其他靜態檔（`ngsw.json`、`ngsw-worker.js`、`manifest.webmanifest`、`favicon.ico`）設 `no-cache`。
 - 登入失敗（`OnRemoteFailure`）轉址到 `/denied`；刪除 `/auth/denied` endpoint。
 
 ## Review Focus
@@ -99,7 +99,7 @@ Task 3（/denied）        獨立，可與 1、2 並行；但 Task 3 的 404 斷
 
 **Interfaces:**
 - Produces: `public static WebApplication UseSpaHosting(this WebApplication app)`（`SixJars.Api.Infrastructure.SpaHosting`）；`internal static bool IsFrontendRoute(PathString path)`。
-- Produces（測試）：`internal static class SpaWebRoot { public static string Create(); public const string IndexMarker = "<!-- sixjars-spa -->"; }`，建立的目錄內有 `index.html`（內容含 `IndexMarker`）、`main-ABCD1234.js`、`ngsw.json`。
+- Produces（測試）：`internal static class SpaWebRoot { public static string Create(); public const string IndexMarker = "<!-- sixjars-spa -->"; }`，建立的目錄內有 `index.html`（內容含 `IndexMarker`）、`main-ABCD2345.js`、`ngsw.json`。
 - Consumes: `ApiFactory(string? connectionString, Action<IServiceCollection>? testServices = null, bool useTestAuthentication = true, IReadOnlyDictionary<string, string>? settings = null)`；以 `settings: { ["webroot"] = SpaWebRoot.Create() }` 指定 web root（事實查核 spike 已確認 `UseSetting("webroot", …)` 會生效）。
 
 - [ ] **Step 1：寫失敗測試**（`SpaHostingTests`，以 `PostgresFixture` 建 `ApiFactory`；除了最後一個測試，其餘都用 `SpaWebRoot.Create()` 當 web root，用匿名 client，`BaseAddress = https://localhost`）
@@ -125,7 +125,7 @@ public async Task Missing_file_with_extension_is_404()
 
 [Fact]
 public async Task Existing_static_file_is_served()
-// GET /main-ABCD1234.js → 200，Content-Type text/javascript
+// GET /main-ABCD2345.js → 200，Content-Type text/javascript
 
 [Fact]
 public async Task Post_to_frontend_route_is_not_rewritten()
@@ -166,7 +166,7 @@ git commit -m "feat(api): 提供前端靜態檔與 SPA fallback（不新增 endp
 容易錯的地方：只對「直接請求 `/index.html`」設 header，忘了 deep link 改寫後的請求；或是把 `ngsw.json` 也設成長期快取。
 
 **Interfaces:**
-- Produces: `internal static bool IsHashedAsset(string fileName)`，規則：`-[A-Z0-9]{8}\.[a-z0-9]+$`。實際的 Angular 輸出檔名在前端 plan 的段 I 用真正的 build 驗證；不相符時回到這裡修改規則，並回寫計畫。
+- Produces: `internal static bool IsHashedAsset(string fileName)`，規則：`-[A-Z2-7]{8}\.[a-z0-9]+$`。實際的 Angular 輸出檔名在前端 plan 的段 I 用真正的 build 驗證；不相符時回到這裡修改規則，並回寫計畫。
 
 - [ ] **Step 1：寫失敗測試**
 
@@ -180,7 +180,7 @@ public async Task Index_is_no_cache_for_root_and_deep_link(string url)
 
 [Fact]
 public async Task Hashed_assets_are_immutable()
-// GET /main-ABCD1234.js：CacheControl.Public 為 true、MaxAge == 365 天、ToString() 包含 "immutable"
+// GET /main-ABCD2345.js：CacheControl.Public 為 true、MaxAge == 365 天、ToString() 包含 "immutable"
 
 [Theory]
 [InlineData("/ngsw.json")]
@@ -188,7 +188,7 @@ public async Task Unhashed_files_are_no_cache(string url)
 // NoCache 為 true，而且沒有 MaxAge
 ```
 
-另外在 `SpaHostingTests` 裡加一個純函式的 Theory：`IsHashedAsset("main-ABCD1234.js")`、`"chunk-Z9Y8X7W6.js"`、`"styles-ABCDEFGH.css"` 為 true；`"ngsw.json"`、`"ngsw-worker.js"`、`"main-abcd1234.js"`（小寫）、`"favicon.ico"` 為 false。`SixJars.Api.csproj` 已有 `InternalsVisibleTo` 給 `SixJars.Api.Tests`，`internal` 方法可以直接測。
+另外在 `SpaHostingTests` 裡加一個純函式的 Theory：`IsHashedAsset("main-ABCD2345.js")`、`"chunk-Z7Y6X5W4.js"`、`"styles-ABCDEFGH.css"` 為 true；`"ngsw.json"`、`"ngsw-worker.js"`、`"main-abcd2345.js"`（小寫）、`"logo-20261004.png"`（含 0、1、8、9，非 base32）、`"favicon.ico"` 為 false。`SixJars.Api.csproj` 已有 `InternalsVisibleTo` 給 `SixJars.Api.Tests`，`internal` 方法可以直接測。
 
 - [ ] **Step 2：確認失敗**：快取的測試失敗（沒有 `Cache-Control` header，`CacheControl` 為 null）；`IsHashedAsset` 的測試以編譯錯誤失敗（方法尚未存在），先加一個 `throw new NotImplementedException()` 的空殼，讓失敗原因變成斷言失敗。
 - [ ] **Step 3：實作**：`UseStaticFiles(new StaticFileOptions { OnPrepareResponse = ctx => … })`，依 `ctx.File.Name`：`index.html` 或 `IsHashedAsset` 為 false 時設 `no-cache`；`IsHashedAsset` 為 true 時設 `public, max-age=31536000, immutable`。用 `ctx.Context.Response.GetTypedHeaders().CacheControl`。
@@ -261,4 +261,4 @@ git commit -m "feat(api): 登入失敗轉址到前端的 /denied，移除 /auth/
 | `src/SixJars.Api/wwwroot` | 不存在 | `Test-Path` 為 False | 「沒有 web root」的測試直接用 Api 專案的預設值 |
 | 各 Create 檔案不存在；各 Modify 檔案存在 | ✓ | `Test-Path`；Modify 的行號已核對 | — |
 | `SixJars.Api` 的 `InternalsVisibleTo` | ✓ | `SixJars.Api.csproj:6` 已開給 `SixJars.Api.Tests` | Task 2 不需修改 csproj |
-| Angular 雜湊檔名格式 `-[A-Z0-9]{8}` | ✓ | Angular CLI 22.2.1 的 production build（scratchpad spike）：`main-DISDLN5L.js`、`styles-OPUTW5UJ.css`；`ngsw-worker.js`、`ngsw.json`、`manifest.webmanifest`、`safety-worker.js`、`worker-basic.min.js` 不帶雜湊 | 規則不變；前端 plan 段 I 再以 `web/` 的實際 build 確認一次 |
+| Angular 雜湊檔名格式 `-[A-Z2-7]{8}`（base32） | ✓ | Angular CLI 22.2.1 的 production build（scratchpad spike）：`main-DISDLN5L.js`、`styles-OPUTW5UJ.css`；`ngsw-worker.js`、`ngsw.json`、`manifest.webmanifest`、`safety-worker.js`、`worker-basic.min.js` 不帶雜湊 | 規則不變；前端 plan 段 I 再以 `web/` 的實際 build 確認一次 |
