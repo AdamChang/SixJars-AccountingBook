@@ -5,7 +5,7 @@ using SixJars.Domain.Common;
 
 namespace SixJars.Application.Planning;
 
-public sealed record GetPlannedExpense(Guid BookId, Guid PlannedExpenseId) : IRequest<PlannedExpenseDto>;
+public sealed record GetPlannedExpense(Guid BookId, Guid PlannedExpenseId) : IRequest<PlannedExpenseDto>, IBookScoped;
 
 internal sealed class GetPlannedExpenseHandler(ISixJarsDbContext db) : IRequestHandler<GetPlannedExpense, PlannedExpenseDto>
 {

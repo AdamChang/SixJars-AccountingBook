@@ -7,7 +7,7 @@ using SixJars.Application.Common;
 namespace SixJars.Application.Transactions;
 
 /// <summary>新增一筆交易。形狀由 <see cref="TransactionInputValidator"/> 檢查（400），業務規則由 TransactionFactory 檢查（422）。</summary>
-public sealed record CreateTransaction(Guid BookId, TransactionInput Input) : IRequest<TransactionDto>;
+public sealed record CreateTransaction(Guid BookId, TransactionInput Input) : IRequest<TransactionDto>, IBookScoped;
 
 internal sealed class CreateTransactionValidator : AbstractValidator<CreateTransaction>
 {

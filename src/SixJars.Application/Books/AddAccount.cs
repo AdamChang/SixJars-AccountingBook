@@ -8,7 +8,7 @@ namespace SixJars.Application.Books;
 
 /// <summary>新增帳戶，回傳新帳戶的 Id。名稱重複由 Domain 擋下（422）。</summary>
 public sealed record AddAccount(Guid BookId, string Name, AccountType Type, decimal OpeningBalance, bool CountsAsAvailableCash = true)
-    : IRequest<Guid>;
+    : IRequest<Guid>, IBookScoped;
 
 internal sealed class AddAccountValidator : AbstractValidator<AddAccount>
 {

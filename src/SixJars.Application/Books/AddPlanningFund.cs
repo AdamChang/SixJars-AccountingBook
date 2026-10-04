@@ -6,7 +6,7 @@ using SixJars.Application.Common;
 namespace SixJars.Application.Books;
 
 /// <summary>新增財務規劃帳戶，回傳新帳戶的 Id。名稱重複由 Domain 擋下（422）。</summary>
-public sealed record AddPlanningFund(Guid BookId, string Name, decimal OpeningBalance) : IRequest<Guid>;
+public sealed record AddPlanningFund(Guid BookId, string Name, decimal OpeningBalance) : IRequest<Guid>, IBookScoped;
 
 internal sealed class AddPlanningFundValidator : AbstractValidator<AddPlanningFund>
 {

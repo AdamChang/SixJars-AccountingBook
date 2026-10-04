@@ -1,13 +1,21 @@
 using Microsoft.Extensions.DependencyInjection;
 using SixJars.Domain.Books;
+using SixJars.Domain.Common;
+using SixJars.Domain.Members;
 using SixJars.Infrastructure.Persistence;
 
 namespace SixJars.Tests.Shared;
 
 internal static class ApiSeed
 {
-    /// <summary>在 factory 的資料庫寫入一本含現金、銀行、信用卡、電子錢包、貸款、一個財務規劃帳戶與基本分類的帳本。</summary>
-    public static async Task<Book> SeedBookAsync(this ApiFactory factory, CancellationToken cancellationToken)
+    private static readonly DateTimeOffset MemberAddedAt = new(2025, 12, 31, 0, 0, 0, TimeSpan.Zero);
+
+    /// <summary>
+    /// 在 factory 的資料庫寫入一本含現金、銀行、信用卡、電子錢包、貸款、一個財務規劃帳戶與基本分類的帳本，
+    /// 並以 <paramref name="ownerSubject"/> 加入已綁定的擁有者成員（ADR 0005）；傳 null 則不加成員。
+    /// </summary>
+    public static async Task<Book> SeedBookAsync(
+        this ApiFactory factory, CancellationToken cancellationToken, string? ownerSubject = ApiFactory.DefaultSubject)
     {
         var book = new Book("測試帳本", new DateOnly(2025, 12, 31));
         book.AddAccount("現金", AccountType.Cash, 1000m);
@@ -27,7 +35,28 @@ internal static class ApiSeed
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<SixJarsDbContext>();
         db.Books.Add(book);
+        if (ownerSubject is not null)
+        {
+            db.BookMembers.Add(Owner(book.Id, ownerSubject));
+        }
+
         await db.SaveChangesAsync(cancellationToken);
         return book;
+    }
+
+    /// <summary>把 <paramref name="subject"/> 加為帳本的擁有者（已綁定 sub，email 與 <see cref="TestAuthHandler"/> 發出的一致）。</summary>
+    public static async Task AddOwnerAsync(this ApiFactory factory, BookId bookId, string subject, CancellationToken cancellationToken)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SixJarsDbContext>();
+        db.BookMembers.Add(Owner(bookId, subject));
+        await db.SaveChangesAsync(cancellationToken);
+    }
+
+    private static BookMember Owner(BookId bookId, string subject)
+    {
+        var member = BookMember.Create(bookId, TestAuthHandler.EmailOf(subject), BookRole.Owner, MemberAddedAt);
+        member.BindSubject(subject);
+        return member;
     }
 }

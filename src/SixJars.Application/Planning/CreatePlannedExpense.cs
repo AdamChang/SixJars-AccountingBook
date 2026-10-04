@@ -9,7 +9,7 @@ using SixJars.Domain.Planning;
 namespace SixJars.Application.Planning;
 
 /// <summary>新增一筆預定支出。形狀由 <see cref="PlannedExpenseInputValidator"/> 檢查（400），業務規則由 <see cref="PlannedExpense"/> 檢查（422）。</summary>
-public sealed record CreatePlannedExpense(Guid BookId, PlannedExpenseInput Input) : IRequest<PlannedExpenseDto>;
+public sealed record CreatePlannedExpense(Guid BookId, PlannedExpenseInput Input) : IRequest<PlannedExpenseDto>, IBookScoped;
 
 internal sealed class CreatePlannedExpenseValidator : AbstractValidator<CreatePlannedExpense>
 {

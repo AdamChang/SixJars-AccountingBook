@@ -6,7 +6,7 @@ using SixJars.Application.Common;
 namespace SixJars.Application.Auditing;
 
 /// <summary>某一筆資料的修改歷史（唯讀），由舊到新；只看得到 <see cref="BookId"/> 這本帳的記錄。已刪除的資料也查得到。</summary>
-public sealed record GetAuditHistory(Guid BookId, Guid EntityId) : IRequest<IReadOnlyList<AuditEntryDto>>;
+public sealed record GetAuditHistory(Guid BookId, Guid EntityId) : IRequest<IReadOnlyList<AuditEntryDto>>, IBookScoped;
 
 /// <summary>稽核記錄的 API 輸出；<see cref="Before"/>／<see cref="After"/> 是 JSON 物件（不是跳脫過的字串），新增時沒有修改前、刪除時沒有修改後。</summary>
 public sealed record AuditEntryDto(

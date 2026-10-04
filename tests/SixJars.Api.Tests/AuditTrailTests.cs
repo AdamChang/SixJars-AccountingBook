@@ -144,6 +144,8 @@ public class AuditTrailTests(PostgresFixture postgres)
         // 其他測試都用 DefaultSubject 登入，寫死操作者也會通過；換一個使用者才鎖得住。
         await using var factory = await CreateFactoryAsync();
         var book = await factory.SeedBookAsync(Ct);
+        // 第二位擁有者（ADR 0005：只有成員能存取帳本）。
+        await factory.AddOwnerAsync(book.Id, "spouse-sub", Ct);
         var client = factory.CreateSignedInClient("spouse-sub");
 
         var created = await CreateTransactionAsync(client, book, LunchInput(book, -100m, "午餐"));

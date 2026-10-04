@@ -5,7 +5,7 @@ using SixJars.Domain.Common;
 
 namespace SixJars.Application.Transactions;
 
-public sealed record GetTransaction(Guid BookId, Guid TransactionId) : IRequest<TransactionDto>;
+public sealed record GetTransaction(Guid BookId, Guid TransactionId) : IRequest<TransactionDto>, IBookScoped;
 
 internal sealed class GetTransactionHandler(ISixJarsDbContext db) : IRequestHandler<GetTransaction, TransactionDto>
 {

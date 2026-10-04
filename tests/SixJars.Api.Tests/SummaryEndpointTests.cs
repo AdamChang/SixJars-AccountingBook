@@ -64,7 +64,7 @@ public class SummaryEndpointTests(PostgresFixture postgres)
     }
 
     [Fact]
-    public async Task Summary_uses_at_most_five_database_round_trips()
+    public async Task Summary_uses_at_most_six_database_round_trips()
     {
         var counter = new CommandCounter();
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct, services => services.AddSingleton<IInterceptor>(counter));
@@ -75,8 +75,9 @@ public class SummaryEndpointTests(PostgresFixture postgres)
         counter.Reset();
         await GetSummaryAsync(client, book, "?budgetMonth=202602&asOf=2026-02-20");
 
-        // Book 1 次 + 分錄 1 次 + 財務規劃帳戶 1 次 + 交易 1 次 + 預定支出 1 次（spec §5 原本預期 ≤ 3，見計畫 T27 的偏差說明）。
-        counter.Count.Should().BeLessThanOrEqualTo(5);
+        // 成員授權 1 次（BookAccessBehavior）+ Book 1 次 + 分錄 1 次 + 財務規劃帳戶 1 次 + 交易 1 次 + 預定支出 1 次。
+        // spec §5 原本預期 ≤ 3；使用者已同意放寬為 ≤ 6（見計畫段 E 執行紀錄）。
+        counter.Count.Should().BeLessThanOrEqualTo(6);
     }
 
     [Theory]

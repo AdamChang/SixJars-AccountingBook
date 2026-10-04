@@ -8,7 +8,7 @@ namespace SixJars.Application.Planning;
 
 /// <summary>預定支出清單，依歸屬月份、再依建立順序排列。</summary>
 /// <param name="BudgetMonth">歸屬月份（yyyymm）；null 表示全部月份。</param>
-public sealed record ListPlannedExpenses(Guid BookId, int? BudgetMonth) : IRequest<IReadOnlyList<PlannedExpenseDto>>;
+public sealed record ListPlannedExpenses(Guid BookId, int? BudgetMonth) : IRequest<IReadOnlyList<PlannedExpenseDto>>, IBookScoped;
 
 /// <summary>歸屬月份必須是合法的 yyyymm；否則 <see cref="BudgetMonth.FromKey"/> 會擲例外，變成 500。</summary>
 internal sealed class ListPlannedExpensesValidator : AbstractValidator<ListPlannedExpenses>

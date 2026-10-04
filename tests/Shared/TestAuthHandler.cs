@@ -20,7 +20,10 @@ public sealed class TestAuthHandler(IOptionsMonitor<AuthenticationSchemeOptions>
             return Task.FromResult(AuthenticateResult.NoResult());
         }
 
-        var identity = new ClaimsIdentity([new Claim("sub", subject.ToString()), new Claim("email", $"{subject}@example.com")], SchemeName);
+        var identity = new ClaimsIdentity([new Claim("sub", subject.ToString()), new Claim("email", EmailOf(subject.ToString()))], SchemeName);
         return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(identity), SchemeName)));
     }
+
+    /// <summary>模擬身分的 email claim。</summary>
+    public static string EmailOf(string subject) => $"{subject}@example.com";
 }

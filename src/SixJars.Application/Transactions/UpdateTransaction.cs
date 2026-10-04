@@ -12,7 +12,8 @@ namespace SixJars.Application.Transactions;
 /// 修改一筆交易（可改交易類型），以樂觀並行控制：<see cref="Version"/> 是前端讀到的版本，
 /// 期間若有人改過這筆交易，存檔時擲 <see cref="DbUpdateConcurrencyException"/>（409）。
 /// </summary>
-public sealed record UpdateTransaction(Guid BookId, Guid TransactionId, uint Version, TransactionInput Input) : IRequest<TransactionDto>;
+public sealed record UpdateTransaction(Guid BookId, Guid TransactionId, uint Version, TransactionInput Input)
+    : IRequest<TransactionDto>, IBookScoped;
 
 internal sealed class UpdateTransactionValidator : AbstractValidator<UpdateTransaction>
 {

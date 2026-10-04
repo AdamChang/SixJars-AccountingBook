@@ -13,7 +13,8 @@ namespace SixJars.Application.Planning;
 /// 修改一筆未付的預定支出，以樂觀並行控制：<see cref="Version"/> 是前端讀到的版本，
 /// 期間若有人改過（含付款），存檔時擲 <see cref="DbUpdateConcurrencyException"/>（409）。
 /// </summary>
-public sealed record UpdatePlannedExpense(Guid BookId, Guid PlannedExpenseId, uint Version, PlannedExpenseInput Input) : IRequest<PlannedExpenseDto>;
+public sealed record UpdatePlannedExpense(Guid BookId, Guid PlannedExpenseId, uint Version, PlannedExpenseInput Input)
+    : IRequest<PlannedExpenseDto>, IBookScoped;
 
 internal sealed class UpdatePlannedExpenseValidator : AbstractValidator<UpdatePlannedExpense>
 {

@@ -8,7 +8,7 @@ namespace SixJars.Application.Ledger;
 
 /// <param name="BudgetMonth">歸屬月份（yyyymm）。</param>
 /// <param name="AsOf">餘額的截止日（含）；null 表示 Asia/Taipei 的今天。</param>
-public sealed record GetLedgerSummary(Guid BookId, int BudgetMonth, DateOnly? AsOf) : IRequest<LedgerSummaryDto>;
+public sealed record GetLedgerSummary(Guid BookId, int BudgetMonth, DateOnly? AsOf) : IRequest<LedgerSummaryDto>, IBookScoped;
 
 /// <summary>歸屬月份必須是合法的 yyyymm；否則 <see cref="BudgetMonth.FromKey"/> 會擲例外，變成 500。</summary>
 internal sealed class GetLedgerSummaryValidator : AbstractValidator<GetLedgerSummary>

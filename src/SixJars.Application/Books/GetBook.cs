@@ -5,7 +5,7 @@ using SixJars.Domain.Common;
 
 namespace SixJars.Application.Books;
 
-public sealed record GetBook(Guid BookId) : IRequest<BookDto>;
+public sealed record GetBook(Guid BookId) : IRequest<BookDto>, IBookScoped;
 
 internal sealed class GetBookHandler(ISixJarsDbContext db) : IRequestHandler<GetBook, BookDto>
 {

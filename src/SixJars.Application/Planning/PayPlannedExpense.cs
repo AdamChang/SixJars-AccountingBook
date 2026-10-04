@@ -27,7 +27,7 @@ public sealed record PayPlannedExpense(
     Guid AccountId,
     decimal Amount,
     Guid? LoanAccountId,
-    decimal? LoanPrincipal) : IRequest<PayPlannedExpenseResult>;
+    decimal? LoanPrincipal) : IRequest<PayPlannedExpenseResult>, IBookScoped;
 
 /// <summary>付款結果：兩者都帶最新的版本，前端可以接著修改。</summary>
 public sealed record PayPlannedExpenseResult(PlannedExpenseDto PlannedExpense, TransactionDto Transaction);

@@ -11,7 +11,7 @@ namespace SixJars.Application.Planning;
 /// 期間若有人改過（含付款），存檔時擲 <see cref="DbUpdateConcurrencyException"/>（409）。
 /// 已付款的也可以刪除：刪除的是計畫本身，付款交易保留。
 /// </summary>
-public sealed record DeletePlannedExpense(Guid BookId, Guid PlannedExpenseId, uint Version) : IRequest;
+public sealed record DeletePlannedExpense(Guid BookId, Guid PlannedExpenseId, uint Version) : IRequest, IBookScoped;
 
 internal sealed class DeletePlannedExpenseHandler(ISixJarsDbContext db, TimeProvider clock, IAuditTrail audit) : IRequestHandler<DeletePlannedExpense>
 {

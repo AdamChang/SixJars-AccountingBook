@@ -14,7 +14,7 @@ namespace SixJars.Application.Transactions;
 /// <param name="BudgetMonth">歸屬月份（yyyymm），不是交易日期的月份。</param>
 /// <param name="AccountId">只列出動到該帳戶的交易，包含該帳戶是對方帳戶的情形。</param>
 public sealed record ListTransactions(Guid BookId, DateOnly? From, DateOnly? To, int? BudgetMonth, Guid? AccountId)
-    : IRequest<IReadOnlyList<TransactionDto>>;
+    : IRequest<IReadOnlyList<TransactionDto>>, IBookScoped;
 
 /// <summary>歸屬月份必須是合法的 yyyymm；否則 <see cref="BudgetMonth.FromKey"/> 會擲例外，變成 500。</summary>
 internal sealed class ListTransactionsValidator : AbstractValidator<ListTransactions>

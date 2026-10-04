@@ -14,7 +14,7 @@ namespace SixJars.Application.Transactions;
 /// 這筆交易若是某預定支出的付款，該預定支出一併回到未付（spec §9 O2）。
 /// 交易日期或該預定支出的歸屬月份被鎖帳日鎖住時擲 <see cref="DomainException"/>（422 <c>locked</c>）。
 /// </summary>
-public sealed record DeleteTransaction(Guid BookId, Guid TransactionId, uint Version) : IRequest;
+public sealed record DeleteTransaction(Guid BookId, Guid TransactionId, uint Version) : IRequest, IBookScoped;
 
 internal sealed class DeleteTransactionHandler(ISixJarsDbContext db, TimeProvider clock, IAuditTrail audit) : IRequestHandler<DeleteTransaction>
 {
