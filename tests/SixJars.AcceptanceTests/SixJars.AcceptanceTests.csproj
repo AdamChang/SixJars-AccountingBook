@@ -12,6 +12,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\SixJars.Infrastructure\SixJars.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\SixJars.Cli\SixJars.Cli.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="..\Shared\**\*.cs" Exclude="..\Shared\Api*.cs;..\Shared\TestAuthHandler.cs" LinkBase="Shared" />

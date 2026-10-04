@@ -5,9 +5,11 @@ using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 using SixJars.Application;
 using SixJars.Application.Common;
+using SixJars.Application.LegacyImport;
 using SixJars.Application.Members;
 using SixJars.Domain.Common;
 using SixJars.Infrastructure;
+using SixJars.Infrastructure.LegacyExcel;
 
 namespace SixJars.Cli;
 
@@ -38,10 +40,68 @@ public static class CliApp
         var host = new Host(environment, output, testServices);
         var root = new RootCommand("六罐子記帳本的管理工具（直接寫入 ConnectionStrings__SixJars 指定的資料庫）。")
         {
+            ImportLegacyCommand(host),
             AddMemberCommand(host),
         };
 
         return root.Parse(args).InvokeAsync(new InvocationConfiguration { Output = output, Error = output }, cancellationToken);
+    }
+
+    /// <summary>報告的錯誤、警告與修正逐條印出；有錯誤時 exit code 為 1，而且沒有寫入任何資料。</summary>
+    private static Command ImportLegacyCommand(Host host)
+    {
+        var file = new Option<FileInfo>("--file") { Description = "舊 Excel 記帳本（.xlsm）", Required = true };
+        var bookName = new Option<string>("--book-name") { Description = "新帳本的名稱；已有同名帳本時拒絕匯入", Required = true };
+        var ownerEmail = new Option<string>("--owner-email") { Description = "擁有者的 Google email", Required = true };
+        var dryRun = new Option<bool>("--dry-run") { Description = "只轉換與檢查，印出報告與筆數，不寫入" };
+        var command = new Command("import-legacy", "把舊 Excel 記帳本匯入成一本新帳本（單一 DB transaction）。")
+        {
+            file, bookName, ownerEmail, dryRun,
+        };
+        command.SetAction((parseResult, ct) => host.RunAsync(async (sender, output) =>
+        {
+            var source = parseResult.GetValue(file)!;
+            if (!source.Exists)
+            {
+                await output.WriteLineAsync($"錯誤：找不到檔案 {source.FullName}。");
+                return 1;
+            }
+
+            LegacyWorkbook workbook;
+            await using (var stream = source.OpenRead())
+            {
+                workbook = await new ExcelLegacyWorkbookReader().ReadAsync(stream, ct);
+            }
+
+            var isDryRun = parseResult.GetValue(dryRun);
+            var result = await sender.Send(
+                new ImportLegacyBook(workbook, source.Name, parseResult.GetValue(bookName)!, parseResult.GetValue(ownerEmail)!, isDryRun), ct);
+            await WriteReportAsync(output, result.Report);
+
+            if (result.Report.Errors.Count > 0)
+            {
+                await output.WriteLineAsync($"匯入報告有 {result.Report.Errors.Count} 個錯誤，沒有寫入任何資料。");
+                return 1;
+            }
+
+            var counts = $"交易 {result.Transactions} 筆、預定支出 {result.PlannedExpenses} 筆、警告 {result.Report.Warnings.Count} 個";
+            await output.WriteLineAsync(isDryRun
+                ? $"dry run：可以匯入（{counts}），沒有寫入任何資料。"
+                : $"已匯入帳本 {result.BookId}（{counts}）；擁有者第一次以 Google 登入時綁定帳號。");
+            return 0;
+        }, ct));
+        return command;
+    }
+
+    private static async Task WriteReportAsync(TextWriter output, ImportReport report)
+    {
+        foreach (var (label, issues) in new[] { ("錯誤", report.Errors), ("警告", report.Warnings), ("修正", report.Corrections) })
+        {
+            foreach (var issue in issues)
+            {
+                await output.WriteLineAsync($"[{label}] {issue.Sheet} 第 {issue.Row} 列：{issue.Message}");
+            }
+        }
     }
 
     private static Command AddMemberCommand(Host host)

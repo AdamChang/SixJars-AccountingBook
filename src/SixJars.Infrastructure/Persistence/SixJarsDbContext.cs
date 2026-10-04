@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using SixJars.Application.Auditing;
 using SixJars.Application.Common;
 using SixJars.Domain.Books;
@@ -33,6 +34,9 @@ public sealed class SixJarsDbContext(DbContextOptions<SixJarsDbContext> options)
         // 只改 owned 分錄時，EF 不會更新 owner，也就不會檢查 xmin（spike S2b）；強制整筆 UPDATE，WHERE 才會帶上版本（S2c）。
         entry.State = EntityState.Modified;
     }
+
+    public Task<IDbContextTransaction> BeginTransactionAsync(CancellationToken cancellationToken) =>
+        Database.BeginTransactionAsync(cancellationToken);
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {

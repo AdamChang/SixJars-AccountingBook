@@ -30,7 +30,7 @@ public sealed class AuditEntry
 /// <summary><see cref="AuditEntry.EntityType"/> 的取值。</summary>
 public static class AuditEntityTypes
 {
-    /// <summary>帳本本身的設定，目前只有鎖帳日；EntityId 即帳本 Id。</summary>
+    /// <summary>帳本本身：鎖帳日，以及匯入（Import 的摘要記錄）；EntityId 即帳本 Id。</summary>
     public const string Book = "Book";
     public const string Account = "Account";
     public const string PlanningFund = "PlanningFund";

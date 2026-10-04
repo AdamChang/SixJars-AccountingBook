@@ -9,6 +9,13 @@ namespace SixJars.Application.Tests.LegacyImport;
 public class LegacyWorkbookMapperSettingsTests
 {
     [Fact]
+    public void Book_is_named_by_the_caller_or_defaults()
+    {
+        LegacyWorkbookMapper.Map(Workbook(), "我們家的帳本").Book.Name.Should().Be("我們家的帳本");
+        LegacyWorkbookMapper.Map(Workbook()).Book.Name.Should().Be(LegacyWorkbookMapper.DefaultBookName);
+    }
+
+    [Fact]
     public void Creates_hand_cash_counted_and_foreign_cash_not_counted()
     {
         var book = LegacyWorkbookMapper.Map(Workbook()).Book;

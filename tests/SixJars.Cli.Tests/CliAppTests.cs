@@ -127,6 +127,22 @@ public class CliAppTests(PostgresFixture postgres)
             .And.NotBeNullOrWhiteSpace();
     }
 
+    [Fact]
+    public async Task Import_legacy_with_missing_file_fails_with_clear_message()
+    {
+        var connectionString = await postgres.CreateConnectionStringAsync(Ct);
+        var missing = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.xlsm");
+        var output = new StringWriter();
+
+        var exitCode = await RunAsync(connectionString, output,
+            "import-legacy", "--file", missing, "--book-name", "我的帳本", "--owner-email", "owner@example.com");
+
+        exitCode.Should().Be(1);
+        output.ToString().Should().Contain("找不到檔案").And.NotContain("   at ");
+        await using var db = Open(connectionString);
+        (await db.Books.CountAsync(Ct)).Should().Be(0);
+    }
+
     private static Task<int> RunAsync(string connectionString, TextWriter output, params string[] args) =>
         CliApp.RunAsync(
             args,

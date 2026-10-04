@@ -17,5 +17,8 @@
     <Compile Include="..\Shared\**\*.cs" Exclude="..\Shared\Api*.cs;..\Shared\TestAuthHandler.cs" LinkBase="Shared" />
     <!-- SampleBook 是 internal，以 link 方式編譯進來，不改成 public（T26）。 -->
     <Compile Include="..\SixJars.Domain.Tests\SampleBook.cs" Link="Shared\SampleBook.cs" />
+    <!-- T40：合成的舊記帳本與固定時鐘，重用既有的測試輔助。 -->
+    <Compile Include="..\SixJars.Application.Tests\LegacyImport\LegacyWorkbookFactory.cs" Link="Shared\LegacyWorkbookFactory.cs" />
+    <Compile Include="..\SixJars.Api.Tests\FixedTimeProvider.cs" Link="Shared\FixedTimeProvider.cs" />
   </ItemGroup>
 </Project>

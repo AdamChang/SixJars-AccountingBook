@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using SixJars.Application.Auditing;
 using SixJars.Domain.Books;
 using SixJars.Domain.Members;
@@ -27,4 +28,10 @@ public interface ISixJarsDbContext
     void ExpectVersion(object entity, uint version);
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken);
+
+    /// <summary>
+    /// 明確的 DB transaction：跨多次 <see cref="SaveChangesAsync"/> 的寫入（匯入）全部成功或全部不寫入。
+    /// 沒有 Commit 就 Dispose 時自動回滾。單次 SaveChanges 本身已是 transaction，一般的 command 不需要。
+    /// </summary>
+    Task<IDbContextTransaction> BeginTransactionAsync(CancellationToken cancellationToken);
 }
