@@ -1678,6 +1678,54 @@ public sealed class BookAccessBehavior<TRequest, TResponse>(ISixJarsDbContext db
 - **安全審查**：對段 E 的 diff 執行 `/security-review`（若可用），回寫結論。
 - 停下來讓使用者檢視。
 
+### 段 E 執行紀錄（2026-10-04，雲端 container）
+
+執行方式：每批一個 subagent，依序為 T34–35｜T36｜T37–38；每批交付後主控者重跑測試、比對 diff、做變異測試。
+
+Checkpoint E 結束時：總計 **300**、失敗 0、略過 15；build 0 warning；機密掃描只有測試用的假連線字串。段 F 起的 Expected 一律以「計畫值 + 84」為準。
+
+| Task | Commit | 計畫 | 實際 | 差異的來源 |
+|---|---|---|---|---|
+| T34 | `529f4c5` | 199 | 249 | 不支援的角色改成 Theory（2 個 case）。commit 前 container 的 Docker 無法啟動，所以用 `wip` 前綴 commit；修好 Docker 後已跑過全部測試，`529f4c5` 即 T34 |
+| T35 | `2d07e83` | 203 | 254 | 加 1 個：用原始 SQL 寫入非擁有者成員，鎖住 Role 條件 |
+| T36 | `cb6443b` | 210 | 291 | ReturnUrl 16 個、validator 11 個、options 8 個、端點 2 個（計畫 7 個） |
+| T37 | `04be875` | 214 | 298 | 加 3 個：logout 沒帶 token、cookie 屬性、登入前取得的 token |
+| T38 | `6b31851` | 216 | 300 | — |
+
+**使用者決定**：`/summary` 的資料庫往返上限從 5 放寬為 6（成員授權多 1 次），spec §5 同步更新。
+
+**與計畫的偏離**（以 committed code 為準）
+- **T34**：`BookMember.NormalizeEmail` 公開供 T36 使用；空白的 email 或 sub 擲 `DomainException`；`GoogleSubject` 長度 255。
+- **T35**：
+  - 新增 `Common/BookMembership.OwnedBookIds`，授權、`ListBooks`、`/api/me` 共用；`/api/me` 在 `Endpoints/MeEndpoints.cs`。
+  - `ApiSeed.SeedBookAsync(ct, ownerSubject)` 預設加入已綁定的擁有者；新增 `AddOwnerAsync`。
+  - 列舉 endpoint 的測試對 handler 的必填 query 參數帶假值，否則 minimal API 在進 MediatR 前就回 400。限制：帶子資源 Id 的 endpoint 漏了 `IBookScoped` 時，handler 本身也會回 404，抓不到；這類遺漏由反射的慣例測試把關。
+- **T36**：
+  - **spike S4 的「options 延遲驗證」不成立**：缺 ClientId 時每個請求都 500。改成 Development（含測試）沒有設定就不註冊 Google scheme；其他環境缺設定時啟動失敗。`AddSixJarsAuthentication` 多了 `IHostEnvironment` 參數。
+  - **白名單改成先綁定、再判斷**：已登入過的人之後被加進另一本帳，下次登入時才會綁定那本帳。
+  - `IAuditTrail.RecordAs(actorSubject, …)`：綁定時的操作者是被綁定的 sub（callback 當下尚未登入）。
+  - CallbackPath `/auth/callback`；cookie 名稱 `__Host-sixjars-auth`；DataProtection `SetApplicationName("SixJars")`。
+  - cookie 的 `OnRedirectToLogin`／`OnRedirectToAccessDenied` 一律回 401／403，不分路徑。
+  - `ApiFactory` 新增 `useTestAuthentication`、`settings` 參數；`DisposeAsync` 清掉該資料庫的 Npgsql 連線池，修正 `53300 too many clients`。
+- **T37**：
+  - token endpoint 在 `Endpoints/AntiforgeryEndpoints.cs`；filter 用 `IsRequestValidAsync`，不靠例外。
+  - antiforgery cookie 名稱 `__Host-sixjars-af`（HttpOnly、Secure、SameSite=Strict）；`XSRF-TOKEN` 為 HttpOnly=false、Secure、SameSite=Strict。
+  - `CreateSignedInClient` 保留為不帶 token 的 client；既有測試 74 處換成 `CreateMemberClientAsync`。
+  - endpoint filter 在參數綁定之後執行：body 格式錯誤時先回綁定的 400，但 handler 不會在驗證前執行。
+- **T38**：endpoint 列舉抽成 `tests/SixJars.Api.Tests/ApiEndpoints.cs`；另外斷言不在 `/api` 底下的路徑只有 `/health` 與 `/auth/**`。XSRF 測試同時斷言標題：拿掉 filter 時 11 個請求中有 7 個是 validation 的 400，只看狀態碼會誤判通過。
+
+**Checkpoint E 變異測試**（主控者獨立執行，全部有測試失敗）：拿掉 Role 條件、拿掉 email_verified 檢查、ReturnUrl 允許 `//`。subagent 另外做了：behavior 未註冊、拿掉 sub 條件、behavior 順序對調、拿掉 `OnRedirectToLogin`、拿掉 `ctx.Fail`、拿掉 `PersistKeysToDbContext`、拿掉 `MapInboundClaims = false`、拿掉 `RequireAuthorization()`、拿掉 antiforgery filter、token 不綁定身分，全部被抓到。
+
+**安全審查**（`/security-review` 在此 clone 因沒有 `origin/HEAD` 無法執行，改由獨立的 reviewer agent 審查 `529f4c5^..6b31851`）：沒有 High。
+- **Medium**：DataProtection 金鑰以明文存在資料庫。拿到 DB 讀取權（備份外流、Supabase Data API 金鑰外洩，ADR 0004 沒開 RLS）就能偽造登入 cookie。建議在 Supabase 關閉 Data API 或對這些表 `REVOKE ALL ... FROM anon, authenticated`，並考慮用 KMS／憑證加密金鑰。**待使用者決定**。
+- **Low**：cookie 14 天加 sliding，伺服器端無法撤銷（被偷的 cookie 只要仍是成員就有效）；`GET /auth/login` 的 login CSRF（攻擊者須本身在白名單，影響小）；企業網域 email 的 Workspace 管理員可在本人首次登入前搶先綁定。
+- 成員被移除後，cookie 仍有效，但 `BookAccessBehavior` 每個請求查 DB，帳本資料立即拿不到。
+
+**留給段 F 的事項**
+- **T44 必須加 `UseForwardedHeaders`**：Cloud Run 終止 TLS，否則 OIDC `redirect_uri` 變成 `http://`，antiforgery（SecurePolicy=Always）在非 HTTPS 請求會擲例外而回 500。Google OAuth client 的 redirect URI 設為 `https://<網域>/auth/callback`。
+- `__Host-` cookie 需要 HTTPS，本機開發要用 https。
+- 真實的 Google 登入只能手動驗證。
+
 ---
 ## 段 F：CLI、備份、匯出、部署
 
