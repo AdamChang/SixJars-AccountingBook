@@ -1,0 +1,17 @@
+<app-month-nav [month]="month()" (monthChange)="changeMonth($event)" />
+@for (book of currentBookAsList(); track book.id) {
+  <section #formTop class="form-section">
+    <app-transaction-form
+      [book]="book"
+      [editing]="editing()"
+      (saved)="onSaved()"
+      (cancelled)="onCancelled()"
+      (stale)="onStale()" />
+  </section>
+  <app-transaction-list
+    [transactions]="transactions()"
+    [book]="book"
+    [editingId]="editingId()"
+    (edit)="edit($event)"
+    (remove)="remove($event)" />
+}
