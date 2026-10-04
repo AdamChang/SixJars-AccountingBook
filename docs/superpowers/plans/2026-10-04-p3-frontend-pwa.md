@@ -639,3 +639,18 @@ RUN npx ng build
 | 後端契約 | ✓ | `TransactionsEndpoints.cs`（PUT body `{version,input}`、DELETE `?version=`、list `budgetMonth`）、`SummaryEndpoints.cs`、`AuthEndpoints.cs`、`AntiforgeryFilter.InvalidTokenTitle`、`ApiExceptionHandler`（422 帶 `code`） | G2、G3 |
 | 帳戶與分類規則 | ✓ | `TransactionFactory.RequireAccount`／`RequireCategory`（只檢查分類種類，主分類也可用）、`TransactionBuilder` 的欄位對應 | H2 的表格 |
 | 後端本機啟動方式 | 環境變數，`ASPNETCORE_URLS=https://localhost:5001` | `docs/deploy.md` §5；`SixJars.Api.csproj` 沒有 `UserSecretsId` | spec 原本寫 user-secrets，改為環境變數 |
+
+## 執行結果與偏差（2026-10-05，段 G–I 完成後回寫）
+
+| 項目 | 計畫原文 | 實際 | 理由 |
+|---|---|---|---|
+| 測試數量 | — | 前端 194 個單元測試（24 檔）、Playwright 4 個、後端 375 個 | 後端比基準 369 多 6 個：lazy chunk 雜湊規則 |
+| lazy chunk 檔名（I4 Step 1） | 所有 `.js`／`.css` 都是 base32 雜湊 | `main-*`、`styles-*` 是 base32；lazy chunk 是 `chunk-BvxS2djg.js`（大小寫混合 8 字元） | 後端 `IsHashedAsset` 另外接受 `^chunk-[A-Za-z0-9_-]{8}\.js$`，只對 `chunk-` 前綴放寬，`logo-20261004.png` 仍不算雜湊檔 |
+| initial bundle 警告門檻（I2） | Angular 預設 500 kB | 700 kB（錯誤門檻仍 1 MB），實際約 591 kB | Material 外框與記帳頁共用元件；精簡外框沒有使用者看得到的效益。壓縮是否生效列入 deploy.md §2.4 實測 |
+| 記帳頁初始焦點（I3） | 「進入記帳頁 → 焦點在金額」 | 不自動 focus；只有送出成功後焦點回到金額（spec §4） | 手機上自動 focus 會在每次進入時彈出鍵盤；E2E 改為先以鍵盤選帳戶再 Tab 到金額 |
+| E2E 斷言 | 3 個測試 | 另加 `does_not_post_twice_on_rapid_enter`，並斷言 POST 帶 `X-XSRF-TOKEN` | 原本 3 個測試在拿掉 pending 檢查時仍通過 |
+| service worker 導覽排除 | `!/auth/**`、`!/api/**` | 再加 `!/health` | 與後端 SPA fallback 的排除清單一致 |
+| 換帳本（H6） | — | 表單依帳本重建；編輯中的交易以 `linkedSignal` 保存被點的那筆物件 | 避免沿用舊帳本的規則；避免列表重新載入時清掉編輯中的內容 |
+| 總覽空分組（I1） | 未規定 | 沒有帳戶的分組、沒有財務規劃帳戶時的表格都不顯示 | — |
+| `.dockerignore` | `.env*` 排除不變 | 改為 `**/.env`、`**/.env.*` | 新增的 `COPY web/ ./` 會把 `web/.env*` 帶進 build context |
+| 422 沒有 `detail` | — | 顯示「無法完成此操作，請檢查輸入後再試」 | 避免空白錯誤訊息 |

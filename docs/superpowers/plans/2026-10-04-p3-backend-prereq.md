@@ -188,7 +188,7 @@ public async Task Unhashed_files_are_no_cache(string url)
 // NoCache 為 true，而且沒有 MaxAge
 ```
 
-另外在 `SpaHostingTests` 裡加一個純函式的 Theory：`IsHashedAsset("main-ABCD2345.js")`、`"chunk-Z7Y6X5W4.js"`、`"styles-ABCDEFGH.css"` 為 true；`"ngsw.json"`、`"ngsw-worker.js"`、`"main-abcd2345.js"`（小寫）、`"logo-20261004.png"`（含 0、1、8、9，非 base32）、`"favicon.ico"` 為 false。`SixJars.Api.csproj` 已有 `InternalsVisibleTo` 給 `SixJars.Api.Tests`，`internal` 方法可以直接測。
+另外在 `SpaHostingTests` 裡加一個純函式的 Theory：`IsHashedAsset("main-ABCD2345.js")`、`"chunk-Z7Y6X5W4.js"`、`"styles-ABCDEFGH.css"` 為 true；`"ngsw.json"`、`"ngsw-worker.js"`、`"main-abcd2345.js"`（小寫）、`"logo-20261004.png"`（含 0、1、8、9，非 base32）、`"favicon.ico"` 為 false。（2026-10-05 回寫：Angular 22 的 lazy chunk 實際名稱為 `chunk-BvxS2djg.js` 這類大小寫混合雜湊，`IsHashedAsset` 另外接受 `^chunk-[A-Za-z0-9_-]{8}\.js$`，見前端 plan 的「執行結果與偏差」。）`SixJars.Api.csproj` 已有 `InternalsVisibleTo` 給 `SixJars.Api.Tests`，`internal` 方法可以直接測。
 
 - [ ] **Step 2：確認失敗**：快取的測試失敗（沒有 `Cache-Control` header，`CacheControl` 為 null）；`IsHashedAsset` 的測試以編譯錯誤失敗（方法尚未存在），先加一個 `throw new NotImplementedException()` 的空殼，讓失敗原因變成斷言失敗。
 - [ ] **Step 3：實作**：`UseStaticFiles(new StaticFileOptions { OnPrepareResponse = ctx => … })`，依 `ctx.File.Name`：`index.html` 或 `IsHashedAsset` 為 false 時設 `no-cache`；`IsHashedAsset` 為 true 時設 `public, max-age=31536000, immutable`。用 `ctx.Context.Response.GetTypedHeaders().CacheControl`。
