@@ -24,7 +24,8 @@
 | 裝置 | **桌機優先**；手機能看、能用，不另外設計版面 | 手機優先；兩者並重 |
 | 元件庫 | **Angular Material** | PrimeNG（新 major 常延遲支援、沒有官方 test harness）；只用 CDK（日期選擇器、對話框都要自己做） |
 | 前端狀態 | **standalone components＋signals＋薄 API service** | NgRx SignalStore、NgRx Store（4 個畫面撐不起這層抽象） |
-| validation 錯誤的 key | **後端改成 camelCase 並拿掉 `input.` 前綴**（§8） | 前端自己轉換（前端會依賴後端 command 的內部結構） |
+| validation 錯誤的 key | **由後端提供 camelCase 且不帶 `input.` 前綴的 key**。事實查核時發現 P2 已經實作（`46e7b20`，`ApiExceptionHandler.ToBodyFieldName`，新增與修改都有測試），不需要再修正 | 前端自己轉換（前端會依賴後端 command 的內部結構） |
+| Node／Angular 版本 | **使用者把 Node 升到 ≥ 24.15.0，使用 Angular 22**（事實查核：Angular 22 CLI 要求 `^22.22.3 \|\| ^24.15.0 \|\| >=26.0.0`，本機原本是 24.13.1） | Angular 21.2（已進入 LTS，新專案一開始就落後一個 major） |
 | 本機登入 | **真的 Google OAuth client**（localhost 專用） | 後端加開發用的假登入（一個要提防的後門，也驗證不到真正的登入流程） |
 | 測試 | **Vitest＋少量 Playwright**（API 以 `page.route` 模擬） | 只用 Vitest；Playwright 接真後端（需要測試專用的登入捷徑） |
 
@@ -32,7 +33,7 @@
 
 ### 2.1 技術與版本
 
-- Angular **22.x**（2026-10-04 的最新穩定版為 22.2.1，符合「21 以上」），Angular Material 同一版、Node 24。
+- Angular **22.x**（2026-10-04 的最新穩定版為 22.2.1，符合「21 以上」），Angular Material 同一版，Node **≥ 24.15.0**（Angular 22 CLI 的最低需求）。
 - 單元與元件測試用 Vitest（Angular CLI 的預設 test runner），E2E 用 Playwright。
 - 實際版本在事實查核時以 `package.json` 與 lock file 為準。
 
@@ -84,7 +85,7 @@ web/src/app/
 | `/` | 讀 `/api/me` 後分流：只有 1 本帳本時，直接進該帳本的記帳頁；多本時顯示選擇清單；0 本時顯示「沒有可存取的帳本」 |
 | `/books/:bookId/transactions?month=YYYYMM` | **記帳頁**（落地頁）。省略 `month` 時用今天所在的月份 |
 | `/books/:bookId/summary?month=YYYYMM` | **總覽頁** |
-| `/denied` | 「此 Google 帳號不在白名單」，附上「改用其他帳號登入」的連結 |
+| `/denied` | 「登入未完成：可能是此 Google 帳號不在白名單，或登入時取消了授權」，附上「重新登入」的連結（§8 第 3 項） |
 
 - 版面：桌機上方是 app bar，顯示帳本名稱、「記帳／總覽」切換、登入的 email 與登出。寬度不足時同一套版面縱向排列。
 - **月份放在 query string**，重新整理或加書籤都會回到同一個月。
@@ -141,8 +142,8 @@ web/src/app/
 
 | 回應 | 處理 |
 |---|---|
-| 400 `ValidationProblemDetails` | 依 `errors` 的 key（§8 修正後是 camelCase 的欄位名）設定對應表單欄位的 server error，顯示在欄位下方。對不到可見欄位的 key，顯示在表單頂端，不默默吞掉。 |
-| 422（`code`） | 用前端的對照表把 `code` 轉成中文，例如 `locked` →「此日期已鎖帳，不能新增、修改或刪除」。對照表裡沒有的 code，顯示後端的 `title`／`detail`，並在 console 記下 code。完整的 code 清單在事實查核時從 Domain 抓出來。 |
+| 400 `ValidationProblemDetails` | 依 `errors` 的 key（camelCase 的 body 欄位名，例如 `counterAccountId`）設定對應表單欄位的 server error，顯示在欄位下方。對不到可見欄位的 key，顯示在表單頂端，不默默吞掉。 |
+| 422（`code`） | 事實查核：`DomainException` 只有兩種 code，`rule`（一般業務規則）與 `locked`（鎖帳），`detail` 已是中文訊息。`locked` 顯示「此日期已鎖帳，不能新增、修改或刪除」；其他 code 一律顯示後端的 `detail`。 |
 | 409 | 「這筆交易已在其他裝置修改」：結束編輯狀態並重新載入列表，由使用者看過最新內容後再改。不做自動合併。 |
 | 404 | 操作列表時：「這筆交易已不存在」，重新載入列表。帳本本身 404 時回到 `/`。 |
 | 401 | interceptor 整頁導向 `/auth/login?returnUrl=…`。尚未送出的內容會遺失；cookie 是 14 天滑動期限，日常使用碰不到，所以接受這個代價。 |
@@ -174,12 +175,13 @@ web/src/app/
 
 這些修正都是因為前端而需要，所以設計寫在這裡；plan 獨立成一份，照 P2 的慣例執行（TDD、一個修正一個 commit、`dotnet test` 全綠）。
 
-1. **validation 錯誤的 key**：改成 camelCase，並拿掉 command 屬性造成的前綴。例如 `Input.CounterAccountId` → `counterAccountId`，讓錯誤的 key 與 request body 的欄位名稱一致。範圍涵蓋所有會回 `ValidationProblemDetails` 的 endpoint。
-2. **靜態檔與 SPA fallback**：`UseStaticFiles` 加上 fallback 到 `index.html`，但**只限不屬於 `/api`、`/auth`、`/health` 的路徑**。
+> 原本的第 1 項「validation 錯誤的 key 改成 camelCase 並拿掉 `input.`」：事實查核時發現 P2 已經完成（`46e7b20`），刪除。
+
+1. **靜態檔與 SPA fallback**：`UseStaticFiles` 加上 fallback 到 `index.html`，但**只限不屬於 `/api`、`/auth`、`/health` 的路徑**。
    - 要用測試鎖住：打錯的 API 路徑（例如 `/api/nope`）仍回 404，不能回 `index.html` 加 200。否則前端拿到 HTML 會解析失敗，問題很難查。
    - `wwwroot` 不存在時（例如只跑 API 測試、或沒有 build 前端）不可以讓 app 啟動失敗。
-3. **快取 header**：`index.html` 設 `Cache-Control: no-cache`；檔名帶 hash 的 js／css 設長期快取（`immutable`）。這樣部署新版後，使用者不會一直拿到舊的 `index.html`。
-4. **`/auth/denied` 改為轉址到 SPA 的 `/denied`**：目前回 403 的 ProblemDetails JSON，不在白名單的人會直接看到一段 JSON。
+2. **快取 header**：`index.html` 設 `Cache-Control: no-cache`；檔名帶 hash 的 js／css 設長期快取（`immutable`）。這樣部署新版後，使用者不會一直拿到舊的 `index.html`。
+3. **登入失敗改為轉址到 SPA 的 `/denied`**：OIDC 的 `OnRemoteFailure`（白名單拒絕、使用者在 Google 取消同意）目前轉址到 `/auth/denied`，回 403 的 ProblemDetails JSON，使用者會直接看到一段 JSON。改為轉址到 `/denied`，並刪除 `/auth/denied` endpoint。因為原因可能是被拒絕，也可能是使用者自己取消，頁面文案寫成「登入未完成：可能是此 Google 帳號不在白名單，或登入時取消了授權」。
 
 ## 9. 分段
 
@@ -187,7 +189,7 @@ web/src/app/
 
 | 段 | 內容 | checkpoint 時可交付的成果 |
 |---|---|---|
-| **後端前置** | §8 的 4 項 | 後端全綠，數量 ≥ 345 |
+| **後端前置** | §8 的 3 項 | 後端全綠，數量 ≥ 345 |
 | **G** | 建立 Angular 專案（Material、Vitest、Playwright）、proxy 與 `ng serve --ssl`、API service 與 DTO、SessionService／authGuard／interceptor、錯誤分類、app shell 與路由（`/`、`/denied`） | 在本機用真的 Google 帳號登入，看到 app shell 與帳本名稱。同時完成 P2 交接文件留下的「Google 登入手動驗證」 |
 | **H** | 記帳頁：先做純函式，再做表單、列表、修改、刪除、鎖帳 | 在本機可以完全用前端記帳，並和 CLI 匯入的真實資料對得上 |
 | **I** | 總覽頁、PWA（manifest、ngsw 排除 `/auth`）、Dockerfile 的 Node stage、Playwright E2E、更新 `docs/deploy.md` | 可以部署：image 內含前端，`deploy.md` 第 2 節的檢查重跑全部通過 |

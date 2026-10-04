@@ -1161,7 +1161,7 @@ Checkpoint C 結束時：總計 **190**、失敗 0、略過 15（`reference/` �
 **留給後續段落的注意事項**
 - **T28**：軟刪除後，SQL 彙總必須排除已刪除的資料。T26 的 oracle 資料要加上已刪除的交易與預定支出（計畫已有這個測試）。
 - **T44**：省略 `asOf` 時需要 `Asia/Taipei` 時區。Docker image 若改用 chiseled 或 alpine，要確認有 tzdata。
-- **前端 spec**：validation 錯誤 `errors` 的 key 是 PascalCase，而且新增或修改交易時帶有 `Input.` 前綴，例如 `Input.CounterAccountId`。**這點待使用者決定**。
+- **前端 spec**：validation 錯誤 `errors` 的 key 是 PascalCase，而且新增或修改交易時帶有 `Input.` 前綴，例如 `Input.CounterAccountId`。**這點待使用者決定**。（2026-10-04 註記：已由 `46e7b20` 改為 camelCase 且不帶前綴，例如 `counterAccountId`；P3 spec 事實查核時確認。）
 - 建立預定支出時，回應的 `Location` 指向 `/planned-expenses/{id}`，但目前沒有讀取單筆的 GET。
 
 ---
