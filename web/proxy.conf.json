@@ -1,0 +1,4 @@
+{
+  "/api": { "target": "https://localhost:5001", "secure": false },
+  "/auth": { "target": "https://localhost:5001", "secure": false }
+}
