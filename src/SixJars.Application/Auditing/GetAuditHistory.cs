@@ -17,7 +17,24 @@ public sealed record AuditEntryDto(
     string EntityType,
     Guid EntityId,
     JsonElement? Before,
-    JsonElement? After);
+    JsonElement? After)
+{
+    /// <summary>修改歷史與備份（T41）共用：資料庫存的 JSON 字串轉成 JSON 物件。</summary>
+    public static AuditEntryDto From(AuditEntry e) =>
+        new(e.Id, e.At, e.ActorSubject, e.Action, e.EntityType, e.EntityId, Parse(e.Before), Parse(e.After));
+
+    private static JsonElement? Parse(string? json)
+    {
+        if (json is null)
+        {
+            return null;
+        }
+
+        // Clone 讓 JsonElement 不依賴已釋放的 JsonDocument。
+        using var document = JsonDocument.Parse(json);
+        return document.RootElement.Clone();
+    }
+}
 
 internal sealed class GetAuditHistoryHandler(ISixJarsDbContext db) : IRequestHandler<GetAuditHistory, IReadOnlyList<AuditEntryDto>>
 {
@@ -30,19 +47,6 @@ internal sealed class GetAuditHistoryHandler(ISixJarsDbContext db) : IRequestHan
             .OrderBy(e => e.At).ThenBy(e => e.Id)
             .ToListAsync(cancellationToken);
 
-        return [.. entries.Select(e => new AuditEntryDto(
-            e.Id, e.At, e.ActorSubject, e.Action, e.EntityType, e.EntityId, Parse(e.Before), Parse(e.After)))];
-    }
-
-    private static JsonElement? Parse(string? json)
-    {
-        if (json is null)
-        {
-            return null;
-        }
-
-        // Clone 讓 JsonElement 不依賴已釋放的 JsonDocument。
-        using var document = JsonDocument.Parse(json);
-        return document.RootElement.Clone();
+        return [.. entries.Select(AuditEntryDto.From)];
     }
 }

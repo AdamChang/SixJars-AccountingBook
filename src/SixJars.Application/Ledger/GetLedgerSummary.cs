@@ -26,16 +26,14 @@ internal sealed class GetLedgerSummaryValidator : AbstractValidator<GetLedgerSum
 internal sealed class GetLedgerSummaryHandler(ISixJarsDbContext db, ILedgerSummaryQuery summary, TimeProvider clock)
     : IRequestHandler<GetLedgerSummary, LedgerSummaryDto>
 {
-    /// <summary>使用者在台灣；「今天」以台北時間為準，不是伺服器（Cloud Run 為 UTC）的日期。</summary>
-    private static readonly TimeZoneInfo Taipei = TimeZoneInfo.FindSystemTimeZoneById("Asia/Taipei");
-
     public async Task<LedgerSummaryDto> Handle(GetLedgerSummary request, CancellationToken cancellationToken)
     {
         var bookId = new BookId(request.BookId);
         var book = await db.Books.AsNoTracking().SingleOrDefaultAsync(b => b.Id == bookId, cancellationToken)
             ?? throw new NotFoundException($"找不到帳本 {request.BookId}。");
         var month = BudgetMonth.FromKey(request.BudgetMonth);
-        var asOf = request.AsOf ?? DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(clock.GetUtcNow(), Taipei).DateTime);
+        // 使用者在台灣；「今天」以台北時間為準，不是伺服器（Cloud Run 為 UTC）的日期。
+        var asOf = request.AsOf ?? TaipeiTime.DateOf(clock.GetUtcNow());
 
         var cutoff = new BalanceCutoff.AsOf(asOf);
         var postings = await summary.PostingTotalsAsync(bookId, cutoff, cancellationToken);
