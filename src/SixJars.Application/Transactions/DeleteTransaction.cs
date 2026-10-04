@@ -1,6 +1,8 @@
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using SixJars.Application.Auditing;
 using SixJars.Application.Common;
+using SixJars.Application.Planning;
 using SixJars.Domain.Common;
 
 namespace SixJars.Application.Transactions;
@@ -12,7 +14,7 @@ namespace SixJars.Application.Transactions;
 /// </summary>
 public sealed record DeleteTransaction(Guid BookId, Guid TransactionId, uint Version) : IRequest;
 
-internal sealed class DeleteTransactionHandler(ISixJarsDbContext db, TimeProvider clock) : IRequestHandler<DeleteTransaction>
+internal sealed class DeleteTransactionHandler(ISixJarsDbContext db, TimeProvider clock, IAuditTrail audit) : IRequestHandler<DeleteTransaction>
 {
     public async Task Handle(DeleteTransaction request, CancellationToken cancellationToken)
     {
@@ -23,8 +25,11 @@ internal sealed class DeleteTransactionHandler(ISixJarsDbContext db, TimeProvide
             .SingleOrDefaultAsync(t => t.BookId == bookId && t.Id == transactionId, cancellationToken)
             ?? throw new NotFoundException($"找不到交易 {request.TransactionId}。");
 
+        // 快照在 Delete 之前取得；DeletedAt 不在 DTO 裡，刪除時間就是稽核記錄的 At。
+        var before = TransactionDto.From(transaction, db.GetVersion(transaction));
         db.ExpectVersion(transaction, request.Version);
         transaction.Delete(clock.GetUtcNow());
+        audit.Record<TransactionDto>(request.BookId, AuditAction.Delete, AuditEntityTypes.Transaction, transaction.Id.Value, before, null);
 
         // 已刪除的預定支出被 query filter 擋掉，不會在這裡解除連結（已刪除的資料不能修改）。
         var paidPlans = await db.PlannedExpenses
@@ -32,10 +37,14 @@ internal sealed class DeleteTransactionHandler(ISixJarsDbContext db, TimeProvide
             .ToListAsync(cancellationToken);
         foreach (var planned in paidPlans)
         {
+            // 解除連結也是對預定支出的修改，另外留一筆 Update。
+            var plannedBefore = PlannedExpenseDto.From(planned, db.GetVersion(planned));
             planned.MarkUnpaid();
+            audit.Record(request.BookId, AuditAction.Update, AuditEntityTypes.PlannedExpense, planned.Id.Value,
+                plannedBefore, PlannedExpenseDto.From(planned, AuditSnapshots.UnknownVersion));
         }
 
-        // 刪除交易與解除付款連結在同一次 SaveChanges，一起成功或一起失敗。
+        // 刪除交易、解除付款連結與稽核記錄在同一次 SaveChanges，一起成功或一起失敗。
         await db.SaveChangesAsync(cancellationToken);
     }
 }

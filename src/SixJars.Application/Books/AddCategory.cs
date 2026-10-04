@@ -1,5 +1,6 @@
 using FluentValidation;
 using MediatR;
+using SixJars.Application.Auditing;
 using SixJars.Application.Common;
 using SixJars.Domain.Books;
 using SixJars.Domain.Common;
@@ -25,7 +26,7 @@ internal sealed class AddCategoryValidator : AbstractValidator<AddCategory>
     }
 }
 
-internal sealed class AddCategoryHandler(ISixJarsDbContext db) : IRequestHandler<AddCategory, Guid>
+internal sealed class AddCategoryHandler(ISixJarsDbContext db, IAuditTrail audit) : IRequestHandler<AddCategory, Guid>
 {
     public async Task<Guid> Handle(AddCategory request, CancellationToken cancellationToken)
     {
@@ -36,6 +37,7 @@ internal sealed class AddCategoryHandler(ISixJarsDbContext db) : IRequestHandler
             { Kind: CategoryKind.Income } => book.AddIncomeCategory(request.Name),
             _ => book.AddExpenseCategory(request.Name, request.Nature!.Value),
         };
+        audit.Record(request.BookId, AuditAction.Create, AuditEntityTypes.Category, category.Id.Value, null, CategoryDto.From(category));
         await db.SaveChangesAsync(cancellationToken);
         return category.Id.Value;
     }

@@ -1,5 +1,6 @@
 using FluentValidation;
 using MediatR;
+using SixJars.Application.Auditing;
 using SixJars.Application.Books;
 using SixJars.Application.Common;
 using SixJars.Domain.Common;
@@ -15,7 +16,7 @@ internal sealed class CreatePlannedExpenseValidator : AbstractValidator<CreatePl
     public CreatePlannedExpenseValidator() => RuleFor(c => c.Input).NotNull().SetValidator(new PlannedExpenseInputValidator());
 }
 
-internal sealed class CreatePlannedExpenseHandler(ISixJarsDbContext db) : IRequestHandler<CreatePlannedExpense, PlannedExpenseDto>
+internal sealed class CreatePlannedExpenseHandler(ISixJarsDbContext db, IAuditTrail audit) : IRequestHandler<CreatePlannedExpense, PlannedExpenseDto>
 {
     public async Task<PlannedExpenseDto> Handle(CreatePlannedExpense request, CancellationToken cancellationToken)
     {
@@ -26,6 +27,8 @@ internal sealed class CreatePlannedExpenseHandler(ISixJarsDbContext db) : IReque
             book, BudgetMonth.FromKey(input.BudgetMonth), new CategoryId(input.CategoryId),
             input.AccountId is { } accountId ? new AccountId(accountId) : null, input.EstimatedAmount, input.Note);
         db.PlannedExpenses.Add(planned);
+        audit.Record(request.BookId, AuditAction.Create, AuditEntityTypes.PlannedExpense, planned.Id.Value,
+            null, PlannedExpenseDto.From(planned, AuditSnapshots.UnknownVersion));
         await db.SaveChangesAsync(cancellationToken);
 
         // 存檔時 EF 已讀回資料庫產生的版本。

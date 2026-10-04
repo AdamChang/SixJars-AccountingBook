@@ -1,6 +1,7 @@
 using FluentValidation;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using SixJars.Application.Auditing;
 using SixJars.Application.Books;
 using SixJars.Application.Common;
 using SixJars.Domain.Common;
@@ -19,7 +20,7 @@ internal sealed class UpdatePlannedExpenseValidator : AbstractValidator<UpdatePl
     public UpdatePlannedExpenseValidator() => RuleFor(c => c.Input).NotNull().SetValidator(new PlannedExpenseInputValidator());
 }
 
-internal sealed class UpdatePlannedExpenseHandler(ISixJarsDbContext db) : IRequestHandler<UpdatePlannedExpense, PlannedExpenseDto>
+internal sealed class UpdatePlannedExpenseHandler(ISixJarsDbContext db, IAuditTrail audit) : IRequestHandler<UpdatePlannedExpense, PlannedExpenseDto>
 {
     public async Task<PlannedExpenseDto> Handle(UpdatePlannedExpense request, CancellationToken cancellationToken)
     {
@@ -29,10 +30,14 @@ internal sealed class UpdatePlannedExpenseHandler(ISixJarsDbContext db) : IReque
         var book = await db.GetBookAsNoTrackingAsync(request.BookId, cancellationToken);
         var input = request.Input;
 
+        // 修改前的快照必須在 Update 之前取得，否則會拿到修改後的內容。
+        var before = PlannedExpenseDto.From(planned, db.GetVersion(planned));
         db.ExpectVersion(planned, request.Version);
         planned.Update(
             book, BudgetMonth.FromKey(input.BudgetMonth), new CategoryId(input.CategoryId),
             input.AccountId is { } accountId ? new AccountId(accountId) : null, input.EstimatedAmount, input.Note);
+        audit.Record(request.BookId, AuditAction.Update, AuditEntityTypes.PlannedExpense, planned.Id.Value,
+            before, PlannedExpenseDto.From(planned, AuditSnapshots.UnknownVersion));
         await db.SaveChangesAsync(cancellationToken);
 
         return PlannedExpenseDto.From(planned, db.GetVersion(planned));

@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using FluentAssertions;
+using SixJars.Application.Auditing;
 using SixJars.Application.Ledger;
 using SixJars.Application.Planning;
 using SixJars.Application.Transactions;
@@ -371,6 +372,13 @@ public class PlannedExpensesEndpointsTests(PostgresFixture postgres)
         (await client.GetFromJsonAsync<List<TransactionDto>>($"/api/books/{book.Id.Value}/transactions", ApiJson.Options, Ct))
             .Should().BeEmpty();
         (await SummaryAsync(client, book)).MonthlyDisposable.Should().Be(-3000m);
+        // 稽核記錄（ADR 0006）：除了交易的 Delete，解除連結也替預定支出留下一筆 Update。
+        var entries = await AuditTrailTests.EntriesAsync(factory);
+        entries.Should().ContainSingle(e => e.EntityId == paid.Transaction.Id && e.Action == AuditAction.Delete);
+        var unlink = entries.Where(e => e.EntityId == planned.Id).Should().HaveCount(3).And.Subject.Last();
+        unlink.Action.Should().Be(AuditAction.Update);
+        JsonDocument.Parse(unlink.Before!).RootElement.GetProperty("paidTransactionId").GetGuid().Should().Be(paid.Transaction.Id);
+        JsonDocument.Parse(unlink.After!).RootElement.GetProperty("isPaid").GetBoolean().Should().BeFalse();
         // 回到未付之後可以再付一次。
         await PayAsync(client, book, reverted,
             new { version = reverted.Version, date = "2026-02-21", accountId = book.FindAccount("國泰世華銀行")!.Id.Value, amount = -2900m });

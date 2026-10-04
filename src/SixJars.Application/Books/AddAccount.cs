@@ -1,5 +1,6 @@
 using FluentValidation;
 using MediatR;
+using SixJars.Application.Auditing;
 using SixJars.Application.Common;
 using SixJars.Domain.Books;
 
@@ -18,12 +19,13 @@ internal sealed class AddAccountValidator : AbstractValidator<AddAccount>
     }
 }
 
-internal sealed class AddAccountHandler(ISixJarsDbContext db) : IRequestHandler<AddAccount, Guid>
+internal sealed class AddAccountHandler(ISixJarsDbContext db, IAuditTrail audit) : IRequestHandler<AddAccount, Guid>
 {
     public async Task<Guid> Handle(AddAccount request, CancellationToken cancellationToken)
     {
         var book = await db.GetBookForUpdateAsync(request.BookId, cancellationToken);
         var account = book.AddAccount(request.Name, request.Type, request.OpeningBalance, request.CountsAsAvailableCash);
+        audit.Record(request.BookId, AuditAction.Create, AuditEntityTypes.Account, account.Id.Value, null, AccountDto.From(account));
         await db.SaveChangesAsync(cancellationToken);
         return account.Id.Value;
     }

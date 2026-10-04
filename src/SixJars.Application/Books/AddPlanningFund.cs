@@ -1,5 +1,6 @@
 using FluentValidation;
 using MediatR;
+using SixJars.Application.Auditing;
 using SixJars.Application.Common;
 
 namespace SixJars.Application.Books;
@@ -12,12 +13,13 @@ internal sealed class AddPlanningFundValidator : AbstractValidator<AddPlanningFu
     public AddPlanningFundValidator() => RuleFor(c => c.Name).NotEmpty().MaximumLength(100);
 }
 
-internal sealed class AddPlanningFundHandler(ISixJarsDbContext db) : IRequestHandler<AddPlanningFund, Guid>
+internal sealed class AddPlanningFundHandler(ISixJarsDbContext db, IAuditTrail audit) : IRequestHandler<AddPlanningFund, Guid>
 {
     public async Task<Guid> Handle(AddPlanningFund request, CancellationToken cancellationToken)
     {
         var book = await db.GetBookForUpdateAsync(request.BookId, cancellationToken);
         var fund = book.AddPlanningFund(request.Name, request.OpeningBalance);
+        audit.Record(request.BookId, AuditAction.Create, AuditEntityTypes.PlanningFund, fund.Id.Value, null, PlanningFundDto.From(fund));
         await db.SaveChangesAsync(cancellationToken);
         return fund.Id.Value;
     }

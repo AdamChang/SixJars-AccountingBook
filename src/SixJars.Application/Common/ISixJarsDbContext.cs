@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using SixJars.Application.Auditing;
 using SixJars.Domain.Books;
 using SixJars.Domain.Planning;
 using SixJars.Domain.Transactions;
@@ -11,6 +12,9 @@ public interface ISixJarsDbContext
     DbSet<Book> Books { get; }
     DbSet<Transaction> Transactions { get; }
     DbSet<PlannedExpense> PlannedExpenses { get; }
+
+    /// <summary>稽核記錄（append-only）；只由 <see cref="IAuditTrail"/> 加入。</summary>
+    DbSet<AuditEntry> AuditEntries { get; }
 
     /// <summary>樂觀並行版本（PostgreSQL xmin）；回應給前端，修改時帶回來。</summary>
     uint GetVersion(object entity);

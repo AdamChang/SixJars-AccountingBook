@@ -1,12 +1,13 @@
 using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
+using SixJars.Application.Auditing;
 using SixJars.Application.Common;
 
 namespace SixJars.Application;
 
 public static class DependencyInjection
 {
-    /// <summary>註冊 MediatR（含 <see cref="ValidationBehavior{TRequest, TResponse}"/>）與本組件所有 validator。</summary>
+    /// <summary>註冊 MediatR（含 <see cref="ValidationBehavior{TRequest, TResponse}"/>）、本組件所有 validator 與 <see cref="IAuditTrail"/>。</summary>
     public static IServiceCollection AddSixJarsApplication(this IServiceCollection services, string? mediatRLicenseKey)
     {
         services.AddMediatR(cfg =>
@@ -17,6 +18,8 @@ public static class DependencyInjection
             cfg.AddOpenBehavior(typeof(ValidationBehavior<,>));
         });
         services.AddValidatorsFromAssemblyContaining<ISixJarsDbContext>(includeInternalTypes: true);
+        // 依賴 ISixJarsDbContext（scoped）、ICurrentUser 與 TimeProvider，由 composition root 提供。
+        services.AddScoped<IAuditTrail, AuditTrail>();
         return services;
     }
 }

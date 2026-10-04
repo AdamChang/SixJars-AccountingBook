@@ -1,6 +1,7 @@
 using FluentValidation;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using SixJars.Application.Auditing;
 using SixJars.Application.Books;
 using SixJars.Application.Common;
 using SixJars.Domain.Common;
@@ -18,7 +19,7 @@ internal sealed class UpdateTransactionValidator : AbstractValidator<UpdateTrans
     public UpdateTransactionValidator() => RuleFor(c => c.Input).NotNull().SetValidator(new TransactionInputValidator());
 }
 
-internal sealed class UpdateTransactionHandler(ISixJarsDbContext db) : IRequestHandler<UpdateTransaction, TransactionDto>
+internal sealed class UpdateTransactionHandler(ISixJarsDbContext db, IAuditTrail audit) : IRequestHandler<UpdateTransaction, TransactionDto>
 {
     public async Task<TransactionDto> Handle(UpdateTransaction request, CancellationToken cancellationToken)
     {
@@ -33,8 +34,12 @@ internal sealed class UpdateTransactionHandler(ISixJarsDbContext db) : IRequestH
         var book = await db.GetBookAsNoTrackingAsync(request.BookId, cancellationToken);
         var draft = TransactionBuilder.Build(book, request.Input);
 
+        // 修改前的快照必須在 ReplaceWith 之前取得，否則會拿到修改後的內容。
+        var before = TransactionDto.From(transaction, db.GetVersion(transaction));
         db.ExpectVersion(transaction, request.Version);
         transaction.ReplaceWith(draft);
+        audit.Record(request.BookId, AuditAction.Update, AuditEntityTypes.Transaction, transaction.Id.Value,
+            before, TransactionDto.From(transaction, AuditSnapshots.UnknownVersion));
         await db.SaveChangesAsync(cancellationToken);
 
         return TransactionDto.From(transaction, db.GetVersion(transaction));

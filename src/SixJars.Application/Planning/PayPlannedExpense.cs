@@ -1,6 +1,7 @@
 using FluentValidation;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using SixJars.Application.Auditing;
 using SixJars.Application.Books;
 using SixJars.Application.Common;
 using SixJars.Application.Transactions;
@@ -41,7 +42,7 @@ internal sealed class PayPlannedExpenseValidator : AbstractValidator<PayPlannedE
     }
 }
 
-internal sealed class PayPlannedExpenseHandler(ISixJarsDbContext db) : IRequestHandler<PayPlannedExpense, PayPlannedExpenseResult>
+internal sealed class PayPlannedExpenseHandler(ISixJarsDbContext db, IAuditTrail audit) : IRequestHandler<PayPlannedExpense, PayPlannedExpenseResult>
 {
     public async Task<PayPlannedExpenseResult> Handle(PayPlannedExpense request, CancellationToken cancellationToken)
     {
@@ -51,10 +52,16 @@ internal sealed class PayPlannedExpenseHandler(ISixJarsDbContext db) : IRequestH
         var book = await db.GetBookAsNoTrackingAsync(request.BookId, cancellationToken);
         var transaction = BuildPayment(book, planned.CategoryId, planned.BudgetMonth, planned.Note, request);
 
+        // 修改前的快照必須在 MarkPaid 之前取得。
+        var before = PlannedExpenseDto.From(planned, db.GetVersion(planned));
         db.ExpectVersion(planned, request.Version);
         planned.MarkPaid(transaction);
-        // 新增交易與付款連結在同一次 SaveChanges，一起成功或一起失敗。
+        // 新增交易、付款連結與兩筆稽核記錄（交易的 Create、預定支出的 Update）在同一次 SaveChanges，一起成功或一起失敗。
         db.Transactions.Add(transaction);
+        audit.Record(request.BookId, AuditAction.Create, AuditEntityTypes.Transaction, transaction.Id.Value,
+            null, TransactionDto.From(transaction, AuditSnapshots.UnknownVersion));
+        audit.Record(request.BookId, AuditAction.Update, AuditEntityTypes.PlannedExpense, planned.Id.Value,
+            before, PlannedExpenseDto.From(planned, AuditSnapshots.UnknownVersion));
         await db.SaveChangesAsync(cancellationToken);
 
         return new PayPlannedExpenseResult(

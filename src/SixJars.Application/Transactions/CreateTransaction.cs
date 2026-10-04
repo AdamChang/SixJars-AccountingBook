@@ -1,5 +1,6 @@
 using FluentValidation;
 using MediatR;
+using SixJars.Application.Auditing;
 using SixJars.Application.Books;
 using SixJars.Application.Common;
 
@@ -13,7 +14,7 @@ internal sealed class CreateTransactionValidator : AbstractValidator<CreateTrans
     public CreateTransactionValidator() => RuleFor(c => c.Input).NotNull().SetValidator(new TransactionInputValidator());
 }
 
-internal sealed class CreateTransactionHandler(ISixJarsDbContext db) : IRequestHandler<CreateTransaction, TransactionDto>
+internal sealed class CreateTransactionHandler(ISixJarsDbContext db, IAuditTrail audit) : IRequestHandler<CreateTransaction, TransactionDto>
 {
     public async Task<TransactionDto> Handle(CreateTransaction request, CancellationToken cancellationToken)
     {
@@ -21,6 +22,8 @@ internal sealed class CreateTransactionHandler(ISixJarsDbContext db) : IRequestH
         var book = await db.GetBookAsNoTrackingAsync(request.BookId, cancellationToken);
         var transaction = TransactionBuilder.Build(book, request.Input);
         db.Transactions.Add(transaction);
+        audit.Record(request.BookId, AuditAction.Create, AuditEntityTypes.Transaction, transaction.Id.Value,
+            null, TransactionDto.From(transaction, AuditSnapshots.UnknownVersion));
         await db.SaveChangesAsync(cancellationToken);
 
         // 存檔時 EF 已讀回資料庫產生的版本。

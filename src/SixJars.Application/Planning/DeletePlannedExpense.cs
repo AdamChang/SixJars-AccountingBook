@@ -1,5 +1,6 @@
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using SixJars.Application.Auditing;
 using SixJars.Application.Common;
 
 namespace SixJars.Application.Planning;
@@ -11,15 +12,18 @@ namespace SixJars.Application.Planning;
 /// </summary>
 public sealed record DeletePlannedExpense(Guid BookId, Guid PlannedExpenseId, uint Version) : IRequest;
 
-internal sealed class DeletePlannedExpenseHandler(ISixJarsDbContext db, TimeProvider clock) : IRequestHandler<DeletePlannedExpense>
+internal sealed class DeletePlannedExpenseHandler(ISixJarsDbContext db, TimeProvider clock, IAuditTrail audit) : IRequestHandler<DeletePlannedExpense>
 {
     public async Task Handle(DeletePlannedExpense request, CancellationToken cancellationToken)
     {
         // 已刪除的預定支出被 query filter 擋掉，同樣 404。
         var planned = await db.FindPlannedExpenseAsync(request.BookId, request.PlannedExpenseId, cancellationToken);
 
+        // 快照在 Delete 之前取得；DeletedAt 不在 DTO 裡，刪除時間就是稽核記錄的 At。
+        var before = PlannedExpenseDto.From(planned, db.GetVersion(planned));
         db.ExpectVersion(planned, request.Version);
         planned.Delete(clock.GetUtcNow());
+        audit.Record<PlannedExpenseDto>(request.BookId, AuditAction.Delete, AuditEntityTypes.PlannedExpense, planned.Id.Value, before, null);
         await db.SaveChangesAsync(cancellationToken);
     }
 }
