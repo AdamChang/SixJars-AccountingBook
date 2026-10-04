@@ -195,6 +195,8 @@ describe('TransactionForm', () => {
     await refund.check();
     const body = await form.submitAndExpectBody();
     expect(body.amount).toBe(100);
+    // 存檔後退款回到未勾選
+    expect(await refund.isChecked()).toBe(false);
   });
 
   it('defaults_date_to_local_today_after_midnight', async () => {
@@ -227,18 +229,22 @@ describe('TransactionForm', () => {
 
   it('keeps_date_kind_account_and_focuses_amount_after_save', async () => {
     const form = await setup();
-    const dateInput = form.el.querySelector<HTMLInputElement>('[formControlName=date]')!;
-    const dateText = dateInput.value;
+    // 刻意用非預設的類型與日期：表單 reset 的預設值是「支出」與今天，用預設值測不出遺失
+    await form.selectKind('收入');
+    const date = await form.loader.getHarness(MatDatepickerInputHarness);
+    await date.setValue('2026/3/15');
+    const dateText = await date.getValue();
     await form.select('accountId', '銀行');
     await form.type('amount', '250');
-    await form.chooseCategory('飲', '飲食');
-    await form.type('note', '晚餐');
-    await form.submitAndExpectBody();
+    await form.chooseCategory('獎', '薪資 / 獎金');
+    await form.type('note', '年終');
+    const body = await form.submitAndExpectBody();
+    expect(body).toMatchObject({ kind: 'Income', date: '2026-03-15', accountId: 'acc-bank' });
 
     const group = await form.loader.getHarness(MatButtonToggleGroupHarness);
     const checked = await group.getToggles({ checked: true });
-    expect(await checked[0].getText()).toBe('支出');
-    expect(dateInput.value).toBe(dateText);
+    expect(await checked[0].getText()).toBe('收入');
+    expect(await date.getValue()).toBe(dateText);
     expect(await form.selectedText('accountId')).toBe('銀行');
     expect(await (await form.input('amount')).getValue()).toBe('');
     expect(await (await form.input('note')).getValue()).toBe('');
