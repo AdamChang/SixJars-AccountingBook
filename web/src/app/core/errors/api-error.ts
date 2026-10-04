@@ -1,4 +1,5 @@
 import { HttpErrorResponse } from '@angular/common/http';
+import { DOMAIN_FALLBACK_MESSAGE } from './messages';
 
 export type ApiError =
   | { kind: 'validation'; fieldErrors: Record<string, string[]> }
@@ -36,7 +37,7 @@ export function classifyError(error: HttpErrorResponse): ApiError {
     case 409:
       return { kind: 'conflict' };
     case 422:
-      return { kind: 'domain', code: body?.code ?? 'rule', message: body?.detail ?? '' };
+      return { kind: 'domain', code: body?.code ?? 'rule', message: body?.detail?.trim() ? body.detail : DOMAIN_FALLBACK_MESSAGE };
     default:
       return { kind: 'unavailable' };
   }
