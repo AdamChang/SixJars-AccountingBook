@@ -33,6 +33,9 @@ internal sealed class ApiExceptionHandler(IProblemDetailsService problemDetails)
                 Status = StatusCodes.Status409Conflict,
                 Detail = "資料已被其他人修改，請重新載入後再試。",
             },
+            // minimal API 的參數綁定失敗（例如 ?from=not-a-date）：Development 會擲出這個例外，其他環境直接回 400；
+            // 兩邊一致回它帶的狀態碼，不變成 500。
+            BadHttpRequestException badRequest => new ProblemDetails { Status = badRequest.StatusCode, Title = "請求格式錯誤" },
             _ => null,
         };
 

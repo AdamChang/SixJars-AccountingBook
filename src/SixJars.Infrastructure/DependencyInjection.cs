@@ -2,7 +2,9 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using SixJars.Application.Common;
+using SixJars.Application.Exports;
 using SixJars.Application.Ledger;
+using SixJars.Infrastructure.Exports;
 using SixJars.Infrastructure.Ledger;
 using SixJars.Infrastructure.Persistence;
 
@@ -21,6 +23,9 @@ public static class DependencyInjection
             .AddInterceptors(sp.GetServices<IInterceptor>()));
         services.AddScoped<ISixJarsDbContext>(sp => sp.GetRequiredService<SixJarsDbContext>());
         services.AddScoped<ILedgerSummaryQuery, SqlLedgerSummaryQuery>();
+        // 交易明細匯出：每種格式一個 writer，handler 依 ExportTransactions.Format 挑選。
+        services.AddSingleton<ITransactionSheetWriter, CsvTransactionWriter>();
+        services.AddSingleton<ITransactionSheetWriter, XlsxTransactionWriter>();
         return services;
     }
 }
