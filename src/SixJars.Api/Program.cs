@@ -1,5 +1,4 @@
 using System.Text.Json.Serialization;
-using Microsoft.AspNetCore.Authentication.Cookies;
 using SixJars.Api.Endpoints;
 using SixJars.Api.Infrastructure;
 using SixJars.Application;
@@ -20,13 +19,8 @@ builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 
-// 暫時只有 cookie；T36 換成完整的 Google OIDC 設定。API 未登入時回 401，不轉址到登入頁。
-builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
-    .AddCookie(o => o.Events.OnRedirectToLogin = ctx =>
-    {
-        ctx.Response.StatusCode = StatusCodes.Status401Unauthorized;
-        return Task.CompletedTask;
-    });
+// cookie＋Google OIDC，白名單即帳本成員表（ADR 0005）。API 未登入時回 401，不轉址到 Google。
+builder.Services.AddSixJarsAuthentication(builder.Configuration, builder.Environment);
 builder.Services.AddAuthorization();
 
 var app = builder.Build();
@@ -35,6 +29,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapHealthEndpoints();
+app.MapAuthEndpoints();
 var api = app.MapGroup("/api").RequireAuthorization();
 api.MapMeEndpoints();
 api.MapBooksEndpoints().MapTransactionsEndpoints().MapPlannedExpensesEndpoints().MapSummaryEndpoints().MapAuditEndpoints();
