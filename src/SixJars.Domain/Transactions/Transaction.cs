@@ -36,9 +36,11 @@ public sealed class Transaction
         PlanningFundId? planningFundId,
         decimal? loanPrincipal,
         string? note,
-        IEnumerable<Posting> postings)
+        IEnumerable<Posting> postings,
+        TransactionId? id = null)
     {
-        Id = TransactionId.New();
+        // id 只有還原備份時由 factory 帶入（見 TransactionFactory 的 fixedId）。
+        Id = id ?? TransactionId.New();
         BookId = bookId;
         Kind = kind;
         Date = date;

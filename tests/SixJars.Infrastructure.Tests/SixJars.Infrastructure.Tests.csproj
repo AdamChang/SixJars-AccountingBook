@@ -9,12 +9,15 @@
     <PackageReference Include="xunit.runner.visualstudio" />
     <PackageReference Include="FluentAssertions" />
     <PackageReference Include="Testcontainers.PostgreSql" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\SixJars.Infrastructure\SixJars.Infrastructure.csproj" />
+    <!-- T42：備份往返測試以 API 建立資料與匯出，還原則直接送 internal 的 RestoreBackup（API 看不到）。 -->
+    <ProjectReference Include="..\..\src\SixJars.Api\SixJars.Api.csproj" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="..\Shared\**\*.cs" Exclude="..\Shared\Api*.cs;..\Shared\TestAuthHandler.cs" LinkBase="Shared" />
+    <Compile Include="..\Shared\**\*.cs" LinkBase="Shared" />
     <!-- SampleBook 是 internal，以 link 方式編譯進來，不改成 public（T26）。 -->
     <Compile Include="..\SixJars.Domain.Tests\SampleBook.cs" Link="Shared\SampleBook.cs" />
     <!-- T40：合成的舊記帳本與固定時鐘，重用既有的測試輔助。 -->

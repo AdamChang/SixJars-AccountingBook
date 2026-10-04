@@ -37,10 +37,19 @@ public sealed class PlannedExpense
     public DateTimeOffset? DeletedAt { get; private set; }
     public bool IsDeleted => DeletedAt is not null;
 
-    public static PlannedExpense Create(Book book, BudgetMonth budgetMonth, CategoryId categoryId, AccountId? accountId, decimal estimatedAmount, string? note = null)
+    /// <param name="id">只有還原備份（T42）時指定，保留原本的 Id；一般新增時省略，自動產生。驗證規則完全相同。</param>
+    public static PlannedExpense Create(
+        Book book, BudgetMonth budgetMonth, CategoryId categoryId, AccountId? accountId, decimal estimatedAmount, string? note = null,
+        PlannedExpenseId? id = null)
     {
         Validate(book, categoryId, accountId);
-        return new PlannedExpense(book.Id, budgetMonth, categoryId, accountId, estimatedAmount, note);
+        var planned = new PlannedExpense(book.Id, budgetMonth, categoryId, accountId, estimatedAmount, note);
+        if (id is { } fixedId)
+        {
+            planned.Id = fixedId;
+        }
+
+        return planned;
     }
 
     /// <summary>修改未付的預定支出。付款後金額以實際交易為準，所以禁止修改。</summary>

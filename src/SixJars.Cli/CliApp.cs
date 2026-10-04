@@ -1,9 +1,11 @@
 using System.CommandLine;
 using System.Data.Common;
+using System.Text.Json;
 using FluentValidation;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 using SixJars.Application;
+using SixJars.Application.Backup;
 using SixJars.Application.Common;
 using SixJars.Application.LegacyImport;
 using SixJars.Application.Members;
@@ -42,6 +44,7 @@ public static class CliApp
         {
             ImportLegacyCommand(host),
             AddMemberCommand(host),
+            RestoreBackupCommand(host),
         };
 
         return root.Parse(args).InvokeAsync(new InvocationConfiguration { Output = output, Error = output }, cancellationToken);
@@ -114,6 +117,49 @@ public static class CliApp
             var bookId = parseResult.GetValue(book);
             var memberId = await sender.Send(new AddOwner(bookId, parseResult.GetValue(email)!), ct);
             await output.WriteLineAsync($"已加入擁有者（成員 Id {memberId}，帳本 {bookId}）。");
+            return 0;
+        }, ct));
+        return command;
+    }
+
+    /// <summary>
+    /// 還原 <c>GET /api/books/{id}/export/backup.json</c> 下載的備份（單一 DB transaction）。
+    /// 訊息只印檔名，不印完整路徑（本機路徑可能含使用者名稱等個資）。
+    /// </summary>
+    private static Command RestoreBackupCommand(Host host)
+    {
+        var file = new Option<FileInfo>("--file") { Description = "備份檔（.json）", Required = true };
+        var command = new Command("restore-backup", "把 JSON 備份還原成一本帳；資料庫中已有同一本帳時拒絕。經 Domain 重新驗證，損毀的備份整個不寫入。")
+        {
+            file,
+        };
+        command.SetAction((parseResult, ct) => host.RunAsync(async (sender, output) =>
+        {
+            var source = parseResult.GetValue(file)!;
+            if (!source.Exists)
+            {
+                await output.WriteLineAsync($"錯誤：找不到檔案 {source.Name}。");
+                return 1;
+            }
+
+            BackupDocument backup;
+            try
+            {
+                await using var stream = source.OpenRead();
+                backup = await JsonSerializer.DeserializeAsync<BackupDocument>(stream, BackupJson.Options, ct)
+                    ?? throw new JsonException("內容是 null。");
+            }
+            catch (JsonException ex)
+            {
+                // System.Text.Json 的訊息只有 JSON 路徑與行號，不含檔案內容或路徑。
+                await output.WriteLineAsync($"錯誤：{source.Name} 不是有效的備份檔：{ex.Message}");
+                return 1;
+            }
+
+            var bookId = await sender.Send(new RestoreBackup(backup, source.Name), ct);
+            await output.WriteLineAsync(
+                $"已從 {source.Name} 還原帳本 {bookId}（交易 {backup.Transactions.Count} 筆、預定支出 {backup.PlannedExpenses.Count} 筆、" +
+                $"成員 {backup.Members.Count} 位、稽核記錄 {backup.AuditEntries.Count} 筆）。");
             return 0;
         }, ct));
         return command;

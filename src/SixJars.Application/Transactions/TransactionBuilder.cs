@@ -11,9 +11,10 @@ public static class TransactionBuilder
     /// 必填欄位在 API 已由 <see cref="TransactionInputValidator"/> 保證；CLI 還原（T42）不經過 validator，
     /// 所以缺欄位時仍擲 <see cref="DomainException"/>。業務規則（帳戶類型、正負號等）由 factory 檢查。
     /// </summary>
-    public static Transaction Build(Book book, TransactionInput input)
+    /// <param name="fixedId">只有還原備份時指定，保留原本的 Id（見 <see cref="TransactionFactory"/>）。</param>
+    public static Transaction Build(Book book, TransactionInput input, TransactionId? fixedId = null)
     {
-        var factory = new TransactionFactory(book);
+        var factory = new TransactionFactory(book, fixedId);
         var date = input.Date;
         var amount = input.Amount;
         var account = new AccountId(input.AccountId);

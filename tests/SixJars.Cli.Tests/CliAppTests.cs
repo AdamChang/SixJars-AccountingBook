@@ -1,10 +1,15 @@
+using System.Text.Json;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using SixJars.Api.Tests;
 using SixJars.Application.Auditing;
+using SixJars.Application.Backup;
+using SixJars.Application.Books;
+using SixJars.Application.Transactions;
 using SixJars.Domain.Books;
 using SixJars.Domain.Members;
+using SixJars.Domain.Transactions;
 using SixJars.Infrastructure.Persistence;
 using SixJars.Tests.Shared;
 using Xunit;
@@ -141,6 +146,104 @@ public class CliAppTests(PostgresFixture postgres)
         output.ToString().Should().Contain("找不到檔案").And.NotContain("   at ");
         await using var db = Open(connectionString);
         (await db.Books.CountAsync(Ct)).Should().Be(0);
+    }
+
+    [Fact]
+    public async Task Restore_backup_writes_book_and_restore_audit_entry()
+    {
+        var connectionString = await postgres.CreateConnectionStringAsync(Ct);
+        var backup = MinimalBackup();
+        var file = await WriteBackupFileAsync(JsonSerializer.Serialize(backup, BackupJson.Options));
+        var output = new StringWriter();
+
+        var exitCode = await RunAsync(connectionString, output, "restore-backup", "--file", file);
+
+        exitCode.Should().Be(0, output.ToString());
+        output.ToString().Should().Contain(backup.Book.Id.ToString()).And.Contain(Path.GetFileName(file))
+            .And.NotContain(Path.GetDirectoryName(file)!);
+        await using var db = Open(connectionString);
+        var book = await db.Books.SingleAsync(Ct);
+        book.Id.Value.Should().Be(backup.Book.Id);
+        book.LockDate.Should().Be(backup.Book.LockDate);
+        var transaction = await db.Transactions.SingleAsync(Ct);
+        transaction.Id.Value.Should().Be(backup.Transactions[0].Transaction.Id);
+        transaction.Amount.Should().Be(-80m);
+        var member = await db.BookMembers.SingleAsync(Ct);
+        member.Id.Should().Be(backup.Members[0].Id);
+        member.GoogleSubject.Should().Be("owner-sub");
+
+        var entries = await db.AuditEntries.OrderBy(e => e.At).ToListAsync(Ct);
+        entries.Should().HaveCount(2);
+        entries[0].Id.Should().Be(backup.AuditEntries[0].Id);
+        entries[0].ActorSubject.Should().Be("owner-sub");
+        var restore = entries[1];
+        restore.Action.Should().Be(AuditAction.Restore);
+        restore.ActorSubject.Should().Be("cli");
+        restore.At.Should().Be(Now);
+        // 只記檔名，不記本機路徑。
+        restore.After.Should().Contain(Path.GetFileName(file)).And.NotContain(Path.GetDirectoryName(file)!);
+    }
+
+    /// <summary>格式錯誤、或帳本已存在：exit code 1，訊息看得懂；不印 stack trace，也不印完整路徑。</summary>
+    [Fact]
+    public async Task Restore_backup_failures_are_reported_without_writing()
+    {
+        var connectionString = await postgres.CreateConnectionStringAsync(Ct);
+        var broken = await WriteBackupFileAsync("{ \"formatVersion\": 1, \"book\": ");
+        var valid = await WriteBackupFileAsync(JsonSerializer.Serialize(MinimalBackup(), BackupJson.Options));
+        var missing = Path.Combine(Path.GetDirectoryName(valid)!, "missing.json");
+
+        foreach (var (file, expected) in new[] { (broken, "不是有效的備份檔"), (missing, "找不到檔案") })
+        {
+            var output = new StringWriter();
+
+            var exitCode = await RunAsync(connectionString, output, "restore-backup", "--file", file);
+
+            exitCode.Should().Be(1);
+            output.ToString().Should().Contain(expected).And.Contain(Path.GetFileName(file))
+                .And.NotContain(Path.GetDirectoryName(file)!).And.NotContain("   at ");
+        }
+
+        await using (var db = Open(connectionString))
+        {
+            (await db.Books.CountAsync(Ct)).Should().Be(0);
+        }
+
+        (await RunAsync(connectionString, new StringWriter(), "restore-backup", "--file", valid)).Should().Be(0);
+        var duplicate = new StringWriter();
+        (await RunAsync(connectionString, duplicate, "restore-backup", "--file", valid)).Should().Be(1);
+        duplicate.ToString().Should().Contain("已有").And.NotContain("   at ");
+        await using var check = Open(connectionString);
+        (await check.AuditEntries.CountAsync(e => e.Action == AuditAction.Restore, Ct)).Should().Be(1);
+    }
+
+    /// <summary>一本只有一個帳戶、一個分類、一筆交易、一位已綁定成員與一筆稽核記錄的備份。</summary>
+    private static BackupDocument MinimalBackup()
+    {
+        var bookId = Guid.CreateVersion7();
+        var cash = new AccountDto(Guid.CreateVersion7(), "現金", AccountType.Cash, 1000m, true);
+        var food = new CategoryDto(Guid.CreateVersion7(), "主食", CategoryKind.Expense, ExpenseNature.Floating, null);
+        var transactionId = Guid.CreateVersion7();
+        var transaction = new TransactionDto(transactionId, TransactionKind.Expense, new DateOnly(2026, 1, 5), 202601, -80m, cash.Id,
+            null, food.Id, null, null, null, "午餐", [new PostingDto(cash.Id, -80m)], 0);
+        using var after = JsonDocument.Parse(JsonSerializer.Serialize(transaction, AuditSnapshots.Options));
+        return new BackupDocument(
+            BackupDocument.CurrentFormatVersion,
+            new DateTimeOffset(2026, 2, 1, 0, 0, 0, TimeSpan.Zero),
+            new BookDto(bookId, "還原的帳本", new DateOnly(2025, 12, 31), new DateOnly(2026, 1, 31), [cash], [], [food]),
+            [new BackupTransaction(transaction, null)],
+            [],
+            [new BackupMember(Guid.CreateVersion7(), "owner-sub@example.com", "owner-sub", BookRole.Owner, new DateTimeOffset(2025, 12, 31, 0, 0, 0, TimeSpan.Zero))],
+            [new AuditEntryDto(Guid.CreateVersion7(), new DateTimeOffset(2026, 1, 5, 1, 0, 0, TimeSpan.Zero), "owner-sub", AuditAction.Create,
+                AuditEntityTypes.Transaction, transactionId, null, after.RootElement.Clone())]);
+    }
+
+    private static async Task<string> WriteBackupFileAsync(string content)
+    {
+        var directory = Directory.CreateTempSubdirectory("sixjars-restore-");
+        var file = Path.Combine(directory.FullName, "sixjars-backup-20260201.json");
+        await File.WriteAllTextAsync(file, content, Ct);
+        return file;
     }
 
     private static Task<int> RunAsync(string connectionString, TextWriter output, params string[] args) =>

@@ -9,12 +9,16 @@ public sealed class Book
     private readonly List<PlanningFund> _planningFunds = [];
     private readonly List<Category> _categories = [];
 
-    public Book(string name, DateOnly openingDate)
+    /// <param name="id">只有還原備份（T42）時指定，保留原本的 Id；一般新增時省略，自動產生。</param>
+    public Book(string name, DateOnly openingDate, BookId? id = null)
     {
-        Id = BookId.New();
+        Id = id ?? BookId.New();
         Name = RequireName(name);
         OpeningDate = openingDate;
     }
+
+    // EF Core 專用：公開建構子的 id 參數型別（BookId?）與屬性不同，EF 無法綁定。
+    private Book() => Name = null!;
 
     public BookId Id { get; private set; }
     public string Name { get; private set; }
@@ -28,7 +32,10 @@ public sealed class Book
     public IReadOnlyList<PlanningFund> PlanningFunds => _planningFunds;
     public IReadOnlyList<Category> Categories => _categories;
 
-    public Account AddAccount(string name, AccountType type, decimal openingBalance = 0m, bool countsAsAvailableCash = true)
+    // 以下各 Add 方法的 id 參數：只有還原備份（T42）時指定，保留原本的 Id；一般新增時省略，自動產生。
+    // 指定 Id 不會略過任何檢查（名稱、類型、兩層分類）；同一個 Id 重複出現時由資料庫的主鍵擋下。
+
+    public Account AddAccount(string name, AccountType type, decimal openingBalance = 0m, bool countsAsAvailableCash = true, AccountId? id = null)
     {
         name = RequireName(name);
         if (FindAccount(name) is not null)
@@ -36,12 +43,12 @@ public sealed class Book
             throw new DomainException($"帳戶名稱「{name}」已存在。");
         }
 
-        var account = new Account(AccountId.New(), name, type, openingBalance, type == AccountType.Cash && countsAsAvailableCash);
+        var account = new Account(id ?? AccountId.New(), name, type, openingBalance, type == AccountType.Cash && countsAsAvailableCash);
         _accounts.Add(account);
         return account;
     }
 
-    public PlanningFund AddPlanningFund(string name, decimal openingBalance = 0m)
+    public PlanningFund AddPlanningFund(string name, decimal openingBalance = 0m, PlanningFundId? id = null)
     {
         name = RequireName(name);
         if (FindPlanningFund(name) is not null)
@@ -49,16 +56,17 @@ public sealed class Book
             throw new DomainException($"財務規劃帳戶名稱「{name}」已存在。");
         }
 
-        var fund = new PlanningFund(PlanningFundId.New(), name, openingBalance);
+        var fund = new PlanningFund(id ?? PlanningFundId.New(), name, openingBalance);
         _planningFunds.Add(fund);
         return fund;
     }
 
-    public Category AddIncomeCategory(string name) => AddMainCategory(name, CategoryKind.Income, nature: null);
+    public Category AddIncomeCategory(string name, CategoryId? id = null) => AddMainCategory(name, CategoryKind.Income, nature: null, id);
 
-    public Category AddExpenseCategory(string name, ExpenseNature nature) => AddMainCategory(name, CategoryKind.Expense, nature);
+    public Category AddExpenseCategory(string name, ExpenseNature nature, CategoryId? id = null) =>
+        AddMainCategory(name, CategoryKind.Expense, nature, id);
 
-    public Category AddSubCategory(CategoryId parentId, string name)
+    public Category AddSubCategory(CategoryId parentId, string name, CategoryId? id = null)
     {
         var parent = GetCategory(parentId);
         if (!parent.IsMain)
@@ -72,7 +80,7 @@ public sealed class Book
             throw new DomainException($"主分類「{parent.Name}」底下已有子分類「{name}」。");
         }
 
-        var category = new Category(CategoryId.New(), name, parent.Kind, parent.Nature, parentId);
+        var category = new Category(id ?? CategoryId.New(), name, parent.Kind, parent.Nature, parentId);
         _categories.Add(category);
         return category;
     }
@@ -116,7 +124,7 @@ public sealed class Book
         return _categories.Find(c => c.ParentId == main.Id && c.Name == subName);
     }
 
-    private Category AddMainCategory(string name, CategoryKind kind, ExpenseNature? nature)
+    private Category AddMainCategory(string name, CategoryKind kind, ExpenseNature? nature, CategoryId? id)
     {
         name = RequireName(name);
         if (FindCategory(name) is not null)
@@ -124,7 +132,7 @@ public sealed class Book
             throw new DomainException($"主分類名稱「{name}」已存在。");
         }
 
-        var category = new Category(CategoryId.New(), name, kind, nature, parentId: null);
+        var category = new Category(id ?? CategoryId.New(), name, kind, nature, parentId: null);
         _categories.Add(category);
         return category;
     }

@@ -34,6 +34,22 @@ public sealed class BookMember
         return new BookMember(bookId, NormalizeEmail(email), role, addedAt);
     }
 
+    /// <summary>
+    /// 還原備份（T42）：以完整欄位重建成員，保留 Id；已綁定的 sub 一併還原。
+    /// 經過與 <see cref="Create"/>、<see cref="BindSubject"/> 相同的檢查（只支援擁有者、email 與 sub 不可空白）。
+    /// </summary>
+    public static BookMember Restore(Guid id, BookId bookId, string email, string? googleSubject, BookRole role, DateTimeOffset addedAt)
+    {
+        var member = Create(bookId, email, role, addedAt);
+        member.Id = id;
+        if (googleSubject is not null)
+        {
+            member.BindSubject(googleSubject);
+        }
+
+        return member;
+    }
+
     /// <summary>去頭尾空白並轉小寫；比對登入者的 email 時也要用同樣的方式正規化。</summary>
     public static string NormalizeEmail(string email)
     {
