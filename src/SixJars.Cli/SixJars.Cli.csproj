@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="System.CommandLine" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\SixJars.Application\SixJars.Application.csproj" />
+    <ProjectReference Include="..\SixJars.Infrastructure\SixJars.Infrastructure.csproj" />
+  </ItemGroup>
+</Project>

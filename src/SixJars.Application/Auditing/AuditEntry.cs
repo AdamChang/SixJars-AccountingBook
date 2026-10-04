@@ -37,6 +37,6 @@ public static class AuditEntityTypes
     public const string Category = "Category";
     public const string Transaction = "Transaction";
     public const string PlannedExpense = "PlannedExpense";
-    /// <summary>帳本成員；目前只有第一次登入時綁定 Google sub 會留下記錄，操作者即被綁定的 sub。</summary>
+    /// <summary>帳本成員：CLI 加入成員（Create，操作者 <c>cli</c>）；第一次登入時綁定 Google sub（Update，操作者即被綁定的 sub）。</summary>
     public const string BookMember = "BookMember";
 }

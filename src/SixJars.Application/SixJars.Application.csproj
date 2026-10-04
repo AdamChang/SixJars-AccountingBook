@@ -6,6 +6,10 @@
     <PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
   </ItemGroup>
   <ItemGroup>
+    <!-- CLI 專用的 request（ICliOnlyRequest）是 internal，只有 CLI 與測試看得到；不可加入 SixJars.Api（BookScopeConventionTests 把關）。 -->
+    <InternalsVisibleTo Include="SixJars.Cli" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\SixJars.Domain\SixJars.Domain.csproj" />
   </ItemGroup>
 </Project>
