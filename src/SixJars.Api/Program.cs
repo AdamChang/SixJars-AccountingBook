@@ -30,6 +30,7 @@ var app = builder.Build();
 // 必須在 authentication 之前：OIDC 的 redirect_uri 與 Secure cookie 都依賴 Request.IsHttps。
 app.UseForwardedHeaders();
 app.UseExceptionHandler();
+app.UseSpaHosting();
 app.UseAuthentication();
 app.UseAuthorization();
 

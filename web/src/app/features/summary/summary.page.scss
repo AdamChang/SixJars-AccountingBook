@@ -1,0 +1,10 @@
+:host { display: block; max-width: 960px; margin: 0 auto; padding: 0 16px 24px; }
+app-month-nav { margin: 8px 0; }
+.metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.label { color: var(--mat-sys-on-surface-variant); }
+.value { font-size: 1.75rem; font-variant-numeric: tabular-nums; }
+.sub { font-size: 0.85rem; color: var(--mat-sys-on-surface-variant); font-variant-numeric: tabular-nums; }
+h3 { margin: 16px 0 4px; }
+table { width: 100%; border-collapse: collapse; }
+td { padding: 6px 0; border-bottom: 1px solid var(--mat-sys-outline-variant); }
+.amount { text-align: right; font-variant-numeric: tabular-nums; }

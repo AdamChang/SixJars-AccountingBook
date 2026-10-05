@@ -199,7 +199,7 @@ public class AuthenticationOptionsTests(PostgresFixture postgres)
         await options.Events.RemoteFailure(context);
 
         context.Result!.Handled.Should().BeTrue();
-        httpContext.Response.Headers.Location.ToString().Should().Be("/auth/denied");
+        httpContext.Response.Headers.Location.ToString().Should().Be("/denied");
     }
 
     private async Task<ApiFactory> CreateFactoryAsync(

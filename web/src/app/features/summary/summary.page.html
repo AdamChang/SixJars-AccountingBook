@@ -1,0 +1,52 @@
+<app-month-nav [month]="month()" (monthChange)="changeMonth($event)" />
+@if (summary(); as s) {
+  <div class="metrics">
+    <mat-card class="metric" appearance="outlined">
+      <mat-card-content>
+        <div class="label">月可用餘額</div>
+        <div class="value">{{ format(s.monthlyDisposable) }}</div>
+      </mat-card-content>
+    </mat-card>
+    <mat-card class="metric" appearance="outlined">
+      <mat-card-content>
+        <div class="label">年累計餘額</div>
+        <div class="value">{{ format(s.yearToDate) }}</div>
+      </mat-card-content>
+    </mat-card>
+    <mat-card class="metric" appearance="outlined">
+      <mat-card-content>
+        <div class="label">可用現金</div>
+        <div class="value">{{ format(s.availableCash) }}</div>
+        <div class="sub">含電子錢包 {{ format(s.availableCashWithEWallets) }}</div>
+      </mat-card-content>
+    </mat-card>
+  </div>
+
+  @for (group of groups(); track group.title) {
+    <section class="account-group">
+      <h3>{{ group.title }}</h3>
+      <table>
+        @for (account of group.accounts; track account.id) {
+          <tr>
+            <td>{{ account.name }}</td>
+            <td class="amount">{{ format(account.balance) }}</td>
+          </tr>
+        }
+      </table>
+    </section>
+  }
+
+  @if (s.planningFunds.length > 0) {
+    <section class="planning-funds">
+      <h3>財務規劃帳戶</h3>
+      <table>
+        @for (fund of s.planningFunds; track fund.id) {
+          <tr>
+            <td>{{ fund.name }}</td>
+            <td class="amount">{{ format(fund.balance) }}</td>
+          </tr>
+        }
+      </table>
+    </section>
+  }
+}

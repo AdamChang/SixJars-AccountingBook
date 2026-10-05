@@ -1,0 +1,49 @@
+.transaction-form {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px;
+}
+
+.kinds {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.amount-row,
+.loan-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 16px;
+
+  mat-form-field {
+    flex: 1 1 160px;
+  }
+}
+
+.advanced {
+  margin-bottom: 16px;
+}
+
+.editing-badge {
+  align-self: flex-start;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: var(--mat-sys-secondary-container);
+  color: var(--mat-sys-on-secondary-container);
+}
+
+.form-errors {
+  margin: 0 0 8px;
+  padding-left: 20px;
+  color: var(--mat-sys-error);
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+}

@@ -12,6 +12,8 @@
 3. [Neon 資料庫](#3-neon-資料庫)
 4. [Migration bundle](#4-migration-bundle)
 5. [Google OAuth client](#5-google-oauth-client)
+   - [前端本機開發（`ng serve`）](#前端本機開發ng-serve)
+   - [本機驗證 production build 的登入與 service worker](#本機驗證-production-build-的登入與-service-worker)
 6. [Secret Manager](#6-secret-manager)
 7. [Cloud Run 部署](#7-cloud-run-部署)
 8. [閒置與喚醒：預設不設定 Cloud Scheduler](#8-閒置與喚醒預設不設定-cloud-scheduler)
@@ -61,7 +63,9 @@ docker build -t sixjars-api .
 docker image ls sixjars-api
 ```
 
-預期：build 成功，`docker image ls` 列出 `sixjars-api`。image 大小由 ASP.NET Core runtime image 加上發佈成果組成，尚未實測。
+預期：build 成功，`docker image ls` 列出 `sixjars-api`。image 大小由 ASP.NET Core runtime image 加上發佈成果與前端 build 輸出組成，尚未實測。
+
+image 內含前端：Dockerfile 的 `web` stage（`node:24-alpine`）在 `web/` 執行 `npm ci` 與 `npx ng build`，runtime stage 把 `/web/dist/web/browser` 複製到 `/app/wwwroot`，由後端的 `UseSpaHosting` 提供。Node 只存在於 build 階段，執行階段 image 沒有 Node；`dotnet build`／`dotnet test` 也不依賴 Node。
 
 ### 2.2 時區 `Asia/Taipei`
 
@@ -81,13 +85,13 @@ RUN apt-get update \
 
 ### 2.3 image 內沒有個資
 
-`reference/`（舊 Excel 帳本）已由 `.dockerignore` 排除，而且 Dockerfile 只複製 `src/`。用以下指令再確認一次：
+`reference/`（舊 Excel 帳本）已由 `.dockerignore` 排除，而且 Dockerfile 只複製 `src/` 與 `web/`。用以下指令再確認一次：
 
 ```powershell
 docker run --rm --entrypoint sh sixjars-api -c "ls /app; find / -xdev \( -name reference -o -name '*.xlsm' \) 2>/dev/null"
 ```
 
-預期：`ls /app` 只有 `SixJars.*.dll` 等發佈成果，`find` 沒有任何輸出。
+預期：`ls /app` 只有 `SixJars.*.dll` 等發佈成果與 `wwwroot`（前端），`find` 沒有任何輸出。
 
 若 image 裡沒有 `sh`，改把檔案系統匯出後檢查：
 
@@ -99,7 +103,37 @@ docker rm sixjars-check
 
 預期：`Select-String` 沒有任何輸出（在 bash 中把 `Select-String -Pattern` 換成 `grep -E`）。
 
-### 2.4 `/health`
+### 2.4 前端與快取標頭
+
+先依 2.5 的步驟啟動 API（容器名稱 `sixjars-api-check`，埠 8080），再檢查：
+
+> 這個容器只用來以 `curl.exe` 檢查伺服器行為，**不能在瀏覽器裡登入**：它沒有 Google 設定（Development 下不註冊 Google scheme，`/auth/login` 會回 500）、資料庫沒跑 migration，而且只走 http，`SecurePolicy=Always` 的登入與 antiforgery cookie 不會成立。用瀏覽器開 `http://localhost:8080/` 會看到前端呼叫 `/api/me` 得到 401、整頁導向 `/auth/login` 後出現 500，這是預期行為。登入與 service worker 的驗證改用第 5 節的[方式 C](#本機驗證-production-build-的登入與-service-worker)。
+
+```powershell
+# 1. 根路徑與 deep link 都回 index.html（200、text/html）
+curl.exe -i http://localhost:8080/
+curl.exe -i http://localhost:8080/books/x/transactions
+
+# 2. 從 index.html 找出雜湊檔名（main-XXXX.js、styles-XXXX.css），檢查快取標頭
+curl.exe -s http://localhost:8080/ | Select-String -Pattern '(main|styles)-[A-Za-z0-9]+\.(js|css)'
+curl.exe -I http://localhost:8080/main-<hash>.js
+
+# 2b. 壓縮檢查：看回應有沒有 Content-Encoding
+curl.exe -sI -H "Accept-Encoding: gzip, br" http://localhost:8080/main-<hash>.js
+
+# 3. 入口與 service worker 檔必須 no-cache
+curl.exe -I http://localhost:8080/ngsw.json
+curl.exe -I http://localhost:8080/index.html
+```
+
+預期：
+- `/` 與 `/books/x/transactions` 都是 `200 OK` 且內容是 `index.html`（deep link 由 `UseSpaHosting` 改寫路徑）。
+- 雜湊檔（`main-*.js`、`styles-*.css`，以及 lazy chunk `chunk-*.js`）：`Cache-Control: public, max-age=31536000, immutable`。
+- `index.html`、`ngsw.json`（其他非雜湊檔如 `ngsw-worker.js` 同理）：`Cache-Control: no-cache`。
+- 打錯的 API 路徑（例如 `/api/nope`）維持 404，不會回 `index.html`。
+- 壓縮：ASP.NET Core 的 static files 本身不會壓縮，本機容器預期沒有 `Content-Encoding`。部署到 Cloud Run 後用同一條指令對 `<url>/<main-hash>.js` 再檢查一次；若 Cloud Run 也沒有補上壓縮，首次載入約 590 kB 原始大小（之後由 service worker 快取提供）。請把實測結果記在這裡；目前不實作壓縮。
+
+### 2.5 `/health`
 
 用一個暫時的 PostgreSQL 啟動 API。沒有 Google 設定時只有 Development 能啟動，所以這裡設 `ASPNETCORE_ENVIRONMENT=Development`。
 `/health` 只檢查資料庫連得上（`CanConnectAsync`），不需要 schema，所以這一步不必先跑 migration。若要用這個資料庫測試其他 API，必須先依第 4 節執行 migration bundle。
@@ -232,7 +266,15 @@ $migrator = "Host=<neon-host>;Port=5432;Database=sixjars;Username=sixjars_migrat
    一定要是 `https`：app 依 `X-Forwarded-Proto` 判斷原始請求的 scheme（T44 的 ForwardedHeaders），組出的 `redirect_uri` 是 https。
 4. 記下 Client ID 與 Client secret，放進第 6 節的 Secret Manager。
 
-**本機開發的登入**：登入 cookie（`__Host-sixjars-auth`）與 antiforgery cookie（`__Host-sixjars-af`）都使用 `__Host-` 前綴，瀏覽器只接受 https 發出的這類 cookie，所以本機也必須用 https 執行：
+**本機開發的登入**：登入 cookie（`__Host-sixjars-auth`）與 antiforgery cookie（`__Host-sixjars-af`）都使用 `__Host-` 前綴，瀏覽器只接受 https 發出的這類 cookie，所以本機也必須用 https 執行。有兩種登入方式：
+
+| 方式 | 網址 | 需要加入的 redirect URI | 適用情境 |
+|---|---|---|---|
+| A. 直接用後端 | `https://localhost:5001` | `https://localhost:5001/auth/callback` | 後端除錯、只測 API／`/auth`（本機沒有 `wwwroot`，不會提供前端畫面） |
+| B. 經 `ng serve` | `https://localhost:4300` | `https://localhost:4300/auth/callback` | 前端開發（熱重載）；`/api`、`/auth` 由 proxy 轉給後端 |
+| C. 後端直接提供 production build | `https://localhost:4300` | `https://localhost:4300/auth/callback`（與 B 共用） | 部署前驗證登入與 service worker，見[下方小節](#本機驗證-production-build-的登入與-service-worker) |
+
+表中是「要用該方式就必須註冊」的 redirect URI，不代表已經註冊；用到哪個方式，先到 OAuth client 確認對應的 URI 在清單裡，否則 Google 會回 `400 redirect_uri_mismatch`（錯誤頁的「要求詳情」會列出後端送出的 `redirect_uri`）。後端依請求的 Host 與 port 組出 `redirect_uri`，所以只要讓後端聽在已註冊的 port 上即可，不必為了本機測試新增 URI。多個 redirect URI 可以加進同一個 OAuth client。啟動後端（每種方式都需要）：
 
 ```powershell
 dotnet dev-certs https --trust
@@ -244,7 +286,65 @@ $env:Authentication__Google__ClientSecret = "<client-secret>"
 dotnet run --project src/SixJars.Api
 ```
 
-並在同一個 OAuth client 加入 redirect URI `https://localhost:5001/auth/callback`。
+方式 B 再接著啟動前端，見下一節。
+
+**為什麼是 4300 而不是 Angular 預設的 4200**：這台 Windows 機器把 4150–4249 保留給系統（動態排除埠範圍），4200 會以 `EACCES` 啟動失敗。檢查指令：
+
+```powershell
+netsh interface ipv4 show excludedportrange protocol=tcp
+```
+
+排除範圍會因機器與重開機而變，若 4300 也落在範圍內，改 `web/angular.json` 的 serve port，並同步更新 Google redirect URI。
+
+### 前端本機開發（`ng serve`）
+
+啟動順序：
+
+1. 先啟動後端（上面的 `dotnet run`，監聽 `https://localhost:5001`）。
+2. 再啟動前端：
+
+   ```powershell
+   cd web
+   npx ng serve
+   ```
+
+   開啟 `https://localhost:4300`（`ng serve` 已設定 `--ssl`，使用 dev server 自簽的憑證，瀏覽器第一次需要接受）。
+
+`web/proxy.conf.json` 把 `/api` 與 `/auth` 轉給 `https://localhost:5001`，並設 `secure: false`（後端用的是 dev-certs 自簽憑證）。注意：
+
+- **proxy 不要設 `changeOrigin`**。後端依請求的 Host header 組出 OAuth 的 `redirect_uri`；不改 Host，後端看到的就是 `localhost:4300`，Google 登入完成後的 `/auth/callback` 會回到 4300，再經 proxy 轉給後端，登入 cookie 才會落在前端的 origin。若設了 `changeOrigin: true`，Host 會變成 `localhost:5001`，callback 直接回到 5001，cookie 落在另一個 origin，前端永遠是未登入。
+- **改了 `proxy.conf.json` 必須重啟 `ng serve`**，dev server 不會熱載入 proxy 設定。
+
+### 本機驗證 production build 的登入與 service worker
+
+`ng serve` 是開發模式，不會註冊 service worker；第 2 節的容器又只走 http、無法登入。部署前要在本機確認「service worker 啟用後登入仍正常」，讓後端以 https 直接提供 `ng build` 的輸出（2026-10-06 本機實測通過）：
+
+1. 停掉 `ng serve`（它也佔用 4300）。
+2. 建置前端：
+
+   ```powershell
+   cd web
+   npx ng build
+   cd ..
+   ```
+
+3. 沿用上面的後端環境變數，只改監聽網址，並用 `ASPNETCORE_WEBROOT` 指向 build 輸出（不要把檔案複製進 `src/SixJars.Api/wwwroot`：後端測試依賴該目錄不存在）：
+
+   ```powershell
+   $env:ASPNETCORE_URLS = "https://localhost:4300"
+   $env:ASPNETCORE_WEBROOT = "<repo 路徑>\web\dist\web\browser"
+   dotnet run --project src/SixJars.Api
+   ```
+
+   聽在 4300 是為了讓 `redirect_uri` 成為已註冊的 `https://localhost:4300/auth/callback`。
+
+4. 用 Chrome 開 `https://localhost:4300` 並確認：
+   - 網址列出現「安裝應用程式」。
+   - DevTools → Application → Service Workers 顯示已註冊。
+   - service worker 註冊後重新整理、登出、再登入，都能回到 app（`/auth/callback` 沒有被快取的 `index.html` 攔下）。
+   - 用白名單外的帳號登入，停在 `/denied` 並看到說明文字。
+
+5. 測完回到 `ng serve` 開發前，在 DevTools → Application → Service Workers 按 **Unregister**（或 Storage → Clear site data）。service worker 的範圍是「網址＋port」，留著它可能讓 4300 繼續顯示舊的 production 畫面。也記得清掉 `ASPNETCORE_WEBROOT`，並把 `ASPNETCORE_URLS` 改回 `https://localhost:5001`。
 
 ---
 
@@ -310,6 +410,8 @@ curl.exe -i "$url/health"
 預期：`200 OK`。若是 503，代表連不上資料庫：檢查連線字串（直連 host、`SSL Mode=Require`）與 secret 權限。若 revision 根本起不來，用 `gcloud run services logs read sixjars --region asia-east1` 查看；缺少 Google 設定時，啟動訊息會指出缺少哪個環境變數。
 
 接著回到第 5 節，把 `$url/auth/callback` 加進 OAuth client 的 redirect URI，再以瀏覽器開啟 `$url/auth/login` 驗證登入（真實的 Google 登入只能手動驗證）。
+
+最後檢查 service worker 不會干擾登入：首次造訪後，service worker 應已註冊（DevTools → Application → Service Workers）。接著重新整理頁面、登出、再登入一次，`/auth/callback` 與 `/denied` 的轉址都必須正常運作，不可被快取的 `index.html` 直接回應。
 
 ---
 

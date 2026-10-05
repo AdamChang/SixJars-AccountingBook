@@ -1,0 +1,46 @@
+@if (rows().length === 0) {
+  <p class="empty">這個月還沒有交易</p>
+} @else {
+  <table mat-table [dataSource]="rows()">
+    <ng-container matColumnDef="date">
+      <th mat-header-cell *matHeaderCellDef>日期</th>
+      <td mat-cell *matCellDef="let row">{{ row.date }}</td>
+    </ng-container>
+    <ng-container matColumnDef="kind">
+      <th mat-header-cell *matHeaderCellDef>類型</th>
+      <td mat-cell *matCellDef="let row">{{ row.kindLabel }}</td>
+    </ng-container>
+    <ng-container matColumnDef="account">
+      <th mat-header-cell *matHeaderCellDef>帳戶</th>
+      <td mat-cell *matCellDef="let row">{{ row.accountText }}</td>
+    </ng-container>
+    <ng-container matColumnDef="category">
+      <th mat-header-cell *matHeaderCellDef>分類</th>
+      <td mat-cell *matCellDef="let row">{{ row.categoryText }}</td>
+    </ng-container>
+    <ng-container matColumnDef="amount">
+      <th mat-header-cell *matHeaderCellDef class="amount">金額</th>
+      <td mat-cell *matCellDef="let row" class="amount" [class.negative]="row.negative">{{ row.amountText }}</td>
+    </ng-container>
+    <ng-container matColumnDef="note">
+      <th mat-header-cell *matHeaderCellDef>備註</th>
+      <td mat-cell *matCellDef="let row">{{ row.note }}</td>
+    </ng-container>
+    <ng-container matColumnDef="actions">
+      <th mat-header-cell *matHeaderCellDef></th>
+      <td mat-cell *matCellDef="let row" class="actions">
+        @if (row.locked) {
+          <mat-icon class="lock" aria-label="已鎖帳">lock</mat-icon>
+        }
+        <button matIconButton class="delete" aria-label="刪除" [disabled]="row.locked" (click)="onDelete($event, row)">
+          <mat-icon>delete</mat-icon>
+        </button>
+      </td>
+    </ng-container>
+
+    <tr mat-header-row *matHeaderRowDef="columns"></tr>
+    <tr mat-row *matRowDef="let row; columns: columns"
+        [class.editing]="row.dto.id === editingId()" [class.locked]="row.locked"
+        (click)="onRowClick(row)"></tr>
+  </table>
+}

@@ -1,0 +1,10 @@
+:host { display: block; }
+table { width: 100%; }
+.empty { text-align: center; padding: 24px 0; color: var(--mat-sys-on-surface-variant); }
+tr.mat-mdc-row { cursor: pointer; }
+tr.mat-mdc-row.locked { cursor: default; }
+tr.mat-mdc-row.editing { background: var(--mat-sys-secondary-container); }
+.amount { text-align: right; font-variant-numeric: tabular-nums; }
+.negative { color: var(--mat-sys-error); }
+.actions { white-space: nowrap; text-align: right; }
+.lock { vertical-align: middle; color: var(--mat-sys-on-surface-variant); }

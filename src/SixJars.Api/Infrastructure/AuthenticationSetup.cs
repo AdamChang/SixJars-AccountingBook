@@ -98,10 +98,10 @@ internal static class AuthenticationSetup
                 ctx.Fail("不在白名單");
             }
         };
-        // 白名單拒絕、使用者在 Google 取消同意等遠端失敗，一律導向說明頁，不讓例外變成 500。
+        // 白名單拒絕、使用者在 Google 取消同意等遠端失敗，一律轉址到前端的 /denied 頁（由 SPA 顯示說明與「重新登入」），不讓例外變成 500。
         o.Events.OnRemoteFailure = ctx =>
         {
-            ctx.Response.Redirect("/auth/denied");
+            ctx.Response.Redirect("/denied");
             ctx.HandleResponse();
             return Task.CompletedTask;
         };

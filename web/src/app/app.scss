@@ -1,0 +1,29 @@
+.progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+}
+
+.app-bar {
+  gap: 8px;
+}
+
+.book-name {
+  font-weight: 500;
+}
+
+.spacer {
+  flex: 1 1 auto;
+}
+
+// 窄螢幕讓 toolbar 內容換行，高度隨內容增長
+@media (max-width: 599px) {
+  .app-bar {
+    flex-wrap: wrap;
+    height: auto;
+    min-height: 56px;
+    padding-block: 8px;
+  }
+}
