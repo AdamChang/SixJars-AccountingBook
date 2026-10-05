@@ -13,6 +13,7 @@
 4. [Migration bundle](#4-migration-bundle)
 5. [Google OAuth client](#5-google-oauth-client)
    - [前端本機開發（`ng serve`）](#前端本機開發ng-serve)
+   - [本機驗證 production build 的登入與 service worker](#本機驗證-production-build-的登入與-service-worker)
 6. [Secret Manager](#6-secret-manager)
 7. [Cloud Run 部署](#7-cloud-run-部署)
 8. [閒置與喚醒：預設不設定 Cloud Scheduler](#8-閒置與喚醒預設不設定-cloud-scheduler)
@@ -105,6 +106,8 @@ docker rm sixjars-check
 ### 2.4 前端與快取標頭
 
 先依 2.5 的步驟啟動 API（容器名稱 `sixjars-api-check`，埠 8080），再檢查：
+
+> 這個容器只用來以 `curl.exe` 檢查伺服器行為，**不能在瀏覽器裡登入**：它沒有 Google 設定（Development 下不註冊 Google scheme，`/auth/login` 會回 500）、資料庫沒跑 migration，而且只走 http，`SecurePolicy=Always` 的登入與 antiforgery cookie 不會成立。用瀏覽器開 `http://localhost:8080/` 會看到前端呼叫 `/api/me` 得到 401、整頁導向 `/auth/login` 後出現 500，這是預期行為。登入與 service worker 的驗證改用第 5 節的[方式 C](#本機驗證-production-build-的登入與-service-worker)。
 
 ```powershell
 # 1. 根路徑與 deep link 都回 index.html（200、text/html）
@@ -269,8 +272,9 @@ $migrator = "Host=<neon-host>;Port=5432;Database=sixjars;Username=sixjars_migrat
 |---|---|---|---|
 | A. 直接用後端 | `https://localhost:5001` | `https://localhost:5001/auth/callback` | 後端除錯、只測 API／`/auth`（本機沒有 `wwwroot`，不會提供前端畫面） |
 | B. 經 `ng serve` | `https://localhost:4300` | `https://localhost:4300/auth/callback` | 前端開發（熱重載）；`/api`、`/auth` 由 proxy 轉給後端 |
+| C. 後端直接提供 production build | `https://localhost:4300` | `https://localhost:4300/auth/callback`（與 B 共用） | 部署前驗證登入與 service worker，見[下方小節](#本機驗證-production-build-的登入與-service-worker) |
 
-兩個 redirect URI 都可以加進同一個 OAuth client。啟動後端（兩種方式都需要）：
+表中是「要用該方式就必須註冊」的 redirect URI，不代表已經註冊；用到哪個方式，先到 OAuth client 確認對應的 URI 在清單裡，否則 Google 會回 `400 redirect_uri_mismatch`（錯誤頁的「要求詳情」會列出後端送出的 `redirect_uri`）。後端依請求的 Host 與 port 組出 `redirect_uri`，所以只要讓後端聽在已註冊的 port 上即可，不必為了本機測試新增 URI。多個 redirect URI 可以加進同一個 OAuth client。啟動後端（每種方式都需要）：
 
 ```powershell
 dotnet dev-certs https --trust
@@ -310,6 +314,37 @@ netsh interface ipv4 show excludedportrange protocol=tcp
 
 - **proxy 不要設 `changeOrigin`**。後端依請求的 Host header 組出 OAuth 的 `redirect_uri`；不改 Host，後端看到的就是 `localhost:4300`，Google 登入完成後的 `/auth/callback` 會回到 4300，再經 proxy 轉給後端，登入 cookie 才會落在前端的 origin。若設了 `changeOrigin: true`，Host 會變成 `localhost:5001`，callback 直接回到 5001，cookie 落在另一個 origin，前端永遠是未登入。
 - **改了 `proxy.conf.json` 必須重啟 `ng serve`**，dev server 不會熱載入 proxy 設定。
+
+### 本機驗證 production build 的登入與 service worker
+
+`ng serve` 是開發模式，不會註冊 service worker；第 2 節的容器又只走 http、無法登入。部署前要在本機確認「service worker 啟用後登入仍正常」，讓後端以 https 直接提供 `ng build` 的輸出（2026-10-06 本機實測通過）：
+
+1. 停掉 `ng serve`（它也佔用 4300）。
+2. 建置前端：
+
+   ```powershell
+   cd web
+   npx ng build
+   cd ..
+   ```
+
+3. 沿用上面的後端環境變數，只改監聽網址，並用 `ASPNETCORE_WEBROOT` 指向 build 輸出（不要把檔案複製進 `src/SixJars.Api/wwwroot`：後端測試依賴該目錄不存在）：
+
+   ```powershell
+   $env:ASPNETCORE_URLS = "https://localhost:4300"
+   $env:ASPNETCORE_WEBROOT = "<repo 路徑>\web\dist\web\browser"
+   dotnet run --project src/SixJars.Api
+   ```
+
+   聽在 4300 是為了讓 `redirect_uri` 成為已註冊的 `https://localhost:4300/auth/callback`。
+
+4. 用 Chrome 開 `https://localhost:4300` 並確認：
+   - 網址列出現「安裝應用程式」。
+   - DevTools → Application → Service Workers 顯示已註冊。
+   - service worker 註冊後重新整理、登出、再登入，都能回到 app（`/auth/callback` 沒有被快取的 `index.html` 攔下）。
+   - 用白名單外的帳號登入，停在 `/denied` 並看到說明文字。
+
+5. 測完回到 `ng serve` 開發前，在 DevTools → Application → Service Workers 按 **Unregister**（或 Storage → Clear site data）。service worker 的範圍是「網址＋port」，留著它可能讓 4300 繼續顯示舊的 production 畫面。也記得清掉 `ASPNETCORE_WEBROOT`，並把 `ASPNETCORE_URLS` 改回 `https://localhost:5001`。
 
 ---
 
