@@ -2860,3 +2860,33 @@ test('settings_reorders_account_with_up_button', async ({ page }) => {
 | J12 | v1 測試把帳戶清單第一筆移到最後 | 模擬 v1「資料庫任意順序」；這樣實作前就會失敗，不會碰巧通過。拿掉 `WithoutSortOrder` 分支時確實會失敗 |
 | J12 | `BackupExportTests` 除了第 98 行，第 97、99 行、測試名稱（改為 `Backup_format_version_is_2`）與註解也改成 2 | 計畫只列第 98 行 |
 
+### 前端 checkpoint（2026-10-06，J13–J19）
+
+**結果**：`npx ng test` **232 passed（28 個檔案）**；`npx playwright test` **5 passed**；`npx ng build` 成功、無 budget warning，`settings-page` 是獨立 lazy chunk（117 kB／傳輸約 27 kB）。後端未再變動，`dotnet test` 仍為 426、失敗 0。每個 Task 都先確認失敗理由，並至少做一次變異檢查。
+
+| Task | 測試數 | 預測 |
+|---|---|---|
+| J13 | 200 | 199 |
+| J14 | 207 | 204 |
+| J15 | 212 | 208 |
+| J16 | 219 | 214 |
+| J17 | 225 | 218 |
+| J18 | 232 | 223 |
+| J19 | Playwright 5 | 5 |
+
+**與計畫不同的地方**
+
+| Task | 偏差 | 理由 |
+|---|---|---|
+| J13 | 測試加進既有的 `describe('BookApi')`，不另開 describe；多一個 `update_planning_fund_and_category…` 測試 | 沿用既有 TestBed 設定；補齊兩個 update 方法的涵蓋 |
+| J13 | 實際只需改兩個 fixture（`book-fixture.ts`、`transaction-rules.spec.ts`），另外手動補 `e2e/fixtures.ts` | 其他列出的檔案用空陣列，編譯器沒報錯；e2e fixture 沒有型別，缺欄位時 `archivedAt` 為 `undefined`，J14 的 `!== null` 判斷會把它當成已封存 |
+| J14 | 多兩個測試：`keep_ids_are_the_settings_used_by_the_editing_transaction`、form 的 `hides_archived_planning_fund` | 後者涵蓋 template 從 `book().planningFunds` 改成 `fundChoices()`；計畫沒有測到 |
+| J14 | `keep` 直接由 `editing` input 計算 | `editing` 是 input signal，effect 裡呼叫 `loadTransaction` → `applyKindRule` 時已是新值，計畫提醒的順序陷阱不存在；變異檢查（`applyKindRule` 改用空集合）確認測試會抓到 |
+| J15 | `ACCOUNT_TYPE_LABELS` 不與 `summary.page.ts` 共用；多 `fund_group_has_no_detail` 測試 | `summary.page.ts` 的是「有順序的分組清單」，用途不同 |
+| J16 | 多 `drop_in_place_emits_nothing` 測試；`drop_uses_same_path` 也斷言畫面順序 | 補足邊界 |
+| J17 | 新對話框用 `matButton`（同 `confirm-dialog`）；多 `cash_flag_only_shows_for_cash_type`、`sub_category_has_no_nature`；修改帳戶的 result 為 `{ name, countsAsAvailableCash, nature: null }` | 專案兩種寫法都有，新元件跟最近的範例；`SettingList` 照計畫用 `mat-button`，Material 22 仍支援 |
+| J18 | `run()` 另外處理 `validation`（顯示第一則訊息）；多 `remove_asks_for_confirmation_then_deletes`、`edit_expense_main_category_puts_name_and_nature` 測試；以 `ng-template` 共用每組的標題、新增按鈕與清單 | 後端 400（例如名稱超過 100 字）原本會沒有任何回饋；`onRemove`、`onEdit` 原本沒有測試 |
+| J18 | spec 的 `openTab` 等待新分頁內容出現（`vi.waitFor`） | mat-tab 切換有轉場，內容在轉場結束後才掛上 DOM；不為了測試關掉正式畫面的動畫 |
+| J18 | **修改 `app.spec.ts`** 的導覽連結清單，加上 `/books/b1/settings` | 計畫漏列；該測試比對完整的連結清單 |
+| J19 | export `e2e/fixtures.ts` 的 `BOOK`，測試以 `options.book` 換成兩個帳戶；斷言完整 body 與 `x-xsrf-token` 為 `e2e-token`；tab locator 加 `exact: true` | fixture 只有一個帳戶，計畫的「第 2 列」不存在；「帳戶」會子字串比對到「財務規劃帳戶」 |
+
