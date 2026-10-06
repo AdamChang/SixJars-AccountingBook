@@ -3,7 +3,7 @@ import { Page, Route } from '@playwright/test';
 // e2e 是獨立的 TS program，不引用 app 程式碼；DTO 只複製必要的欄位
 export const BOOK_ID = 'b1';
 
-const BOOK = {
+export const BOOK = {
   id: BOOK_ID,
   name: '我的帳本',
   openingDate: '2026-01-01',
