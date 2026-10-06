@@ -13,7 +13,7 @@ import { MatMenuHarness } from '@angular/material/menu/testing';
 import { MatSelectHarness } from '@angular/material/select/testing';
 import { MatCheckboxHarness } from '@angular/material/checkbox/testing';
 import { MatDatepickerInputHarness } from '@angular/material/datepicker/testing';
-import { TransactionDto, TransactionInput } from '../../core/api/dto';
+import { BookDto, TransactionDto, TransactionInput } from '../../core/api/dto';
 import { BrowserLocation } from '../../core/browser-location';
 import { apiErrorInterceptor } from '../../core/errors/error-interceptor';
 import { CONFLICT_MESSAGE, LOCKED_MESSAGE, NOT_FOUND_MESSAGE } from '../../core/errors/messages';
@@ -142,7 +142,7 @@ class FormDriver {
   }
 }
 
-async function setup(): Promise<FormDriver> {
+async function setup(book: BookDto = BOOK): Promise<FormDriver> {
   const notifier = { show: vi.fn() };
   TestBed.configureTestingModule({
     providers: [
@@ -155,7 +155,7 @@ async function setup(): Promise<FormDriver> {
     ],
   });
   const fixture = TestBed.createComponent(TransactionForm);
-  fixture.componentRef.setInput('book', BOOK);
+  fixture.componentRef.setInput('book', book);
   const saved: TransactionDto[] = [];
   const events: string[] = [];
   fixture.componentInstance.saved.subscribe(dto => saved.push(dto));
@@ -550,6 +550,35 @@ describe('TransactionForm', () => {
       expect(await (await form.input('note')).getValue()).toBe('便當');
       // pending 結束，送出鈕恢復可用
       expect(form.el.querySelector<HTMLButtonElement>('button.submit')!.disabled).toBe(false);
+    });
+  });
+
+  describe('archived settings', () => {
+    const archivedAt = '2026-05-01T00:00:00+00:00';
+    const OLD_BANK = {
+      id: 'acc-old', name: '舊銀行', type: 'Bank' as const, openingBalance: 0, countsAsAvailableCash: false, sortOrder: 5, archivedAt,
+    };
+    const OLD_FUND = { id: 'fund-old', name: '舊基金', openingBalance: 0, sortOrder: 1, archivedAt };
+    const WITH_ARCHIVED: BookDto = {
+      ...BOOK, accounts: [...BOOK.accounts, OLD_BANK], planningFunds: [...BOOK.planningFunds, OLD_FUND],
+    };
+
+    it('hides_archived_account_for_new_transaction', async () => {
+      const form = await setup(WITH_ARCHIVED);
+      expect(await form.selectOptions('accountId')).not.toContain('舊銀行');
+    });
+
+    it('keeps_archived_account_of_editing_transaction', async () => {
+      const form = await setup(WITH_ARCHIVED);
+      await form.edit({ ...EDITING, accountId: 'acc-old' });
+      expect(await form.selectedText('accountId')).toBe('舊銀行');
+      expect(await form.selectOptions('accountId')).toContain('舊銀行');
+    });
+
+    it('hides_archived_planning_fund', async () => {
+      const form = await setup(WITH_ARCHIVED);
+      await form.selectKind('入新資金');
+      expect(await form.selectOptions('planningFundId')).toEqual(['旅遊基金']);
     });
   });
 });

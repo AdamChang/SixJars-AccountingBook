@@ -1,7 +1,7 @@
 import { AccountDto, AccountType, CategoryDto, TransactionDto, TransactionKind } from '../../core/api/dto';
 import {
   KIND_RULES, MORE_KINDS, PRIMARY_KINDS, TransactionFormValue, accountsFor, categoryLabel, categoryOptions,
-  categoryKindOf, fromTransaction, isLocked, signedAmount, toTransactionInput,
+  categoryKindOf, fromTransaction, isLocked, keepIdsOf, selectable, signedAmount, toTransactionInput,
 } from './transaction-rules';
 
 const TYPES: AccountType[] = ['Cash', 'Bank', 'CreditCard', 'EWallet', 'Loan'];
@@ -226,5 +226,45 @@ describe('isLocked', () => {
     ['2026-02-01', '2026-01-31', false], ['2026-01-01', null, false],
   ] as [string, string | null, boolean][])('%s vs lockDate %s → %s', (date, lock, expected) => {
     expect(isLocked(date, lock)).toBe(expected);
+  });
+});
+
+describe('archived settings', () => {
+  const archived = '2026-05-01T00:00:00+00:00';
+  const accounts: AccountDto[] = [
+    { id: 'a1', name: '現金', type: 'Cash', openingBalance: 0, countsAsAvailableCash: true, sortOrder: 0, archivedAt: null },
+    { id: 'a2', name: '舊現金', type: 'Cash', openingBalance: 0, countsAsAvailableCash: true, sortOrder: 1, archivedAt: archived },
+  ];
+  const categories: CategoryDto[] = [
+    { id: 'm1', name: '飲食', kind: 'Expense', nature: 'Floating', parentId: null, sortOrder: 0, archivedAt: archived },
+    { id: 's1', name: '午餐', kind: 'Expense', nature: 'Floating', parentId: 'm1', sortOrder: 0, archivedAt: null },
+    { id: 'm2', name: '交通', kind: 'Expense', nature: 'Floating', parentId: null, sortOrder: 1, archivedAt: null },
+    { id: 's2', name: '舊車', kind: 'Expense', nature: 'Floating', parentId: 'm2', sortOrder: 0, archivedAt: archived },
+  ];
+
+  it('accounts_for_excludes_archived_unless_kept', () => {
+    const slot = KIND_RULES.Expense.account;
+    expect(accountsFor(accounts, slot).map(a => a.id)).toEqual(['a1']);
+    expect(accountsFor(accounts, slot, new Set(['a2'])).map(a => a.id)).toEqual(['a1', 'a2']);
+  });
+
+  it('category_options_exclude_archived_self_or_parent_unless_kept', () => {
+    expect(categoryOptions(categories, 'Expense').map(o => o.id)).toEqual(['m2']);
+    expect(categoryOptions(categories, 'Expense', new Set(['s1'])).map(o => o.id)).toEqual(['s1', 'm2']);
+  });
+
+  it('selectable_funds_exclude_archived_unless_kept', () => {
+    const funds = [
+      { id: 'f1', name: '旅遊', openingBalance: 0, sortOrder: 0, archivedAt: null },
+      { id: 'f2', name: '舊基金', openingBalance: 0, sortOrder: 1, archivedAt: archived },
+    ];
+    expect(selectable(funds).map(f => f.id)).toEqual(['f1']);
+    expect(selectable(funds, new Set(['f2'])).map(f => f.id)).toEqual(['f1', 'f2']);
+  });
+
+  it('keep_ids_are_the_settings_used_by_the_editing_transaction', () => {
+    expect(keepIdsOf(null).size).toBe(0);
+    const editing = { accountId: 'a2', counterAccountId: null, categoryId: 's1', planningFundId: 'f2' } as TransactionDto;
+    expect([...keepIdsOf(editing)].sort()).toEqual(['a2', 'f2', 's1']);
   });
 });
