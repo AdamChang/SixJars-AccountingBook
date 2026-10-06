@@ -2820,3 +2820,43 @@ test('settings_reorders_account_with_up_button', async ({ page }) => {
 ## 執行結果與偏差
 
 （每個 checkpoint 結束後以 `docs(plans):` 回寫：測試數字、與計畫不同的型別或簽章、為什麼改。）
+
+### 後端 checkpoint（2026-10-06，J1–J12）
+
+**結果**：`dotnet build` 0 warning；`dotnet test` **426**，失敗 0，略過 0（`reference/` 存在，`SixJars.AcceptanceTests` 有實際執行且全綠）。比預測的 423 多 3 個，都是額外加的測試（見下表）。每個 Task 都先確認測試以正確理由失敗，並至少做一次變異檢查（拿掉關鍵條件，確認有測試變紅後還原）。
+
+| Task | 測試數 | 預測 |
+|---|---|---|
+| J1 | Domain 81（整套因 PendingModelChangesWarning 不跑） | — |
+| J6 | 379 | 379 |
+| J2 | 384 | 384 |
+| J3 | 388 | 388 |
+| J4 | 395 | 395 |
+| J5 | 402 | 402 |
+| J7 | 404 | 404 |
+| J8 | 409 | 409 |
+| J9 | 413 | 413 |
+| J10 | 419 | 417 |
+| J11 | 424 | 422 |
+| J12 | 426 | 423 |
+
+**與計畫不同的地方**
+
+| Task | 偏差 | 理由 |
+|---|---|---|
+| J1 | `MoveTo` 延到 J4、測試的 `At` 欄位延到 J3 才加 | 最小實作；J1 用不到 |
+| J6 | round-trip 測試先以 `Sort_order_round_trips` 只驗新增順序，J3、J4 時補上封存與排序斷言並改回計畫的名稱；回填測試改用 `GetAccount(id).SortOrder` 逐筆比對，不用 `Order(...)` helper | 計畫本來就要求分段補；逐筆比對較直接 |
+| J3 | 餘額訊息格式改成 `{balance:#,0.####}`，不用 `N0` | `N0` 會把 12.5 四捨五入成 13，訊息會說錯餘額 |
+| J4 | theory 的 `duplicate`、`foreign` 改成與組同樣筆數（`[a, a]`、`[a, new]`）；移除 `Reorder` 裡多餘的 `Distinct` 檢查 | 計畫的資料筆數都與組不同，只靠 `Count` 就擋下，拿掉 `SetEquals` 也不會有測試變紅（變異檢查發現）。筆數相同且集合相等即代表無重複，所以 `Distinct` 多餘 |
+| J7 | 測試的 scope 用 `SixJarsDbContext`（同 `ApiSeed`），不用 `ISixJarsDbContext`；**另外修改 `SummaryEndpointTests.ExpectedAsync`**，預期值也依 SortOrder 排列 | 該測試以 `WithStrictOrdering` 比對，原本是兩邊碰巧讀到相同的資料庫順序；API 改依 SortOrder 後預期值必須用同樣的規則。被測行為沒有放寬 |
+| J7 | 先只加 DTO 欄位、確認排序斷言失敗，再加排序 | 確認排序斷言本身會失敗；實際看到 owned 集合讀回的順序確實會變 |
+| J8 | 路由不存在時回 **404**，不是計畫寫的 405；稽核查詢用 `/audit?entityId=`（沒有 `entityType` 參數），改以 before／after 的 `name` 屬性斷言；`Change_nature` 多斷言 `HaveCount(2)` | `/accounts/{id}` 與既有 POST `/accounts` 是不同路徑；`AuditEndpoints` 只接受 `entityId`；`OnlyContain` 對空集合會通過 |
+| J8 | 強型別 Id 的 `ids.Contains(p.CategoryId)` **可以翻譯**，不需要替代寫法 | 附錄的未查證項目，已由 `Category_with_deleted_planned_expense_cannot_become_floating` 證實 |
+| J9 | `Archive_main_category_and_planning_fund` 多斷言 `code` 為 `non-zero-balance` | 補足斷言 |
+| J10 | `CategoryKind` 的驗證加 `.OverridePropertyName("Kind")`；子分類時用 `CategoryKind.GetValueOrDefault()`；多兩個測試：`Reorder_main_categories_of_a_kind`、`Reorder_records_audit_only_for_moved_items` | 錯誤欄位名稱要對應 body 的 `kind`（`ToBodyFieldName` 依屬性名稱轉 camelCase）；排序子分類時 body 不帶 kind。曾誤用 `!.Value` 造成 500，已由測試抓到並修正 |
+| J11 | `Main_category_with_subs…` 多斷言 `code` 為 `in-use` | 補足斷言 |
+| J12 | (h) 改用帳戶「舊存摺」，並另外封存子分類「計程車」 | 計畫寫的「郵局」已由 `FillAsync` 建立（期初 1234.5），重複名稱會失敗；加上分類封存讓 `ArchiveCategory` 的還原也被涵蓋 |
+| J12 | `Corrupt("format-version")` 改成 `CurrentFormatVersion + 1`；新增損毀情境 `sort-order-gap` | 原本寫死 `FormatVersion = 2`，升版後會變成合法版本（計畫漏列）；`sort-order-gap` 證明 v2 有比對 SortOrder |
+| J12 | v1 測試把帳戶清單第一筆移到最後 | 模擬 v1「資料庫任意順序」；這樣實作前就會失敗，不會碰巧通過。拿掉 `WithoutSortOrder` 分支時確實會失敗 |
+| J12 | `BackupExportTests` 除了第 98 行，第 97、99 行、測試名稱（改為 `Backup_format_version_is_2`）與註解也改成 2 | 計畫只列第 98 行 |
+
