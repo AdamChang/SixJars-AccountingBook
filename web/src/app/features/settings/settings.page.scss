@@ -1,0 +1,8 @@
+:host { display: block; max-width: 960px; margin: 0 auto; padding: 0 16px 24px; }
+.group { margin-top: 16px; }
+header { display: flex; align-items: center; justify-content: space-between; }
+h3 { margin: 16px 0 4px; }
+.hint { color: var(--mat-sys-on-surface-variant); font-size: 0.875rem; }
+.actions { display: flex; gap: 8px; }
+.downloads { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.downloads h3 { flex-basis: 100%; }

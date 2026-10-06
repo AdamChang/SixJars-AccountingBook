@@ -7,6 +7,8 @@
       <span class="book-name">{{ book.name }}</span>
       <a mat-button [routerLink]="['/books', book.id, 'transactions']" queryParamsHandling="preserve">記帳</a>
       <a mat-button [routerLink]="['/books', book.id, 'summary']" queryParamsHandling="preserve">總覽</a>
+      <!-- 月份參數對設定頁沒有意義，不保留 query params -->
+      <a mat-button [routerLink]="['/books', book.id, 'settings']">設定</a>
     }
     <span class="spacer"></span>
     <span class="email">{{ me.email }}</span>

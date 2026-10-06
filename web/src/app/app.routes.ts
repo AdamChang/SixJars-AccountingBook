@@ -19,6 +19,10 @@ export const routes: Routes = [
         path: 'summary',
         loadComponent: () => import('./features/summary/summary.page').then((m) => m.SummaryPage),
       },
+      {
+        path: 'settings',
+        loadComponent: () => import('./features/settings/settings.page').then((m) => m.SettingsPage),
+      },
       { path: '', pathMatch: 'full', redirectTo: 'transactions' },
     ],
   },
