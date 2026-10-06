@@ -157,6 +157,31 @@ public sealed class Book
         account.SetCountsAsAvailableCash(countsAsAvailableCash);
     }
 
+    /// <param name="balance">由呼叫端以分錄算出的目前餘額（Domain 不查詢資料庫）。</param>
+    public void ArchiveAccount(AccountId id, decimal balance, DateTimeOffset at)
+    {
+        var account = GetAccount(id);
+        EnsureZeroBalance(account.Name, balance);
+        account.Archive(at);
+    }
+
+    public void UnarchiveAccount(AccountId id) => GetAccount(id).Unarchive();
+
+    /// <param name="balance">由呼叫端以分錄算出的目前餘額（Domain 不查詢資料庫）。</param>
+    public void ArchivePlanningFund(PlanningFundId id, decimal balance, DateTimeOffset at)
+    {
+        var fund = GetPlanningFund(id);
+        EnsureZeroBalance(fund.Name, balance);
+        fund.Archive(at);
+    }
+
+    public void UnarchivePlanningFund(PlanningFundId id) => GetPlanningFund(id).Unarchive();
+
+    /// <summary>封存主分類不改變子分類的狀態；子分類是否可選 = 自己與主分類都未封存（spec §3.1）。</summary>
+    public void ArchiveCategory(CategoryId id, DateTimeOffset at) => GetCategory(id).Archive(at);
+
+    public void UnarchiveCategory(CategoryId id) => GetCategory(id).Unarchive();
+
     public Account GetAccount(AccountId id) =>
         _accounts.Find(a => a.Id == id) ?? throw new DomainException($"找不到帳戶 {id.Value}。");
 
@@ -201,6 +226,14 @@ public sealed class Book
             NextSortOrder(MainCategoriesOf(kind), c => c.SortOrder));
         _categories.Add(category);
         return category;
+    }
+
+    private static void EnsureZeroBalance(string name, decimal balance)
+    {
+        if (balance != 0m)
+        {
+            throw new DomainException($"「{name}」的餘額為 {balance:#,0.####}，餘額為 0 才能封存。", DomainException.NonZeroBalanceCode);
+        }
     }
 
     private static string RequireName(string name) =>

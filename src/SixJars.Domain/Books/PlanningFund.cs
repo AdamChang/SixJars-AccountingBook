@@ -24,4 +24,9 @@ public sealed class PlanningFund
     public bool IsArchived => ArchivedAt is not null;
 
     internal void Rename(string name) => Name = name;
+
+    /// <summary>重複封存時保留第一次的時間。</summary>
+    internal void Archive(DateTimeOffset at) => ArchivedAt ??= at;
+
+    internal void Unarchive() => ArchivedAt = null;
 }

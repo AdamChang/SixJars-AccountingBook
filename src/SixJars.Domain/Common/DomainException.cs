@@ -9,5 +9,8 @@ public sealed class DomainException(string message, string code = DomainExceptio
     /// <summary>異動落在鎖帳日（含）之前。</summary>
     public const string LockedCode = "locked";
 
+    /// <summary>帳戶或財務規劃帳戶的餘額不為 0，不能封存。</summary>
+    public const string NonZeroBalanceCode = "non-zero-balance";
+
     public string Code { get; } = code;
 }

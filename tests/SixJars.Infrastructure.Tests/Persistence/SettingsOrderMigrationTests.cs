@@ -60,13 +60,15 @@ public class SettingsOrderMigrationTests(PostgresFixture postgres)
     }
 
     [Fact]
-    public async Task Sort_order_round_trips()
+    public async Task Sort_order_and_archive_round_trip()
     {
         var createContext = await postgres.CreateDatabaseAsync(Ct);
+        var archivedAt = new DateTimeOffset(2026, 10, 6, 1, 0, 0, TimeSpan.Zero);
         var book = new Book("帳本", new DateOnly(2025, 12, 30));
         var a = book.AddAccount("A", AccountType.Cash);
         var b = book.AddAccount("B", AccountType.Bank);
         var fund = book.AddPlanningFund("旅遊基金");
+        book.ArchiveAccount(a.Id, balance: 0m, archivedAt);
         await using (var db = createContext())
         {
             db.Books.Add(book);
@@ -78,6 +80,7 @@ public class SettingsOrderMigrationTests(PostgresFixture postgres)
         loaded.GetAccount(a.Id).SortOrder.Should().Be(0);
         loaded.GetAccount(b.Id).SortOrder.Should().Be(1);
         loaded.GetPlanningFund(fund.Id).SortOrder.Should().Be(0);
-        loaded.GetAccount(a.Id).ArchivedAt.Should().BeNull();
+        loaded.GetAccount(a.Id).ArchivedAt.Should().Be(archivedAt);
+        loaded.GetAccount(b.Id).ArchivedAt.Should().BeNull();
     }
 }

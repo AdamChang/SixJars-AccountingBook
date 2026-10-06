@@ -7,6 +7,7 @@ namespace SixJars.Domain.Tests.Books;
 
 public class BookSettingsTests
 {
+    private static readonly DateTimeOffset At = new(2026, 10, 6, 1, 0, 0, TimeSpan.Zero);
     private readonly Book _book = new("測試帳本", new DateOnly(2025, 12, 30));
 
     [Fact]
@@ -102,5 +103,56 @@ public class BookSettingsTests
 
         var act = () => _book.SetCountsAsAvailableCash(bank.Id, true);
         act.Should().Throw<DomainException>();
+    }
+
+    [Fact]
+    public void Account_with_balance_cannot_be_archived()
+    {
+        var bank = _book.AddAccount("銀行", AccountType.Bank);
+
+        var act = () => _book.ArchiveAccount(bank.Id, balance: 12.5m, At);
+        act.Should().Throw<DomainException>().Which.Code.Should().Be(DomainException.NonZeroBalanceCode);
+        bank.ArchivedAt.Should().BeNull();
+    }
+
+    [Fact]
+    public void Archive_and_unarchive_account()
+    {
+        var bank = _book.AddAccount("銀行", AccountType.Bank);
+
+        _book.ArchiveAccount(bank.Id, balance: 0m, At);
+        _book.ArchiveAccount(bank.Id, balance: 0m, At.AddDays(1));   // 重複封存保留第一次的時間
+        bank.ArchivedAt.Should().Be(At);
+
+        _book.UnarchiveAccount(bank.Id);
+        bank.ArchivedAt.Should().BeNull();
+    }
+
+    [Fact]
+    public void Planning_fund_with_balance_cannot_be_archived()
+    {
+        var fund = _book.AddPlanningFund("旅遊基金");
+
+        var act = () => _book.ArchivePlanningFund(fund.Id, balance: -1m, At);
+        act.Should().Throw<DomainException>().Which.Code.Should().Be(DomainException.NonZeroBalanceCode);
+
+        _book.ArchivePlanningFund(fund.Id, balance: 0m, At);
+        fund.ArchivedAt.Should().Be(At);
+        _book.UnarchivePlanningFund(fund.Id);
+        fund.ArchivedAt.Should().BeNull();
+    }
+
+    [Fact]
+    public void Archiving_main_category_leaves_sub_categories_untouched()
+    {
+        var food = _book.AddExpenseCategory("飲食", ExpenseNature.Floating);
+        var lunch = _book.AddSubCategory(food.Id, "午餐");
+
+        _book.ArchiveCategory(food.Id, At);
+
+        food.ArchivedAt.Should().Be(At);
+        lunch.ArchivedAt.Should().BeNull();
+        _book.UnarchiveCategory(food.Id);
+        food.IsArchived.Should().BeFalse();
     }
 }
