@@ -43,7 +43,8 @@ public sealed class Book
             throw new DomainException($"帳戶名稱「{name}」已存在。");
         }
 
-        var account = new Account(id ?? AccountId.New(), name, type, openingBalance, type == AccountType.Cash && countsAsAvailableCash);
+        var account = new Account(id ?? AccountId.New(), name, type, openingBalance, type == AccountType.Cash && countsAsAvailableCash,
+            NextSortOrder(_accounts, a => a.SortOrder));
         _accounts.Add(account);
         return account;
     }
@@ -56,7 +57,7 @@ public sealed class Book
             throw new DomainException($"財務規劃帳戶名稱「{name}」已存在。");
         }
 
-        var fund = new PlanningFund(id ?? PlanningFundId.New(), name, openingBalance);
+        var fund = new PlanningFund(id ?? PlanningFundId.New(), name, openingBalance, NextSortOrder(_planningFunds, f => f.SortOrder));
         _planningFunds.Add(fund);
         return fund;
     }
@@ -80,7 +81,8 @@ public sealed class Book
             throw new DomainException($"主分類「{parent.Name}」底下已有子分類「{name}」。");
         }
 
-        var category = new Category(id ?? CategoryId.New(), name, parent.Kind, parent.Nature, parentId);
+        var category = new Category(id ?? CategoryId.New(), name, parent.Kind, parent.Nature, parentId,
+            NextSortOrder(SubCategoriesOf(parentId), c => c.SortOrder));
         _categories.Add(category);
         return category;
     }
@@ -124,6 +126,14 @@ public sealed class Book
         return _categories.Find(c => c.ParentId == main.Id && c.Name == subName);
     }
 
+    // 排序的組：帳戶一組、財務規劃帳戶一組、同一種類的主分類一組、同一個主分類的子分類一組（spec §3.1）。
+    private IEnumerable<Category> MainCategoriesOf(CategoryKind kind) => _categories.Where(c => c.IsMain && c.Kind == kind);
+
+    private IEnumerable<Category> SubCategoriesOf(CategoryId parentId) => _categories.Where(c => c.ParentId == parentId);
+
+    private static int NextSortOrder<T>(IEnumerable<T> group, Func<T, int> sortOrderOf) =>
+        group.Select(sortOrderOf).DefaultIfEmpty(-1).Max() + 1;
+
     private Category AddMainCategory(string name, CategoryKind kind, ExpenseNature? nature, CategoryId? id)
     {
         name = RequireName(name);
@@ -132,7 +142,8 @@ public sealed class Book
             throw new DomainException($"主分類名稱「{name}」已存在。");
         }
 
-        var category = new Category(id ?? CategoryId.New(), name, kind, nature, parentId: null);
+        var category = new Category(id ?? CategoryId.New(), name, kind, nature, parentId: null,
+            NextSortOrder(MainCategoriesOf(kind), c => c.SortOrder));
         _categories.Add(category);
         return category;
     }
