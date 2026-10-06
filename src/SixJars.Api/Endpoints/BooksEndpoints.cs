@@ -19,6 +19,13 @@ internal static class BooksEndpoints
             Created(bookId, await sender.Send(command with { BookId = bookId }, ct)));
         book.MapPost("/categories", async (Guid bookId, AddCategory command, ISender sender, CancellationToken ct) =>
             Created(bookId, await sender.Send(command with { BookId = bookId }, ct)));
+        // 被修改的項目 Id 一律以路由為準。
+        book.MapPut("/accounts/{id:guid}", (Guid bookId, Guid id, UpdateAccount command, ISender sender, CancellationToken ct) =>
+            NoContent(sender.Send(command with { BookId = bookId, AccountId = id }, ct)));
+        book.MapPut("/planning-funds/{id:guid}", (Guid bookId, Guid id, UpdatePlanningFund command, ISender sender, CancellationToken ct) =>
+            NoContent(sender.Send(command with { BookId = bookId, PlanningFundId = id }, ct)));
+        book.MapPut("/categories/{id:guid}", (Guid bookId, Guid id, UpdateCategory command, ISender sender, CancellationToken ct) =>
+            NoContent(sender.Send(command with { BookId = bookId, CategoryId = id }, ct)));
         // lockDate 為 null 時清除鎖帳日。
         book.MapPut("/lock-date", async (Guid bookId, SetLockDateBody body, ISender sender, CancellationToken ct) =>
         {
@@ -29,6 +36,12 @@ internal static class BooksEndpoints
     }
 
     private static IResult Created(Guid bookId, Guid id) => Results.Created($"/api/books/{bookId}", new { id });
+
+    private static async Task<IResult> NoContent(Task command)
+    {
+        await command;
+        return Results.NoContent();
+    }
 }
 
 /// <summary>設定鎖帳日的 body；<see cref="LockDate"/> 為 null 時清除。</summary>

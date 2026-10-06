@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using FluentAssertions;
@@ -46,6 +47,95 @@ public class SettingsMaintenanceEndpointsTests(PostgresFixture postgres)
             Url(book, "/summary?budgetMonth=202602&asOf=2026-02-20"), ApiJson.Options, Ct))!;
 
         summary.Accounts.Select(a => a.Name).Should().Equal("房屋貸款", "悠遊卡", "國泰Combo卡", "國泰世華銀行", "現金");
+    }
+
+    [Fact]
+    public async Task Rename_account_and_change_cash_flag()
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var book = await factory.SeedBookAsync(Ct);
+        var client = await factory.CreateMemberClientAsync();
+        var cash = book.FindAccount("現金")!;
+
+        var response = await client.PutAsJsonAsync(Url(book, $"/accounts/{cash.Id.Value}"),
+            new { name = "零用金", countsAsAvailableCash = false }, ApiJson.Options, Ct);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        var dto = (await client.GetFromJsonAsync<BookDto>(Url(book, ""), ApiJson.Options, Ct))!;
+        dto.Accounts.Should().ContainSingle(a => a.Id == cash.Id.Value && a.Name == "零用金" && !a.CountsAsAvailableCash);
+    }
+
+    [Fact]
+    public async Task Rename_to_existing_name_is_422_and_blank_is_400()
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var book = await factory.SeedBookAsync(Ct);
+        var client = await factory.CreateMemberClientAsync();
+        var cash = book.FindAccount("現金")!.Id.Value;
+
+        var duplicate = await client.PutAsJsonAsync(Url(book, $"/accounts/{cash}"),
+            new { name = "國泰世華銀行", countsAsAvailableCash = true }, ApiJson.Options, Ct);
+        var blank = await client.PutAsJsonAsync(Url(book, $"/planning-funds/{book.PlanningFunds[0].Id.Value}"),
+            new { name = " " }, ApiJson.Options, Ct);
+
+        duplicate.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
+        (await ReadProblemAsync(duplicate)).GetProperty("code").GetString().Should().Be("rule");
+        blank.StatusCode.Should().Be(HttpStatusCode.BadRequest);   // 空白名稱由 validator 擋下
+    }
+
+    [Fact]
+    public async Task Change_nature_of_expense_main_category()
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var book = await factory.SeedBookAsync(Ct);
+        var client = await factory.CreateMemberClientAsync();
+        var food = book.FindCategory("主食")!;
+
+        var response = await client.PutAsJsonAsync(Url(book, $"/categories/{food.Id.Value}"),
+            new { name = "飲食", nature = "Special" }, ApiJson.Options, Ct);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        var dto = (await client.GetFromJsonAsync<BookDto>(Url(book, ""), ApiJson.Options, Ct))!;
+        dto.Categories.Where(c => c.Id == food.Id.Value || c.ParentId == food.Id.Value)
+            .Should().HaveCount(2).And.OnlyContain(c => c.Nature == ExpenseNature.Special).And.Contain(c => c.Name == "飲食");
+    }
+
+    [Fact]
+    public async Task Category_with_deleted_planned_expense_cannot_become_floating()
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var book = await factory.SeedBookAsync(Ct);
+        var client = await factory.CreateMemberClientAsync();
+        // 預定支出掛在子分類「保險費」；刪除後仍算參照（P4 J plan D3、D6）
+        var planned = await PlannedExpensesEndpointsTests.CreateAsync(client, book,
+            PlannedExpensesEndpointsTests.InsuranceInput(book, 202602, -1200m, "保險"));
+        (await client.DeleteAsync(Url(book, $"/planned-expenses/{planned.Id}?version={planned.Version}"), Ct))
+            .StatusCode.Should().Be(HttpStatusCode.NoContent);
+        var fixedMain = book.FindCategory("固定支出")!;
+
+        var response = await client.PutAsJsonAsync(Url(book, $"/categories/{fixedMain.Id.Value}"),
+            new { name = "固定支出", nature = "Floating" }, ApiJson.Options, Ct);
+
+        response.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
+        (await ReadProblemAsync(response)).GetProperty("code").GetString().Should().Be("in-use");
+    }
+
+    [Fact]
+    public async Task Update_writes_audit_entry_with_before_and_after()
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var book = await factory.SeedBookAsync(Ct);
+        var client = await factory.CreateMemberClientAsync();
+        var fund = book.PlanningFunds[0];
+
+        await client.PutAsJsonAsync(Url(book, $"/planning-funds/{fund.Id.Value}"), new { name = "自由基金" }, ApiJson.Options, Ct);
+
+        var history = await client.GetFromJsonAsync<JsonElement>(Url(book, $"/audit?entityId={fund.Id.Value}"), ApiJson.Options, Ct);
+        var entry = history.EnumerateArray().Should().ContainSingle().Subject;
+        entry.GetProperty("action").GetString().Should().Be("Update");
+        entry.GetProperty("entityType").GetString().Should().Be("PlanningFund");
+        entry.GetProperty("before").GetProperty("name").GetString().Should().Be("財務自由帳戶");
+        entry.GetProperty("after").GetProperty("name").GetString().Should().Be("自由基金");
     }
 
     internal static string Url(Book book, string path) => $"/api/books/{book.Id.Value}{path}";
