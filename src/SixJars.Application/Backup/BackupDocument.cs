@@ -8,7 +8,7 @@ namespace SixJars.Application.Backup;
 
 /// <summary>
 /// 一本帳的完整備份（CONTEXT.md「備份」）：帳本設定、交易、預定支出、成員與稽核記錄，<b>包含已軟刪除的資料</b>。
-/// 格式以 <see cref="FormatVersion"/> 標示；還原（T42）只接受 <see cref="CurrentFormatVersion"/>。
+/// 格式以 <see cref="FormatVersion"/> 標示；v2 起設定項目帶有 SortOrder 與 ArchivedAt，還原也接受 v1（P4 J plan D8）。
 /// 內容直接重用 API 的 DTO；DTO 裡的 Version（xmin）只反映匯出當下的資料庫，還原後會不同，不具意義。
 /// </summary>
 public sealed record BackupDocument(
@@ -20,7 +20,7 @@ public sealed record BackupDocument(
     IReadOnlyList<BackupMember> Members,
     IReadOnlyList<AuditEntryDto> AuditEntries)
 {
-    public const int CurrentFormatVersion = 1;
+    public const int CurrentFormatVersion = 2;
 }
 
 /// <param name="DeletedAt">軟刪除的時間；null 表示未刪除。</param>
