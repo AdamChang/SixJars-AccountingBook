@@ -10,13 +10,24 @@ export type ExpenseNature = 'Floating' | 'Fixed' | 'Loan' | 'Special';
 export interface BookSummaryDto { id: string; name: string }
 export interface MeDto { subject: string; email: string | null; books: BookSummaryDto[] }
 
+// sortOrder：組內順序（0 起算且連續）；archivedAt：封存時間，null 表示未封存
 export interface AccountDto {
   id: string; name: string; type: AccountType; openingBalance: number; countsAsAvailableCash: boolean;
+  sortOrder: number; archivedAt: string | null;
 }
-export interface PlanningFundDto { id: string; name: string; openingBalance: number }
+export interface PlanningFundDto { id: string; name: string; openingBalance: number; sortOrder: number; archivedAt: string | null }
 export interface CategoryDto {
   id: string; name: string; kind: CategoryKind; nature: ExpenseNature | null; parentId: string | null;
+  sortOrder: number; archivedAt: string | null;
 }
+
+// 設定的路徑片段，與後端 BooksEndpoints 的 MapSettingActions 一致
+export type SettingPath = 'accounts' | 'planning-funds' | 'categories';
+// 一次送出整組的新順序（含已封存）；kind、parentId 只用於分類
+export interface ReorderBody { kind?: CategoryKind | null; parentId?: string | null; ids: string[] }
+export interface AddAccountBody { name: string; type: AccountType; openingBalance: number; countsAsAvailableCash: boolean }
+export interface AddPlanningFundBody { name: string; openingBalance: number }
+export interface AddCategoryBody { name: string; kind: CategoryKind; nature: ExpenseNature | null; parentId: string | null }
 export interface BookDto {
   id: string; name: string; openingDate: string; lockDate: string | null;
   accounts: AccountDto[]; planningFunds: PlanningFundDto[]; categories: CategoryDto[];

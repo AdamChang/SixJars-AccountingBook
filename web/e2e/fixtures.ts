@@ -8,12 +8,12 @@ const BOOK = {
   name: '我的帳本',
   openingDate: '2026-01-01',
   lockDate: null,
-  accounts: [{ id: 'acc-cash', name: '現金', type: 'Cash', openingBalance: 0, countsAsAvailableCash: true }],
+  accounts: [{ id: 'acc-cash', name: '現金', type: 'Cash', openingBalance: 0, countsAsAvailableCash: true, sortOrder: 0, archivedAt: null }],
   planningFunds: [],
   categories: [
-    { id: 'cat-food', name: '飲食', kind: 'Expense', nature: 'Floating', parentId: null },
-    { id: 'cat-breakfast', name: '早餐', kind: 'Expense', nature: 'Floating', parentId: 'cat-food' },
-    { id: 'cat-salary', name: '薪資', kind: 'Income', nature: null, parentId: null },
+    { id: 'cat-food', name: '飲食', kind: 'Expense', nature: 'Floating', parentId: null, sortOrder: 0, archivedAt: null },
+    { id: 'cat-breakfast', name: '早餐', kind: 'Expense', nature: 'Floating', parentId: 'cat-food', sortOrder: 0, archivedAt: null },
+    { id: 'cat-salary', name: '薪資', kind: 'Income', nature: null, parentId: null, sortOrder: 0, archivedAt: null },
   ],
 };
 

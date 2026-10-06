@@ -5,8 +5,8 @@ import {
 } from './transaction-rules';
 
 const TYPES: AccountType[] = ['Cash', 'Bank', 'CreditCard', 'EWallet', 'Loan'];
-const sampleAccounts: AccountDto[] = TYPES.map(type => ({
-  id: `a-${type}`, name: type, type, openingBalance: 0, countsAsAvailableCash: true,
+const sampleAccounts: AccountDto[] = TYPES.map((type, sortOrder) => ({
+  id: `a-${type}`, name: type, type, openingBalance: 0, countsAsAvailableCash: true, sortOrder, archivedAt: null,
 }));
 
 interface Expectation {
@@ -186,10 +186,10 @@ describe('fromTransaction', () => {
 
 describe('categoryOptions', () => {
   const categories: CategoryDto[] = [
-    { id: 'c1', name: '食', kind: 'Expense', nature: 'Floating', parentId: null },
-    { id: 'c2', name: '早餐', kind: 'Expense', nature: 'Floating', parentId: 'c1' },
-    { id: 'c3', name: '薪資', kind: 'Income', nature: null, parentId: null },
-    { id: 'c4', name: '交通', kind: 'Expense', nature: 'Floating', parentId: null },
+    { id: 'c1', name: '食', kind: 'Expense', nature: 'Floating', parentId: null, sortOrder: 0, archivedAt: null },
+    { id: 'c2', name: '早餐', kind: 'Expense', nature: 'Floating', parentId: 'c1', sortOrder: 0, archivedAt: null },
+    { id: 'c3', name: '薪資', kind: 'Income', nature: null, parentId: null, sortOrder: 0, archivedAt: null },
+    { id: 'c4', name: '交通', kind: 'Expense', nature: 'Floating', parentId: null, sortOrder: 1, archivedAt: null },
   ];
 
   it('主分類為「主」、子分類為「主 / 子」，維持原順序', () => {
@@ -205,8 +205,8 @@ describe('categoryOptions', () => {
 
 describe('categoryLabel', () => {
   const categories: CategoryDto[] = [
-    { id: 'c1', name: '食', kind: 'Expense', nature: 'Floating', parentId: null },
-    { id: 'c2', name: '早餐', kind: 'Expense', nature: 'Floating', parentId: 'c1' },
+    { id: 'c1', name: '食', kind: 'Expense', nature: 'Floating', parentId: null, sortOrder: 0, archivedAt: null },
+    { id: 'c2', name: '早餐', kind: 'Expense', nature: 'Floating', parentId: 'c1', sortOrder: 0, archivedAt: null },
   ];
 
   it('主分類回傳名稱、子分類回傳「主 / 子」', () => {

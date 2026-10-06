@@ -33,4 +33,10 @@ export class CurrentBook {
     this.cached = { bookId, promise };
     return promise;
   }
+
+  // 設定變更後呼叫：丟掉快取重新取得，讓記帳頁的選項同步更新；沿用 load() 的競態保護
+  reload(bookId: string): Promise<BookDto> {
+    this.cached = undefined;
+    return this.load(bookId);
+  }
 }

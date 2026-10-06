@@ -63,4 +63,15 @@ describe('CurrentBook', () => {
     // 第三次走快取，不再發請求（afterEach 的 verify 會檢查）
     expect((await current.load('b1')).id).toBe('b1');
   });
+
+  it('current_book_reload_refetches_same_book', async () => {
+    const first = current.load('b1');
+    httpTesting.expectOne('/api/books/b1').flush(book('b1'));
+    await first;
+
+    const reloaded = current.reload('b1');
+    httpTesting.expectOne('/api/books/b1').flush({ ...book('b1'), name: '改名後' });
+    expect((await reloaded).name).toBe('改名後');
+    expect(current.book()?.name).toBe('改名後');
+  });
 });
