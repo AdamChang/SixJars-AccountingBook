@@ -36,5 +36,7 @@ public sealed class Account
 
     internal void Unarchive() => ArchivedAt = null;
 
+    internal void MoveTo(int sortOrder) => SortOrder = sortOrder;
+
     internal void SetCountsAsAvailableCash(bool value) => CountsAsAvailableCash = value;
 }

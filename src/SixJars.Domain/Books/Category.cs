@@ -35,4 +35,6 @@ public sealed class Category
     internal void Archive(DateTimeOffset at) => ArchivedAt ??= at;
 
     internal void Unarchive() => ArchivedAt = null;
+
+    internal void MoveTo(int sortOrder) => SortOrder = sortOrder;
 }

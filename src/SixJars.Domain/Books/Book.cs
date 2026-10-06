@@ -182,6 +182,21 @@ public sealed class Book
 
     public void UnarchiveCategory(CategoryId id) => GetCategory(id).Unarchive();
 
+    // 排序清單必須恰好等於組內目前的成員（含已封存）：不能多、不能少、不能重複，擋下過時畫面造成的漏項。
+
+    public void ReorderAccounts(IReadOnlyList<AccountId> ids) =>
+        Reorder(_accounts, ids, a => a.Id, (a, order) => a.MoveTo(order), "帳戶");
+
+    public void ReorderPlanningFunds(IReadOnlyList<PlanningFundId> ids) =>
+        Reorder(_planningFunds, ids, f => f.Id, (f, order) => f.MoveTo(order), "財務規劃帳戶");
+
+    /// <summary><paramref name="parentId"/> 有值時排序該主分類的子分類；否則排序 <paramref name="kind"/> 的主分類。</summary>
+    public void ReorderCategories(CategoryKind kind, CategoryId? parentId, IReadOnlyList<CategoryId> ids)
+    {
+        var group = parentId is { } parent ? SubCategoriesOf(GetCategory(parent).Id).ToList() : MainCategoriesOf(kind).ToList();
+        Reorder(group, ids, c => c.Id, (c, order) => c.MoveTo(order), "分類");
+    }
+
     public Account GetAccount(AccountId id) =>
         _accounts.Find(a => a.Id == id) ?? throw new DomainException($"找不到帳戶 {id.Value}。");
 
@@ -226,6 +241,21 @@ public sealed class Book
             NextSortOrder(MainCategoriesOf(kind), c => c.SortOrder));
         _categories.Add(category);
         return category;
+    }
+
+    private static void Reorder<TItem, TId>(IReadOnlyCollection<TItem> group, IReadOnlyList<TId> ids,
+        Func<TItem, TId> idOf, Action<TItem, int> moveTo, string groupName) where TId : notnull
+    {
+        if (ids.Count != group.Count || !group.Select(idOf).ToHashSet().SetEquals(ids))
+        {
+            throw new DomainException($"{groupName}的排序清單與目前的項目不一致，請重新載入後再試。");
+        }
+
+        var byId = group.ToDictionary(idOf);
+        for (var order = 0; order < ids.Count; order++)
+        {
+            moveTo(byId[ids[order]], order);
+        }
     }
 
     private static void EnsureZeroBalance(string name, decimal balance)

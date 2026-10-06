@@ -68,6 +68,7 @@ public class SettingsOrderMigrationTests(PostgresFixture postgres)
         var a = book.AddAccount("A", AccountType.Cash);
         var b = book.AddAccount("B", AccountType.Bank);
         var fund = book.AddPlanningFund("旅遊基金");
+        book.ReorderAccounts([b.Id, a.Id]);
         book.ArchiveAccount(a.Id, balance: 0m, archivedAt);
         await using (var db = createContext())
         {
@@ -77,8 +78,8 @@ public class SettingsOrderMigrationTests(PostgresFixture postgres)
 
         await using var read = createContext();
         var loaded = await read.Books.AsNoTracking().SingleAsync(Ct);
-        loaded.GetAccount(a.Id).SortOrder.Should().Be(0);
-        loaded.GetAccount(b.Id).SortOrder.Should().Be(1);
+        loaded.GetAccount(b.Id).SortOrder.Should().Be(0);
+        loaded.GetAccount(a.Id).SortOrder.Should().Be(1);
         loaded.GetPlanningFund(fund.Id).SortOrder.Should().Be(0);
         loaded.GetAccount(a.Id).ArchivedAt.Should().Be(archivedAt);
         loaded.GetAccount(b.Id).ArchivedAt.Should().BeNull();

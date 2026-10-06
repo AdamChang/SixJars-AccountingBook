@@ -155,4 +155,76 @@ public class BookSettingsTests
         _book.UnarchiveCategory(food.Id);
         food.IsArchived.Should().BeFalse();
     }
+
+    [Fact]
+    public void Reorder_accounts_renumbers_from_zero()
+    {
+        var a = _book.AddAccount("A", AccountType.Cash);
+        var b = _book.AddAccount("B", AccountType.Bank);
+        var c = _book.AddAccount("C", AccountType.Bank);
+
+        _book.ReorderAccounts([c.Id, a.Id, b.Id]);
+
+        (c.SortOrder, a.SortOrder, b.SortOrder).Should().Be((0, 1, 2));
+    }
+
+    [Theory]
+    [InlineData("missing")]
+    [InlineData("duplicate")]
+    [InlineData("foreign")]
+    public void Reorder_rejects_ids_that_do_not_match_the_group(string mismatch)
+    {
+        var a = _book.AddAccount("A", AccountType.Cash);
+        var b = _book.AddAccount("B", AccountType.Bank);
+        AccountId[] ids = mismatch switch
+        {
+            "missing" => [a.Id],
+            // 筆數與組相同，必須靠集合比對才擋得下
+            "duplicate" => [a.Id, a.Id],
+            _ => [a.Id, AccountId.New()],
+        };
+
+        var act = () => _book.ReorderAccounts(ids);
+
+        act.Should().Throw<DomainException>();
+        (a.SortOrder, b.SortOrder).Should().Be((0, 1));
+    }
+
+    [Fact]
+    public void Reorder_main_categories_only_touches_that_kind()
+    {
+        var salary = _book.AddIncomeCategory("薪資");
+        var food = _book.AddExpenseCategory("飲食", ExpenseNature.Floating);
+        var transport = _book.AddExpenseCategory("交通", ExpenseNature.Floating);
+
+        _book.ReorderCategories(CategoryKind.Expense, parentId: null, [transport.Id, food.Id]);
+
+        (transport.SortOrder, food.SortOrder, salary.SortOrder).Should().Be((0, 1, 0));
+        var mixed = () => _book.ReorderCategories(CategoryKind.Expense, parentId: null, [transport.Id, food.Id, salary.Id]);
+        mixed.Should().Throw<DomainException>();
+    }
+
+    [Fact]
+    public void Reorder_sub_categories_of_one_parent()
+    {
+        var food = _book.AddExpenseCategory("飲食", ExpenseNature.Floating);
+        var lunch = _book.AddSubCategory(food.Id, "午餐");
+        var dinner = _book.AddSubCategory(food.Id, "晚餐");
+
+        // 有 parentId 時以主分類為組，kind 參數不參與判斷
+        _book.ReorderCategories(CategoryKind.Expense, food.Id, [dinner.Id, lunch.Id]);
+
+        (dinner.SortOrder, lunch.SortOrder).Should().Be((0, 1));
+    }
+
+    [Fact]
+    public void Reorder_planning_funds()
+    {
+        var a = _book.AddPlanningFund("A");
+        var b = _book.AddPlanningFund("B");
+
+        _book.ReorderPlanningFunds([b.Id, a.Id]);
+
+        (b.SortOrder, a.SortOrder).Should().Be((0, 1));
+    }
 }
