@@ -43,7 +43,8 @@ public sealed class Book
             throw new DomainException($"帳戶名稱「{name}」已存在。");
         }
 
-        var account = new Account(id ?? AccountId.New(), name, type, openingBalance, type == AccountType.Cash && countsAsAvailableCash);
+        var account = new Account(id ?? AccountId.New(), name, type, openingBalance, type == AccountType.Cash && countsAsAvailableCash,
+            NextSortOrder(_accounts, a => a.SortOrder));
         _accounts.Add(account);
         return account;
     }
@@ -56,7 +57,7 @@ public sealed class Book
             throw new DomainException($"財務規劃帳戶名稱「{name}」已存在。");
         }
 
-        var fund = new PlanningFund(id ?? PlanningFundId.New(), name, openingBalance);
+        var fund = new PlanningFund(id ?? PlanningFundId.New(), name, openingBalance, NextSortOrder(_planningFunds, f => f.SortOrder));
         _planningFunds.Add(fund);
         return fund;
     }
@@ -80,7 +81,8 @@ public sealed class Book
             throw new DomainException($"主分類「{parent.Name}」底下已有子分類「{name}」。");
         }
 
-        var category = new Category(id ?? CategoryId.New(), name, parent.Kind, parent.Nature, parentId);
+        var category = new Category(id ?? CategoryId.New(), name, parent.Kind, parent.Nature, parentId,
+            NextSortOrder(SubCategoriesOf(parentId), c => c.SortOrder));
         _categories.Add(category);
         return category;
     }
@@ -99,6 +101,166 @@ public sealed class Book
     /// <summary>預定支出以歸屬月份的最後一天判斷（spec §3.1）。</summary>
     public void EnsureUnlocked(BudgetMonth month) =>
         EnsureUnlocked(new DateOnly(month.Year, month.Month, DateTime.DaysInMonth(month.Year, month.Month)));
+
+    // 改名沿用新增時的唯一性規則；改成原本的名字不算重複。
+
+    public void RenameAccount(AccountId id, string name)
+    {
+        var account = GetAccount(id);
+        name = RequireName(name);
+        if (FindAccount(name) is { } other && other.Id != id)
+        {
+            throw new DomainException($"帳戶名稱「{name}」已存在。");
+        }
+
+        account.Rename(name);
+    }
+
+    public void RenamePlanningFund(PlanningFundId id, string name)
+    {
+        var fund = GetPlanningFund(id);
+        name = RequireName(name);
+        if (FindPlanningFund(name) is { } other && other.Id != id)
+        {
+            throw new DomainException($"財務規劃帳戶名稱「{name}」已存在。");
+        }
+
+        fund.Rename(name);
+    }
+
+    public void RenameCategory(CategoryId id, string name)
+    {
+        var category = GetCategory(id);
+        name = RequireName(name);
+        var duplicate = category.IsMain
+            ? _categories.Find(c => c.IsMain && c.Name == name && c.Id != id)
+            : _categories.Find(c => c.ParentId == category.ParentId && c.Name == name && c.Id != id);
+        if (duplicate is not null)
+        {
+            throw new DomainException(category.IsMain
+                ? $"主分類名稱「{name}」已存在。"
+                : $"主分類「{GetCategory(category.ParentId!.Value).Name}」底下已有子分類「{name}」。");
+        }
+
+        category.Rename(name);
+    }
+
+    /// <summary>與新增時相同：只有現金帳戶可以計入可用現金。</summary>
+    public void SetCountsAsAvailableCash(AccountId id, bool countsAsAvailableCash)
+    {
+        var account = GetAccount(id);
+        if (countsAsAvailableCash && account.Type != AccountType.Cash)
+        {
+            throw new DomainException($"「{account.Name}」不是現金帳戶，不能計入可用現金。");
+        }
+
+        account.SetCountsAsAvailableCash(countsAsAvailableCash);
+    }
+
+    /// <param name="balance">由呼叫端以分錄算出的目前餘額（Domain 不查詢資料庫）。</param>
+    public void ArchiveAccount(AccountId id, decimal balance, DateTimeOffset at)
+    {
+        var account = GetAccount(id);
+        EnsureZeroBalance(account.Name, balance);
+        account.Archive(at);
+    }
+
+    public void UnarchiveAccount(AccountId id) => GetAccount(id).Unarchive();
+
+    /// <param name="balance">由呼叫端以分錄算出的目前餘額（Domain 不查詢資料庫）。</param>
+    public void ArchivePlanningFund(PlanningFundId id, decimal balance, DateTimeOffset at)
+    {
+        var fund = GetPlanningFund(id);
+        EnsureZeroBalance(fund.Name, balance);
+        fund.Archive(at);
+    }
+
+    public void UnarchivePlanningFund(PlanningFundId id) => GetPlanningFund(id).Unarchive();
+
+    /// <summary>封存主分類不改變子分類的狀態；子分類是否可選 = 自己與主分類都未封存（spec §3.1）。</summary>
+    public void ArchiveCategory(CategoryId id, DateTimeOffset at) => GetCategory(id).Archive(at);
+
+    public void UnarchiveCategory(CategoryId id) => GetCategory(id).Unarchive();
+
+    // 排序清單必須恰好等於組內目前的成員（含已封存）：不能多、不能少、不能重複，擋下過時畫面造成的漏項。
+
+    public void ReorderAccounts(IReadOnlyList<AccountId> ids) =>
+        Reorder(_accounts, ids, a => a.Id, (a, order) => a.MoveTo(order), "帳戶");
+
+    public void ReorderPlanningFunds(IReadOnlyList<PlanningFundId> ids) =>
+        Reorder(_planningFunds, ids, f => f.Id, (f, order) => f.MoveTo(order), "財務規劃帳戶");
+
+    /// <summary><paramref name="parentId"/> 有值時排序該主分類的子分類；否則排序 <paramref name="kind"/> 的主分類。</summary>
+    public void ReorderCategories(CategoryKind kind, CategoryId? parentId, IReadOnlyList<CategoryId> ids)
+    {
+        var group = parentId is { } parent ? SubCategoriesOf(GetCategory(parent).Id).ToList() : MainCategoriesOf(kind).ToList();
+        Reorder(group, ids, c => c.Id, (c, order) => c.MoveTo(order), "分類");
+    }
+
+    // 刪除後把組內剩下的項目重新編號，維持 SortOrder 0..n-1 連續（還原備份時才能重建出相同的順序）。
+
+    /// <param name="isReferenced">由呼叫端查詢：是否有交易或預定支出（含已軟刪除）使用這個帳戶。</param>
+    public void RemoveAccount(AccountId id, bool isReferenced)
+    {
+        var account = GetAccount(id);
+        EnsureUnreferenced(account.Name, isReferenced);
+        _accounts.Remove(account);
+        Compact(_accounts, a => a.SortOrder, (a, order) => a.MoveTo(order));
+    }
+
+    /// <param name="isReferenced">由呼叫端查詢：是否有交易（含已軟刪除）使用這個財務規劃帳戶。</param>
+    public void RemovePlanningFund(PlanningFundId id, bool isReferenced)
+    {
+        var fund = GetPlanningFund(id);
+        EnsureUnreferenced(fund.Name, isReferenced);
+        _planningFunds.Remove(fund);
+        Compact(_planningFunds, f => f.SortOrder, (f, order) => f.MoveTo(order));
+    }
+
+    /// <param name="isReferenced">由呼叫端查詢：是否有交易或預定支出（含已軟刪除）使用這個分類。</param>
+    public void RemoveCategory(CategoryId id, bool isReferenced)
+    {
+        var category = GetCategory(id);
+        if (category.IsMain && SubCategoriesOf(id).Any())
+        {
+            throw new DomainException($"「{category.Name}」底下還有子分類，請先刪除子分類。", DomainException.InUseCode);
+        }
+
+        EnsureUnreferenced(category.Name, isReferenced);
+        _categories.Remove(category);
+        var siblings = category.ParentId is { } parentId ? SubCategoriesOf(parentId) : MainCategoriesOf(category.Kind);
+        Compact(siblings, c => c.SortOrder, (c, order) => c.MoveTo(order));
+    }
+
+    /// <summary>
+    /// 改支出主分類的性質，回溯生效，子分類一起改（spec §3.1、Q4）。
+    /// 預定支出只允許固定、貸款、特別，所以有預定支出（含已刪除）時不能改成浮動。
+    /// L 段會再加上「有預算時拒絕」。
+    /// </summary>
+    public void ChangeExpenseNature(CategoryId id, ExpenseNature nature, bool hasPlannedExpenses)
+    {
+        var category = GetCategory(id);
+        if (!category.IsMain || category.Kind != CategoryKind.Expense)
+        {
+            throw new DomainException($"只有支出主分類可以修改支出性質，「{category.Name}」不是。");
+        }
+
+        if (category.Nature == nature)
+        {
+            return;
+        }
+
+        if (nature == ExpenseNature.Floating && hasPlannedExpenses)
+        {
+            throw new DomainException($"「{category.Name}」有預定支出，不能改成浮動支出。", DomainException.InUseCode);
+        }
+
+        category.ChangeNature(nature);
+        foreach (var sub in SubCategoriesOf(id))
+        {
+            sub.ChangeNature(nature);
+        }
+    }
 
     public Account GetAccount(AccountId id) =>
         _accounts.Find(a => a.Id == id) ?? throw new DomainException($"找不到帳戶 {id.Value}。");
@@ -124,6 +286,14 @@ public sealed class Book
         return _categories.Find(c => c.ParentId == main.Id && c.Name == subName);
     }
 
+    // 排序的組：帳戶一組、財務規劃帳戶一組、同一種類的主分類一組、同一個主分類的子分類一組（spec §3.1）。
+    private IEnumerable<Category> MainCategoriesOf(CategoryKind kind) => _categories.Where(c => c.IsMain && c.Kind == kind);
+
+    private IEnumerable<Category> SubCategoriesOf(CategoryId parentId) => _categories.Where(c => c.ParentId == parentId);
+
+    private static int NextSortOrder<T>(IEnumerable<T> group, Func<T, int> sortOrderOf) =>
+        group.Select(sortOrderOf).DefaultIfEmpty(-1).Max() + 1;
+
     private Category AddMainCategory(string name, CategoryKind kind, ExpenseNature? nature, CategoryId? id)
     {
         name = RequireName(name);
@@ -132,9 +302,50 @@ public sealed class Book
             throw new DomainException($"主分類名稱「{name}」已存在。");
         }
 
-        var category = new Category(id ?? CategoryId.New(), name, kind, nature, parentId: null);
+        var category = new Category(id ?? CategoryId.New(), name, kind, nature, parentId: null,
+            NextSortOrder(MainCategoriesOf(kind), c => c.SortOrder));
         _categories.Add(category);
         return category;
+    }
+
+    private static void Reorder<TItem, TId>(IReadOnlyCollection<TItem> group, IReadOnlyList<TId> ids,
+        Func<TItem, TId> idOf, Action<TItem, int> moveTo, string groupName) where TId : notnull
+    {
+        if (ids.Count != group.Count || !group.Select(idOf).ToHashSet().SetEquals(ids))
+        {
+            throw new DomainException($"{groupName}的排序清單與目前的項目不一致，請重新載入後再試。");
+        }
+
+        var byId = group.ToDictionary(idOf);
+        for (var order = 0; order < ids.Count; order++)
+        {
+            moveTo(byId[ids[order]], order);
+        }
+    }
+
+    private static void EnsureUnreferenced(string name, bool isReferenced)
+    {
+        if (isReferenced)
+        {
+            throw new DomainException($"「{name}」已有交易或預定支出使用，不能刪除；可以改用封存。", DomainException.InUseCode);
+        }
+    }
+
+    private static void Compact<T>(IEnumerable<T> group, Func<T, int> sortOrderOf, Action<T, int> moveTo)
+    {
+        var order = 0;
+        foreach (var item in group.OrderBy(sortOrderOf).ToList())
+        {
+            moveTo(item, order++);
+        }
+    }
+
+    private static void EnsureZeroBalance(string name, decimal balance)
+    {
+        if (balance != 0m)
+        {
+            throw new DomainException($"「{name}」的餘額為 {balance:#,0.####}，餘額為 0 才能封存。", DomainException.NonZeroBalanceCode);
+        }
     }
 
     private static string RequireName(string name) =>

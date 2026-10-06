@@ -1,52 +1,54 @@
 <app-month-nav [month]="month()" (monthChange)="changeMonth($event)" />
 @if (summary(); as s) {
   <div class="metrics">
-    <mat-card class="metric" appearance="outlined">
+    <mat-card class="metric hero" appearance="outlined">
       <mat-card-content>
         <div class="label">月可用餘額</div>
-        <div class="value">{{ format(s.monthlyDisposable) }}</div>
+        <div class="value figure" [class.red-ink]="s.monthlyDisposable < 0">{{ format(s.monthlyDisposable) }}</div>
       </mat-card-content>
     </mat-card>
     <mat-card class="metric" appearance="outlined">
       <mat-card-content>
         <div class="label">年累計餘額</div>
-        <div class="value">{{ format(s.yearToDate) }}</div>
+        <div class="value figure" [class.red-ink]="s.yearToDate < 0">{{ format(s.yearToDate) }}</div>
       </mat-card-content>
     </mat-card>
     <mat-card class="metric" appearance="outlined">
       <mat-card-content>
         <div class="label">可用現金</div>
-        <div class="value">{{ format(s.availableCash) }}</div>
-        <div class="sub">含電子錢包 {{ format(s.availableCashWithEWallets) }}</div>
+        <div class="value figure" [class.red-ink]="s.availableCash < 0">{{ format(s.availableCash) }}</div>
+        <div class="sub">含電子錢包 <span class="figure">{{ format(s.availableCashWithEWallets) }}</span></div>
       </mat-card-content>
     </mat-card>
   </div>
 
-  @for (group of groups(); track group.title) {
-    <section class="account-group">
-      <h3>{{ group.title }}</h3>
-      <table>
-        @for (account of group.accounts; track account.id) {
-          <tr>
-            <td>{{ account.name }}</td>
-            <td class="amount">{{ format(account.balance) }}</td>
-          </tr>
-        }
-      </table>
-    </section>
-  }
+  <div class="balances">
+    @for (group of groups(); track group.title) {
+      <section class="account-group">
+        <h3>{{ group.title }}</h3>
+        <table class="ledger ledger-sheet">
+          @for (account of group.accounts; track account.id) {
+            <tr>
+              <td>{{ account.name }}</td>
+              <td class="amount" [class.red-ink]="account.balance < 0">{{ format(account.balance) }}</td>
+            </tr>
+          }
+        </table>
+      </section>
+    }
 
-  @if (s.planningFunds.length > 0) {
-    <section class="planning-funds">
-      <h3>財務規劃帳戶</h3>
-      <table>
-        @for (fund of s.planningFunds; track fund.id) {
-          <tr>
-            <td>{{ fund.name }}</td>
-            <td class="amount">{{ format(fund.balance) }}</td>
-          </tr>
-        }
-      </table>
-    </section>
-  }
+    @if (s.planningFunds.length > 0) {
+      <section class="planning-funds">
+        <h3>財務規劃帳戶</h3>
+        <table class="ledger ledger-sheet">
+          @for (fund of s.planningFunds; track fund.id) {
+            <tr>
+              <td>{{ fund.name }}</td>
+              <td class="amount" [class.red-ink]="fund.balance < 0">{{ format(fund.balance) }}</td>
+            </tr>
+          }
+        </table>
+      </section>
+    }
+  </div>
 }

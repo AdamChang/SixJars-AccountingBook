@@ -22,7 +22,7 @@ import { budgetMonthOf, parseBudgetMonth } from '../../shared/dates';
 import { formatAmount } from '../../shared/money';
 import {
   KIND_RULES, KindRule, MORE_KINDS, PRIMARY_KINDS, TransactionFormValue,
-  accountsFor, categoryKindOf, categoryOptions, fromTransaction, toTransactionInput,
+  accountsFor, categoryKindOf, categoryOptions, fromTransaction, keepIdsOf, selectable, toTransactionInput,
 } from './transaction-rules';
 
 // 金額欄位保留原始字串，避免 type="number" 吃掉小數位數與非法輸入，驗證後才轉 number
@@ -143,13 +143,16 @@ export class TransactionForm implements OnInit {
 
   protected readonly rule = computed(() => KIND_RULES[this.kind()]);
   protected readonly moreLabel = computed(() => (MORE_KINDS.includes(this.kind()) ? this.rule().label : '更多'));
-  protected readonly accountChoices = computed(() => accountsFor(this.book().accounts, this.rule().account));
+  // 編輯中交易用到的已封存項目仍要出現在選項中
+  private readonly keep = computed(() => keepIdsOf(this.editing()));
+  protected readonly accountChoices = computed(() => accountsFor(this.book().accounts, this.rule().account, this.keep()));
   protected readonly counterChoices = computed(() => {
     const counter = this.rule().counter;
-    return counter ? accountsFor(this.book().accounts, counter) : [];
+    return counter ? accountsFor(this.book().accounts, counter, this.keep()) : [];
   });
   private readonly categoryChoices = computed(() =>
-    categoryOptions(this.book().categories, categoryKindOf(this.kind())));
+    categoryOptions(this.book().categories, categoryKindOf(this.kind()), this.keep()));
+  protected readonly fundChoices = computed(() => selectable(this.book().planningFunds, this.keep()));
   protected readonly filteredCategories = computed(() => {
     const choices = this.categoryChoices();
     const text = this.categoryText().trim();
@@ -316,16 +319,17 @@ export class TransactionForm implements OnInit {
     const rule = KIND_RULES[kind];
     const accounts = this.book().accounts;
     const ids = (list: { id: string }[]) => list.map(item => item.id);
+    const keep = this.keep();
 
-    if (!ids(accountsFor(accounts, rule.account)).includes(this.controls.accountId.value)) {
+    if (!ids(accountsFor(accounts, rule.account, keep)).includes(this.controls.accountId.value)) {
       this.controls.accountId.setValue('');
     }
-    const counterIds = rule.counter ? ids(accountsFor(accounts, rule.counter)) : [];
+    const counterIds = rule.counter ? ids(accountsFor(accounts, rule.counter, keep)) : [];
     const counterId = this.controls.counterAccountId.value;
     if (counterId !== null && !counterIds.includes(counterId)) {
       this.controls.counterAccountId.setValue(null);
     }
-    const categoryIds = rule.category ? ids(categoryOptions(this.book().categories, categoryKindOf(kind))) : [];
+    const categoryIds = rule.category ? ids(categoryOptions(this.book().categories, categoryKindOf(kind), keep)) : [];
     if (!categoryIds.includes(this.controls.categoryId.value)) {
       this.controls.categoryId.setValue('');
     }

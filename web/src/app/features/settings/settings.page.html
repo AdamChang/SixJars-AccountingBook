@@ -1,0 +1,51 @@
+<mat-tab-group class="ledger-sheet">
+  <mat-tab label="分類">
+    @for (group of categoryGroups(); track group.key) {
+      <ng-container [ngTemplateOutlet]="groupTemplate" [ngTemplateOutletContext]="{ $implicit: group }" />
+    }
+  </mat-tab>
+  <mat-tab label="帳戶">
+    <ng-container [ngTemplateOutlet]="groupTemplate" [ngTemplateOutletContext]="{ $implicit: accounts() }" />
+  </mat-tab>
+  <mat-tab label="財務規劃帳戶">
+    <ng-container [ngTemplateOutlet]="groupTemplate" [ngTemplateOutletContext]="{ $implicit: funds() }" />
+  </mat-tab>
+  <mat-tab label="鎖帳日與資料">
+    <section class="lock-date">
+      <h3>鎖帳日</h3>
+      <p class="hint">此日（含）以前的交易不能再新增、修改或刪除。</p>
+      <mat-form-field>
+        <mat-label>鎖帳日</mat-label>
+        <input matInput type="date" [value]="lockDate()" (input)="lockDate.set($any($event.target).value)" />
+      </mat-form-field>
+      <div class="actions">
+        <button matButton="filled" type="button" class="save-lock-date" (click)="saveLockDate()">儲存</button>
+        <button matButton type="button" class="clear-lock-date" (click)="clearLockDate()">清除</button>
+      </div>
+    </section>
+    <section class="downloads">
+      <h3>下載</h3>
+      <a matButton="outlined" [href]="exportUrl('transactions.csv')" download>交易明細 CSV</a>
+      <a matButton="outlined" [href]="exportUrl('transactions.xlsx')" download>交易明細 Excel</a>
+      <a matButton="outlined" [href]="exportUrl('backup.json')" download>完整備份</a>
+    </section>
+  </mat-tab>
+</mat-tab-group>
+
+<!-- 一組設定：標題、新增按鈕與清單；空的子分類組也要顯示，才能新增第一個子分類 -->
+<ng-template #groupTemplate let-group>
+  <section class="group" [attr.data-group]="group.key">
+    <header>
+      <h3>{{ group.title }}</h3>
+      <button matButton type="button" class="add" (click)="onAdd(group)">新增</button>
+    </header>
+    <app-setting-list
+      [rows]="group.rows"
+      (reorder)="onReorder(group, $event)"
+      (edit)="onEdit(group, $event)"
+      (archive)="onArchive(group, $event)"
+      (unarchive)="onUnarchive(group, $event)"
+      (remove)="onRemove(group, $event)"
+    />
+  </section>
+</ng-template>

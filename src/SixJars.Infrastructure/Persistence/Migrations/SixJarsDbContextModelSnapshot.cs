@@ -247,6 +247,9 @@ namespace SixJars.Infrastructure.Persistence.Migrations
                             b1.Property<Guid>("Id")
                                 .HasColumnType("uuid");
 
+                            b1.Property<DateTimeOffset?>("ArchivedAt")
+                                .HasColumnType("timestamp with time zone");
+
                             b1.Property<Guid>("BookId")
                                 .HasColumnType("uuid");
 
@@ -261,6 +264,9 @@ namespace SixJars.Infrastructure.Persistence.Migrations
                             b1.Property<decimal>("OpeningBalance")
                                 .HasPrecision(18, 4)
                                 .HasColumnType("numeric(18,4)");
+
+                            b1.Property<int>("SortOrder")
+                                .HasColumnType("integer");
 
                             b1.Property<string>("Type")
                                 .IsRequired()
@@ -281,6 +287,9 @@ namespace SixJars.Infrastructure.Persistence.Migrations
                             b1.Property<Guid>("Id")
                                 .HasColumnType("uuid");
 
+                            b1.Property<DateTimeOffset?>("ArchivedAt")
+                                .HasColumnType("timestamp with time zone");
+
                             b1.Property<Guid>("BookId")
                                 .HasColumnType("uuid");
 
@@ -299,6 +308,9 @@ namespace SixJars.Infrastructure.Persistence.Migrations
                             b1.Property<Guid?>("ParentId")
                                 .HasColumnType("uuid");
 
+                            b1.Property<int>("SortOrder")
+                                .HasColumnType("integer");
+
                             b1.HasKey("Id");
 
                             b1.HasIndex("BookId");
@@ -314,6 +326,9 @@ namespace SixJars.Infrastructure.Persistence.Migrations
                             b1.Property<Guid>("Id")
                                 .HasColumnType("uuid");
 
+                            b1.Property<DateTimeOffset?>("ArchivedAt")
+                                .HasColumnType("timestamp with time zone");
+
                             b1.Property<Guid>("BookId")
                                 .HasColumnType("uuid");
 
@@ -325,6 +340,9 @@ namespace SixJars.Infrastructure.Persistence.Migrations
                             b1.Property<decimal>("OpeningBalance")
                                 .HasPrecision(18, 4)
                                 .HasColumnType("numeric(18,4)");
+
+                            b1.Property<int>("SortOrder")
+                                .HasColumnType("integer");
 
                             b1.HasKey("Id");
 

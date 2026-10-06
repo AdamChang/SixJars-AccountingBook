@@ -30,8 +30,8 @@ internal sealed class RestoreBackupValidator : AbstractValidator<RestoreBackup>
     public RestoreBackupValidator()
     {
         RuleFor(c => c.Backup.FormatVersion)
-            .Equal(BackupDocument.CurrentFormatVersion)
-            .WithMessage($"只支援格式版本 {BackupDocument.CurrentFormatVersion} 的備份。");
+            .InclusiveBetween(1, BackupDocument.CurrentFormatVersion)
+            .WithMessage($"只支援格式版本 1 到 {BackupDocument.CurrentFormatVersion} 的備份。");
         RuleFor(c => c.FileName).NotEmpty();
     }
 }
@@ -50,7 +50,7 @@ internal sealed class RestoreBackupHandler(ISixJarsDbContext db, IAuditTrail aud
         }
 
         // 2–5. 先在記憶體中經 Domain 重建全部資料，任何驗證失敗都發生在寫入之前。
-        var book = RestoreBook(backup.Book);
+        var book = RestoreBook(backup.Book, backup.FormatVersion);
         var transactions = backup.Transactions.Select(t => RestoreTransaction(book, t)).ToList();
         var plannedExpenses = RestorePlannedExpenses(book, backup.PlannedExpenses, transactions.ToDictionary(t => t.Transaction.Id));
 
@@ -104,7 +104,8 @@ internal sealed class RestoreBackupHandler(ISixJarsDbContext db, IAuditTrail aud
     }
 
     /// <summary>先建主分類、再建子分類（子分類要找得到主分類）；鎖帳日由呼叫端在交易建立之後設定。</summary>
-    private static Book RestoreBook(BookDto dto)
+    /// <remarks>SortOrder 不另外寫入：照 DTO 順序 Add 會重建出相同的連續編號（P4 J plan D5），一致性檢查會驗證這一點。</remarks>
+    private static Book RestoreBook(BookDto dto, int formatVersion)
     {
         var book = new Book(dto.Name, dto.OpeningDate, new BookId(dto.Id));
         foreach (var account in dto.Accounts)
@@ -130,11 +131,29 @@ internal sealed class RestoreBackupHandler(ISixJarsDbContext db, IAuditTrail aud
             book.AddSubCategory(new CategoryId(category.ParentId!.Value), category.Name, new CategoryId(category.Id));
         }
 
+        // 封存的帳戶在備份當下已通過餘額檢查，交易也會原樣還原，所以這裡以 0 傳入。
+        foreach (var account in dto.Accounts.Where(a => a.ArchivedAt is not null))
+        {
+            book.ArchiveAccount(new AccountId(account.Id), balance: 0m, account.ArchivedAt!.Value);
+        }
+
+        foreach (var fund in dto.PlanningFunds.Where(f => f.ArchivedAt is not null))
+        {
+            book.ArchivePlanningFund(new PlanningFundId(fund.Id), balance: 0m, fund.ArchivedAt!.Value);
+        }
+
+        foreach (var category in dto.Categories.Where(c => c.ArchivedAt is not null))
+        {
+            book.ArchiveCategory(new CategoryId(category.Id), category.ArchivedAt!.Value);
+        }
+
         // 例如名稱被去掉空白、非現金帳戶的「計入可用現金」被改成 false、子分類的種類與主分類不同。
-        var restored = BookDto.From(book);
-        if (!restored.Accounts.SequenceEqual(dto.Accounts)
-            || !restored.PlanningFunds.SequenceEqual(dto.PlanningFunds)
-            || !restored.Categories.ToHashSet().SetEquals(dto.Categories)
+        // v1 沒有 SortOrder（全部是 0），重建出來的是依清單順序的編號，比對時忽略。
+        var expected = formatVersion == 1 ? WithoutSortOrder(dto) : dto;
+        var restored = formatVersion == 1 ? WithoutSortOrder(BookDto.From(book)) : BookDto.From(book);
+        if (!restored.Accounts.SequenceEqual(expected.Accounts)
+            || !restored.PlanningFunds.SequenceEqual(expected.PlanningFunds)
+            || !restored.Categories.ToHashSet().SetEquals(expected.Categories)
             || restored.Name != dto.Name)
         {
             throw new DomainException($"帳本 {dto.Id} 的設定經 Domain 重建後與備份不一致，備份可能已損毀。");
@@ -142,6 +161,13 @@ internal sealed class RestoreBackupHandler(ISixJarsDbContext db, IAuditTrail aud
 
         return book;
     }
+
+    private static BookDto WithoutSortOrder(BookDto book) => book with
+    {
+        Accounts = [.. book.Accounts.Select(a => a with { SortOrder = 0 })],
+        PlanningFunds = [.. book.PlanningFunds.Select(f => f with { SortOrder = 0 })],
+        Categories = [.. book.Categories.Select(c => c with { SortOrder = 0 })],
+    };
 
     /// <summary>以輸入欄位重建（分錄由 factory 重新展開，不採用備份裡的分錄）；刪除留到付款連結之後。</summary>
     private static (Transaction Transaction, DateTimeOffset? DeletedAt) RestoreTransaction(Book book, BackupTransaction backup)

@@ -8,18 +8,18 @@ export const BOOK: BookDto = {
   openingDate: '2026-01-01',
   lockDate: null,
   accounts: [
-    { id: 'acc-cash', name: '現金', type: 'Cash', openingBalance: 0, countsAsAvailableCash: true },
-    { id: 'acc-bank', name: '銀行', type: 'Bank', openingBalance: 0, countsAsAvailableCash: true },
-    { id: 'acc-card', name: '信用卡', type: 'CreditCard', openingBalance: 0, countsAsAvailableCash: false },
-    { id: 'acc-ewallet', name: '悠遊卡', type: 'EWallet', openingBalance: 0, countsAsAvailableCash: false },
-    { id: 'acc-loan', name: '房貸', type: 'Loan', openingBalance: 0, countsAsAvailableCash: false },
+    { id: 'acc-cash', name: '現金', type: 'Cash', openingBalance: 0, countsAsAvailableCash: true, sortOrder: 0, archivedAt: null },
+    { id: 'acc-bank', name: '銀行', type: 'Bank', openingBalance: 0, countsAsAvailableCash: true, sortOrder: 1, archivedAt: null },
+    { id: 'acc-card', name: '信用卡', type: 'CreditCard', openingBalance: 0, countsAsAvailableCash: false, sortOrder: 2, archivedAt: null },
+    { id: 'acc-ewallet', name: '悠遊卡', type: 'EWallet', openingBalance: 0, countsAsAvailableCash: false, sortOrder: 3, archivedAt: null },
+    { id: 'acc-loan', name: '房貸', type: 'Loan', openingBalance: 0, countsAsAvailableCash: false, sortOrder: 4, archivedAt: null },
   ],
-  planningFunds: [{ id: 'fund-travel', name: '旅遊基金', openingBalance: 0 }],
+  planningFunds: [{ id: 'fund-travel', name: '旅遊基金', openingBalance: 0, sortOrder: 0, archivedAt: null }],
   categories: [
-    { id: 'cat-food', name: '飲食', kind: 'Expense', nature: 'Floating', parentId: null },
-    { id: 'cat-lunch', name: '午餐', kind: 'Expense', nature: 'Floating', parentId: 'cat-food' },
-    { id: 'cat-salary', name: '薪資', kind: 'Income', nature: null, parentId: null },
-    { id: 'cat-bonus', name: '獎金', kind: 'Income', nature: null, parentId: 'cat-salary' },
+    { id: 'cat-food', name: '飲食', kind: 'Expense', nature: 'Floating', parentId: null, sortOrder: 0, archivedAt: null },
+    { id: 'cat-lunch', name: '午餐', kind: 'Expense', nature: 'Floating', parentId: 'cat-food', sortOrder: 0, archivedAt: null },
+    { id: 'cat-salary', name: '薪資', kind: 'Income', nature: null, parentId: null, sortOrder: 0, archivedAt: null },
+    { id: 'cat-bonus', name: '獎金', kind: 'Income', nature: null, parentId: 'cat-salary', sortOrder: 0, archivedAt: null },
   ],
 };
 

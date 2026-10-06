@@ -137,8 +137,26 @@ export function fromTransaction(dto: TransactionDto): TransactionFormValue {
   };
 }
 
-export function accountsFor(accounts: AccountDto[], slot: AccountSlot): AccountDto[] {
-  return accounts.filter(account => slot.types.includes(account.type));
+const NO_KEEP: ReadonlySet<string> = new Set();
+
+// 封存的項目不出現在選項中；keep 是編輯中交易已經用到的 id，必須保留，否則 applyKindRule 會清掉原本的選擇
+export function selectable<T extends { id: string; archivedAt: string | null }>(
+  items: T[], keep: ReadonlySet<string> = NO_KEEP,
+): T[] {
+  return items.filter(item => item.archivedAt === null || keep.has(item.id));
+}
+
+// 編輯中交易用到的設定 id；新增時為空集合
+export function keepIdsOf(editing: TransactionDto | null): ReadonlySet<string> {
+  if (editing === null) {
+    return NO_KEEP;
+  }
+  return new Set([editing.accountId, editing.counterAccountId, editing.categoryId, editing.planningFundId]
+    .filter((id): id is string => id !== null));
+}
+
+export function accountsFor(accounts: AccountDto[], slot: AccountSlot, keep: ReadonlySet<string> = NO_KEEP): AccountDto[] {
+  return selectable(accounts, keep).filter(account => slot.types.includes(account.type));
 }
 
 function labelOf(category: CategoryDto, nameById: Map<string, string>): string {
@@ -146,10 +164,16 @@ function labelOf(category: CategoryDto, nameById: Map<string, string>): string {
   return parentName === undefined ? category.name : `${parentName} / ${category.name}`;
 }
 
-export function categoryOptions(categories: CategoryDto[], kind: CategoryKind): { id: string; label: string }[] {
+export function categoryOptions(
+  categories: CategoryDto[], kind: CategoryKind, keep: ReadonlySet<string> = NO_KEEP,
+): { id: string; label: string }[] {
+  const byId = new Map(categories.map(category => [category.id, category]));
   const nameById = new Map(categories.map(category => [category.id, category.name]));
+  // 子分類可選 = 自己與主分類都未封存（spec §3.1）
+  const usable = (category: CategoryDto) => category.archivedAt === null
+    && (category.parentId === null || byId.get(category.parentId)?.archivedAt === null);
   return categories
-    .filter(category => category.kind === kind)
+    .filter(category => category.kind === kind && (usable(category) || keep.has(category.id)))
     .map(category => ({ id: category.id, label: labelOf(category, nameById) }));
 }
 

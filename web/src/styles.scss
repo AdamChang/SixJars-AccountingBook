@@ -1,9 +1,19 @@
-// Include theming for Angular Material with `mat.theme()`.
-// This Sass mixin will define CSS variables that are used for styling Angular Material
-// components according to the Material 3 design spec.
-// Learn more about theming and how to use it for your application's
-// custom components at https://material.angular.dev/guide/theming
+// 視覺主題「帳簿紙」：綠灰帳簿紙底、藍黑墨水主色、綠色格線、金額欄前的紅色雙線，負數用赤字紅。
+// Material 的 system variables 由 mat.theme 產生，再用 theme-overrides 換成帳簿配色。
 @use '@angular/material' as mat;
+
+:root {
+  --ledger-paper: #f2f5f1;
+  --ledger-sheet: #ffffff;
+  --ledger-rule: #cfdccd;
+  --ledger-rule-strong: #9fb9a6;
+  --ledger-heading: #3f6b52;
+  --ledger-red-rule: #d98c84;
+  --ink: #1e3550;
+  --red-ink: #b42318;
+  --font-serif: 'Noto Serif TC', 'Songti TC', 'PMingLiU', serif;
+  --font-sans: 'Noto Sans TC', 'Microsoft JhengHei', 'PingFang TC', sans-serif;
+}
 
 html {
   height: 100%;
@@ -11,29 +21,88 @@ html {
     (
       color: (
         primary: mat.$azure-palette,
-        tertiary: mat.$blue-palette,
+        tertiary: mat.$green-palette,
       ),
-      typography: Roboto,
+      typography: (
+        plain-family: var(--font-sans),
+        brand-family: var(--font-serif),
+      ),
       density: 0,
+    )
+  );
+  @include mat.theme-overrides(
+    (
+      primary: #1e3550,
+      on-primary: #ffffff,
+      primary-container: #d7e3f0,
+      on-primary-container: #0f2238,
+      secondary-container: #dce9df,
+      on-secondary-container: #1b3524,
+      error: #b42318,
+      surface: #f2f5f1,
+      surface-container-lowest: #ffffff,
+      surface-container-low: #f8faf7,
+      surface-container: #eef2ed,
+      surface-container-high: #e7ede7,
+      surface-container-highest: #e0e8e1,
+      surface-variant: #e6ece5,
+      on-surface-variant: #4a5650,
+      outline-variant: #cfdccd,
     )
   );
 }
 
 body {
-  // Default the application to a light color theme. This can be changed to
-  // `dark` to enable the dark color theme, or to `light dark` to defer to the
-  // user's system settings.
   color-scheme: light;
-
-  // Set a default background, font and text colors for the application using
-  // Angular Material's system-level CSS variables. Learn more about these
-  // variables at https://material.angular.dev/guide/system-variables
-  background-color: var(--mat-sys-surface);
+  background-color: var(--ledger-paper);
   color: var(--mat-sys-on-surface);
   font: var(--mat-sys-body-medium);
-
-  // Reset the user agent margin.
   margin: 0;
   height: 100%;
 }
-/* You can add global styles to this file, and also import other style files */
+
+// 一張帳簿紙：放在背景上的白色頁面，用來承載表單與清單
+.ledger-sheet {
+  background: var(--ledger-sheet);
+  border: 1px solid var(--ledger-rule);
+  border-radius: 6px;
+}
+
+// 金額一律用明體等寬數字，負數用赤字紅
+.figure {
+  font-family: var(--font-serif);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+
+.red-ink {
+  color: var(--red-ink);
+}
+
+// 帳簿式表格：綠色橫線，金額欄前加紅色雙線（紙本帳簿的金額欄）
+table.ledger {
+  width: 100%;
+  border-collapse: collapse;
+
+  td {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--ledger-rule);
+  }
+
+  tr:last-child td {
+    border-bottom: none;
+  }
+
+  td.amount {
+    width: 9em;
+    text-align: right;
+    border-left: 3px double var(--ledger-red-rule);
+    font-family: var(--font-serif);
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}

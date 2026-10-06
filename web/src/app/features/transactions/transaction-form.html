@@ -130,7 +130,7 @@
     <mat-form-field>
       <mat-label>財務規劃帳戶</mat-label>
       <mat-select formControlName="planningFundId">
-        @for (fund of book().planningFunds; track fund.id) {
+        @for (fund of fundChoices(); track fund.id) {
           <mat-option [value]="fund.id">{{ fund.name }}</mat-option>
         }
       </mat-select>

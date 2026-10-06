@@ -1,10 +1,126 @@
-:host { display: block; }
-table { width: 100%; }
+@use '@angular/material' as mat;
+
+:host {
+  display: block;
+  @include mat.table-overrides(
+    (
+      background-color: transparent,
+      row-item-outline-color: var(--ledger-rule),
+      header-headline-color: var(--ledger-heading),
+    )
+  );
+}
+
+// 窄螢幕不逐字換行，改由外層紙張橫向捲動
+table { width: 100%; min-width: 720px; }
+
+th.mat-mdc-header-cell {
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  border-bottom: 1px solid var(--ledger-rule-strong);
+}
+
+td.mat-mdc-cell { font-variant-numeric: tabular-nums; }
+tr.mat-mdc-row:hover { background: var(--mat-sys-surface-container-low); }
+
+// 金額欄前的紅色雙線
+.amount {
+  border-left: 3px double var(--ledger-red-rule);
+  padding-left: 12px;
+}
+
+td.amount { font-family: var(--font-serif); font-size: 1rem; }
 .empty { text-align: center; padding: 24px 0; color: var(--mat-sys-on-surface-variant); }
 tr.mat-mdc-row { cursor: pointer; }
 tr.mat-mdc-row.locked { cursor: default; }
-tr.mat-mdc-row.editing { background: var(--mat-sys-secondary-container); }
+tr.mat-mdc-row.editing, tr.mat-mdc-row.editing:hover { background: var(--mat-sys-secondary-container); }
 .amount { text-align: right; font-variant-numeric: tabular-nums; }
-.negative { color: var(--mat-sys-error); }
+.negative { color: var(--red-ink); }
 .actions { white-space: nowrap; text-align: right; }
 .lock { vertical-align: middle; color: var(--mat-sys-on-surface-variant); }
+
+// 窄螢幕：同一個 table 改排成兩行清單（不另寫一份 DOM，點擊、刪除、鎖帳行為共用）
+//   第一行：類型 分類            │ 金額 操作
+//   第二行：日期 帳戶 備註        │
+// 斷點對齊上面 table 的 min-width，避免 600–720px 之間還要橫向捲動
+@media (max-width: 719px) {
+  table,
+  tbody {
+    display: block;
+    min-width: 0;
+  }
+
+  tr.mat-mdc-header-row {
+    display: none;
+  }
+
+  tr.mat-mdc-row {
+    display: grid;
+    // 每列是各自的 grid，金額與操作欄固定寬度，紅線才會上下對齊
+    grid-template-columns: auto auto minmax(0, 1fr) 6.5em 40px;
+    align-items: center;
+    column-gap: 10px;
+    row-gap: 2px;
+    height: auto;
+    padding: 10px 4px 10px 16px;
+    border-bottom: 1px solid var(--ledger-rule);
+  }
+
+  tr.mat-mdc-row:last-child {
+    border-bottom: none;
+  }
+
+  td.mat-mdc-cell {
+    padding: 0;
+    border: none;
+    min-width: 0;
+  }
+
+  .mat-column-kind {
+    grid-area: 1 / 1;
+    font-size: 0.8125rem;
+    color: var(--ledger-heading);
+  }
+
+  .mat-column-category {
+    grid-area: 1 / 2 / 2 / 4;
+    font-size: 1rem;
+    font-weight: 500;
+  }
+
+  .mat-column-date,
+  .mat-column-account,
+  .mat-column-note {
+    font-size: 0.8125rem;
+    color: var(--mat-sys-on-surface-variant);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .mat-column-date { grid-area: 2 / 1; }
+  .mat-column-account { grid-area: 2 / 2; }
+  .mat-column-note { grid-area: 2 / 3; }
+
+  td.amount {
+    grid-area: 1 / 4 / 3 / 5;
+    align-self: stretch;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding-left: 8px;
+    border-left: 3px double var(--ledger-red-rule);
+    white-space: nowrap;
+    font-size: 1.0625rem;
+  }
+
+  .actions {
+    grid-area: 1 / 5 / 3 / 6;
+    text-align: center;
+  }
+
+  // 鎖帳列只留鎖頭：停用的刪除鈕在窄螢幕只佔位置
+  tr.locked .delete {
+    display: none;
+  }
+}

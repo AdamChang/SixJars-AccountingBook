@@ -9,7 +9,11 @@ import { DENIED_MESSAGE } from '../../core/errors/messages';
     <p class="message">{{ message }}</p>
     <p class="message"><a href="/auth/login">重新登入</a></p>
   `,
-  styles: `.message { padding: 0 16px; }`,
+  styles: `
+    :host { display: block; max-width: 480px; margin: 48px auto; padding: 0 16px; text-align: center; }
+    .message { margin: 0 0 12px; }
+    a { color: var(--ink); font-weight: 500; }
+  `,
 })
 export class DeniedPage {
   protected readonly message = DENIED_MESSAGE;

@@ -12,6 +12,7 @@ using SixJars.Api.Tests;
 using SixJars.Application;
 using SixJars.Application.Auditing;
 using SixJars.Application.Backup;
+using SixJars.Application.Books;
 using SixJars.Application.Common;
 using SixJars.Application.Members;
 using SixJars.Application.Planning;
@@ -69,6 +70,34 @@ public class RestoreBackupTests(PostgresFixture postgres)
     }
 
     [Fact]
+    public async Task Version_1_backup_without_sort_order_is_restored()
+    {
+        var source = await Scenario.BuildAsync(postgres);
+        await using var _ = source;
+        var a = await source.ExportAsync();
+        // 模擬 P3 的 v1 備份：沒有 sortOrder、archivedAt 欄位，清單順序是當時資料庫讀出的任意順序
+        var json = JsonNode.Parse(BackupJson.SerializeToUtf8Bytes(a))!;
+        json["formatVersion"] = 1;
+        foreach (var list in new[] { "accounts", "planningFunds", "categories" })
+        {
+            foreach (var item in json["book"]![list]!.AsArray())
+            {
+                item!.AsObject().Remove("sortOrder");
+                item.AsObject().Remove("archivedAt");
+            }
+        }
+
+        var accounts = json["book"]!["accounts"]!.AsArray();
+        var first = accounts[0]!;
+        accounts.RemoveAt(0);
+        accounts.Add(first);
+        var v1 = json.Deserialize<BackupDocument>(BackupJson.Options)!;
+        var target = await postgres.CreateConnectionStringAsync(Ct);
+
+        (await RestoreAsync(target, v1)).Should().Be(a.Book.Id);
+    }
+
+    [Fact]
     public async Task Restore_into_database_with_same_book_is_rejected()
     {
         var source = await Scenario.BuildAsync(postgres);
@@ -116,6 +145,7 @@ public class RestoreBackupTests(PostgresFixture postgres)
     [InlineData("paid-flag-without-link")]
     [InlineData("transaction-normalized-by-domain")]
     [InlineData("sub-category-kind-mismatch")]
+    [InlineData("sort-order-gap")]
     public async Task Corrupted_backup_writes_nothing(string corruption)
     {
         var source = await Scenario.BuildAsync(postgres);
@@ -160,7 +190,14 @@ public class RestoreBackupTests(PostgresFixture postgres)
         switch (corruption)
         {
             case "format-version":
-                return backup with { FormatVersion = 2 };
+                return backup with { FormatVersion = BackupDocument.CurrentFormatVersion + 1 };
+            case "sort-order-gap":
+            {
+                // D5：同一組的 SortOrder 一定連續；有空號表示檔案被改過，還原會重新編號而與備份不同。
+                var accounts = backup.Book.Accounts.ToList();
+                accounts[^1] = accounts[^1] with { SortOrder = accounts[^1].SortOrder + 1 };
+                return backup with { Book = backup.Book with { Accounts = accounts } };
+            }
             case "unknown-account":
                 transactions[0] = transactions[0] with { Transaction = transactions[0].Transaction with { AccountId = Guid.NewGuid() } };
                 return backup with { Transactions = transactions };
@@ -324,6 +361,7 @@ public class RestoreBackupTests(PostgresFixture postgres)
             var client = await factory.CreateMemberClientAsync();
             var scenario = new Scenario(factory, connectionString, client, book.Id.Value);
             await scenario.FillAsync(book);
+            await scenario.ArchiveAndReorderAsync();
             await scenario.Post(other.Id.Value, "transactions", Input(TransactionKind.Expense, "2026-01-06", -77m, other.FindAccount("現金")!,
                 category: other.FindCategory("主食")!.Id.Value));
 
@@ -369,6 +407,22 @@ public class RestoreBackupTests(PostgresFixture postgres)
             a.AuditEntries.Should().Contain(e => e.Action == AuditAction.Update && e.EntityType == AuditEntityTypes.Transaction);
             a.AuditEntries.Should().Contain(e => e.Action == AuditAction.LockDateChanged);
             a.AuditEntries.Should().Contain(e => e.EntityType == AuditEntityTypes.BookMember && e.ActorSubject == CliSubject);
+            // (h) 封存的帳戶與子分類，且帳戶順序與建立順序（UUIDv7 遞增）不同。
+            a.Book.Accounts.Should().Contain(x => x.Name == "舊存摺" && x.ArchivedAt != null);
+            a.Book.Categories.Should().Contain(x => x.Name == "計程車" && x.ArchivedAt != null);
+            a.Book.Accounts.Select(x => x.Id).Should().NotBeInAscendingOrder();
+        }
+
+        /// <summary>(h) 新增一個餘額為 0 的帳戶並封存、封存一個子分類，再把帳戶順序整個倒過來。</summary>
+        private async Task ArchiveAndReorderAsync()
+        {
+            var oldPassbook = await PostForId("accounts", new { name = "舊存摺", type = "Bank", openingBalance = 0m });
+            (await Client.PostAsync($"/api/books/{BookId}/accounts/{oldPassbook}/archive", null, Ct)).EnsureSuccessStatusCode();
+            var current = (await Client.GetFromJsonAsync<BookDto>($"/api/books/{BookId}", ApiJson.Options, Ct))!;
+            var taxi = current.Categories.Single(c => c.Name == "計程車").Id;
+            (await Client.PostAsync($"/api/books/{BookId}/categories/{taxi}/archive", null, Ct)).EnsureSuccessStatusCode();
+            (await Client.PutAsJsonAsync($"/api/books/{BookId}/accounts/order",
+                new { ids = current.Accounts.Select(a => a.Id).Reverse() }, ApiJson.Options, Ct)).EnsureSuccessStatusCode();
         }
 
         public async ValueTask DisposeAsync()

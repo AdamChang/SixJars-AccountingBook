@@ -1,10 +1,59 @@
-:host { display: block; max-width: 960px; margin: 0 auto; padding: 0 16px 24px; }
-app-month-nav { margin: 8px 0; }
-.metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 16px; }
-.label { color: var(--mat-sys-on-surface-variant); }
-.value { font-size: 1.75rem; font-variant-numeric: tabular-nums; }
-.sub { font-size: 0.85rem; color: var(--mat-sys-on-surface-variant); font-variant-numeric: tabular-nums; }
-h3 { margin: 16px 0 4px; }
-table { width: 100%; border-collapse: collapse; }
-td { padding: 6px 0; border-bottom: 1px solid var(--mat-sys-outline-variant); }
-.amount { text-align: right; font-variant-numeric: tabular-nums; }
+:host { display: block; max-width: 960px; margin: 0 auto; padding: 0 16px 32px; }
+app-month-nav { margin: 8px 0 16px; }
+
+// 月可用餘額是這一頁最重要的數字：獨佔一整列、放大；另外兩個並排在下方
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.metric {
+  background: var(--ledger-sheet);
+  border-color: var(--ledger-rule);
+}
+
+// 會計帳上的總計數字下方畫雙底線
+.hero {
+  grid-column: 1 / -1;
+
+  mat-card-content { padding: 20px 24px 24px; }
+  .value {
+    display: inline-block;
+    margin-top: 8px;
+    padding-bottom: 2px;
+    border-bottom: 4px double currentColor;
+    font-size: clamp(2.5rem, 8vw, 3.5rem);
+    font-weight: 700;
+    line-height: 1.15;
+  }
+}
+
+.label { color: var(--mat-sys-on-surface-variant); font-size: 0.9rem; }
+.value { font-size: 1.75rem; font-weight: 500; color: var(--ink); margin-top: 6px; line-height: 1.2; }
+.value.red-ink { color: var(--red-ink); }
+.sub { margin-top: 6px; font-size: 0.85rem; color: var(--mat-sys-on-surface-variant); }
+
+.balances {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 8px 24px;
+  align-items: start;
+}
+
+h3 {
+  margin: 12px 0 6px;
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: 1rem;
+  color: var(--ledger-heading);
+  letter-spacing: 0.08em;
+}
+
+// table 預設 border-collapse 會吃掉圓角，帳簿表格改 separate 才能保留紙張外框
+table.ledger { border-collapse: separate; border-spacing: 0; overflow: hidden; }
+
+@media (max-width: 599px) {
+  .metrics { grid-template-columns: minmax(0, 1fr); }
+}

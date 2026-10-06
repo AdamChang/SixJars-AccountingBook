@@ -1,0 +1,11 @@
+:host { display: block; max-width: 960px; margin: 0 auto; padding: 8px 16px 32px; }
+mat-tab-group { overflow: hidden; }
+section { padding: 0 16px 16px; }
+.group { margin-top: 8px; border-bottom: 1px solid var(--ledger-rule); }
+.group:last-child { border-bottom: none; }
+header { display: flex; align-items: center; justify-content: space-between; }
+h3 { margin: 16px 0 4px; font-family: var(--font-serif); font-weight: 700; font-size: 1rem; color: var(--ledger-heading); letter-spacing: 0.08em; }
+.hint { color: var(--mat-sys-on-surface-variant); font-size: 0.875rem; }
+.actions { display: flex; gap: 8px; }
+.downloads { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.downloads h3 { flex-basis: 100%; }

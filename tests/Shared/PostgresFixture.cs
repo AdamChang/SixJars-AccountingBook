@@ -27,6 +27,18 @@ public sealed class PostgresFixture : IAsyncLifetime
         return connectionString;
     }
 
+    /// <summary>只套用到 <paramref name="targetMigration"/> 為止的資料庫（測試 migration 的資料回填）。</summary>
+    public async Task<string> CreateConnectionStringAtAsync(string targetMigration, CancellationToken cancellationToken)
+    {
+        var connectionString = new NpgsqlConnectionStringBuilder(_container.GetConnectionString())
+        {
+            Database = $"t_{Guid.NewGuid():N}",
+        }.ConnectionString;
+        await using var db = new SixJarsDbContext(Options(connectionString));
+        await db.Database.MigrateAsync(targetMigration, cancellationToken);
+        return connectionString;
+    }
+
     public async Task<Func<SixJarsDbContext>> CreateDatabaseAsync(CancellationToken cancellationToken)
     {
         var options = Options(await CreateConnectionStringAsync(cancellationToken));

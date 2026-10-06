@@ -81,9 +81,9 @@ public class BackupExportTests(PostgresFixture postgres)
         backup.AuditEntries[2].After.Should().BeNull();
     }
 
-    /// <summary>格式版本固定為 1；檔案縮排、中文不跳脫，方便人工檢視。同一份資料匯出兩次，內容完全相同。</summary>
+    /// <summary>格式版本為 2（P4 段 J 起）；檔案縮排、中文不跳脫，方便人工檢視。同一份資料匯出兩次，內容完全相同。</summary>
     [Fact]
-    public async Task Backup_format_version_is_1()
+    public async Task Backup_format_version_is_2()
     {
         await using var factory = await CreateFactoryAsync();
         var book = await factory.SeedBookAsync(Ct);
@@ -94,9 +94,9 @@ public class BackupExportTests(PostgresFixture postgres)
         var json = await client.GetStringAsync(url, Ct);
 
         using var document = JsonDocument.Parse(json);
-        document.RootElement.GetProperty("formatVersion").GetInt32().Should().Be(1);
-        BackupDocument.CurrentFormatVersion.Should().Be(1);
-        json.Should().Contain("\n  \"formatVersion\": 1").And.Contain("測試帳本").And.Contain("\"kind\": \"Expense\"");
+        document.RootElement.GetProperty("formatVersion").GetInt32().Should().Be(2);
+        BackupDocument.CurrentFormatVersion.Should().Be(2);
+        json.Should().Contain("\n  \"formatVersion\": 2").And.Contain("測試帳本").And.Contain("\"kind\": \"Expense\"");
         (await client.GetStringAsync(url, Ct)).Should().Be(json);
     }
 
