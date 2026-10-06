@@ -165,8 +165,8 @@ public class SummaryEndpointTests(PostgresFixture postgres)
             disposable.YearToDate(month),
             cash.AsOf(asOf, includeEWallets: false),
             cash.AsOf(asOf, includeEWallets: true),
-            [.. ledger.Book.Accounts.Select(a => new BalanceDto(a.Id.Value, a.Name, balances.AccountBalanceAsOf(a.Id, asOf)))],
-            [.. ledger.Book.PlanningFunds.Select(f => new BalanceDto(f.Id.Value, f.Name, balances.FundBalanceAsOf(f.Id, asOf)))]);
+            [.. ledger.Book.Accounts.OrderBy(a => a.SortOrder).Select(a => new BalanceDto(a.Id.Value, a.Name, balances.AccountBalanceAsOf(a.Id, asOf)))],
+            [.. ledger.Book.PlanningFunds.OrderBy(f => f.SortOrder).Select(f => new BalanceDto(f.Id.Value, f.Name, balances.FundBalanceAsOf(f.Id, asOf)))]);
     }
 
     private static Guid Account(Book book, string name) => book.FindAccount(name)!.Id.Value;

@@ -47,7 +47,7 @@ internal sealed class GetLedgerSummaryHandler(ISixJarsDbContext db, ILedgerSumma
             monthly.Values.Sum(),
             LedgerBalances.AvailableCash(book, postings, includeEWallets: false),
             LedgerBalances.AvailableCash(book, postings, includeEWallets: true),
-            [.. book.Accounts.Select(a => new BalanceDto(a.Id.Value, a.Name, LedgerBalances.Account(a, postings)))],
-            [.. book.PlanningFunds.Select(f => new BalanceDto(f.Id.Value, f.Name, LedgerBalances.Fund(f, funds)))]);
+            [.. book.Accounts.OrderBy(a => a.SortOrder).Select(a => new BalanceDto(a.Id.Value, a.Name, LedgerBalances.Account(a, postings)))],
+            [.. book.PlanningFunds.OrderBy(f => f.SortOrder).Select(f => new BalanceDto(f.Id.Value, f.Name, LedgerBalances.Fund(f, funds)))]);
     }
 }
