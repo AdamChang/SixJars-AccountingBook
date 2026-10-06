@@ -197,6 +197,71 @@ public sealed class Book
         Reorder(group, ids, c => c.Id, (c, order) => c.MoveTo(order), "分類");
     }
 
+    // 刪除後把組內剩下的項目重新編號，維持 SortOrder 0..n-1 連續（還原備份時才能重建出相同的順序）。
+
+    /// <param name="isReferenced">由呼叫端查詢：是否有交易或預定支出（含已軟刪除）使用這個帳戶。</param>
+    public void RemoveAccount(AccountId id, bool isReferenced)
+    {
+        var account = GetAccount(id);
+        EnsureUnreferenced(account.Name, isReferenced);
+        _accounts.Remove(account);
+        Compact(_accounts, a => a.SortOrder, (a, order) => a.MoveTo(order));
+    }
+
+    /// <param name="isReferenced">由呼叫端查詢：是否有交易（含已軟刪除）使用這個財務規劃帳戶。</param>
+    public void RemovePlanningFund(PlanningFundId id, bool isReferenced)
+    {
+        var fund = GetPlanningFund(id);
+        EnsureUnreferenced(fund.Name, isReferenced);
+        _planningFunds.Remove(fund);
+        Compact(_planningFunds, f => f.SortOrder, (f, order) => f.MoveTo(order));
+    }
+
+    /// <param name="isReferenced">由呼叫端查詢：是否有交易或預定支出（含已軟刪除）使用這個分類。</param>
+    public void RemoveCategory(CategoryId id, bool isReferenced)
+    {
+        var category = GetCategory(id);
+        if (category.IsMain && SubCategoriesOf(id).Any())
+        {
+            throw new DomainException($"「{category.Name}」底下還有子分類，請先刪除子分類。", DomainException.InUseCode);
+        }
+
+        EnsureUnreferenced(category.Name, isReferenced);
+        _categories.Remove(category);
+        var siblings = category.ParentId is { } parentId ? SubCategoriesOf(parentId) : MainCategoriesOf(category.Kind);
+        Compact(siblings, c => c.SortOrder, (c, order) => c.MoveTo(order));
+    }
+
+    /// <summary>
+    /// 改支出主分類的性質，回溯生效，子分類一起改（spec §3.1、Q4）。
+    /// 預定支出只允許固定、貸款、特別，所以有預定支出（含已刪除）時不能改成浮動。
+    /// L 段會再加上「有預算時拒絕」。
+    /// </summary>
+    public void ChangeExpenseNature(CategoryId id, ExpenseNature nature, bool hasPlannedExpenses)
+    {
+        var category = GetCategory(id);
+        if (!category.IsMain || category.Kind != CategoryKind.Expense)
+        {
+            throw new DomainException($"只有支出主分類可以修改支出性質，「{category.Name}」不是。");
+        }
+
+        if (category.Nature == nature)
+        {
+            return;
+        }
+
+        if (nature == ExpenseNature.Floating && hasPlannedExpenses)
+        {
+            throw new DomainException($"「{category.Name}」有預定支出，不能改成浮動支出。", DomainException.InUseCode);
+        }
+
+        category.ChangeNature(nature);
+        foreach (var sub in SubCategoriesOf(id))
+        {
+            sub.ChangeNature(nature);
+        }
+    }
+
     public Account GetAccount(AccountId id) =>
         _accounts.Find(a => a.Id == id) ?? throw new DomainException($"找不到帳戶 {id.Value}。");
 
@@ -255,6 +320,23 @@ public sealed class Book
         for (var order = 0; order < ids.Count; order++)
         {
             moveTo(byId[ids[order]], order);
+        }
+    }
+
+    private static void EnsureUnreferenced(string name, bool isReferenced)
+    {
+        if (isReferenced)
+        {
+            throw new DomainException($"「{name}」已有交易或預定支出使用，不能刪除；可以改用封存。", DomainException.InUseCode);
+        }
+    }
+
+    private static void Compact<T>(IEnumerable<T> group, Func<T, int> sortOrderOf, Action<T, int> moveTo)
+    {
+        var order = 0;
+        foreach (var item in group.OrderBy(sortOrderOf).ToList())
+        {
+            moveTo(item, order++);
         }
     }
 

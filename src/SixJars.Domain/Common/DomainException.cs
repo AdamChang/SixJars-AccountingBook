@@ -12,5 +12,8 @@ public sealed class DomainException(string message, string code = DomainExceptio
     /// <summary>帳戶或財務規劃帳戶的餘額不為 0，不能封存。</summary>
     public const string NonZeroBalanceCode = "non-zero-balance";
 
+    /// <summary>設定項目仍被使用（交易、預定支出、子分類……），不能刪除或變更。</summary>
+    public const string InUseCode = "in-use";
+
     public string Code { get; } = code;
 }

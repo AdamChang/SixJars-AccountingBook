@@ -227,4 +227,95 @@ public class BookSettingsTests
 
         (b.SortOrder, a.SortOrder).Should().Be((0, 1));
     }
+
+    [Fact]
+    public void Referenced_item_cannot_be_removed()
+    {
+        var bank = _book.AddAccount("銀行", AccountType.Bank);
+
+        var act = () => _book.RemoveAccount(bank.Id, isReferenced: true);
+
+        act.Should().Throw<DomainException>().Which.Code.Should().Be(DomainException.InUseCode);
+        _book.Accounts.Should().Contain(bank);
+    }
+
+    [Fact]
+    public void Removing_compacts_sort_order_of_the_group()
+    {
+        var a = _book.AddAccount("A", AccountType.Cash);
+        var b = _book.AddAccount("B", AccountType.Bank);
+        var c = _book.AddAccount("C", AccountType.Bank);
+
+        _book.RemoveAccount(b.Id, isReferenced: false);
+
+        _book.Accounts.Should().BeEquivalentTo([a, c]);
+        (a.SortOrder, c.SortOrder).Should().Be((0, 1));
+        _book.AddAccount("D", AccountType.Bank).SortOrder.Should().Be(2);
+    }
+
+    [Fact]
+    public void Remove_planning_fund_and_sub_category()
+    {
+        var fund = _book.AddPlanningFund("旅遊基金");
+        var food = _book.AddExpenseCategory("飲食", ExpenseNature.Floating);
+        var lunch = _book.AddSubCategory(food.Id, "午餐");
+        var dinner = _book.AddSubCategory(food.Id, "晚餐");
+
+        _book.RemovePlanningFund(fund.Id, isReferenced: false);
+        _book.RemoveCategory(lunch.Id, isReferenced: false);
+
+        _book.PlanningFunds.Should().BeEmpty();
+        _book.Categories.Should().BeEquivalentTo([food, dinner]);
+        dinner.SortOrder.Should().Be(0);
+    }
+
+    [Fact]
+    public void Main_category_with_sub_categories_cannot_be_removed()
+    {
+        var food = _book.AddExpenseCategory("飲食", ExpenseNature.Floating);
+        _book.AddSubCategory(food.Id, "午餐");
+
+        var act = () => _book.RemoveCategory(food.Id, isReferenced: false);
+
+        act.Should().Throw<DomainException>().Which.Code.Should().Be(DomainException.InUseCode);
+    }
+
+    [Fact]
+    public void Changing_nature_applies_to_sub_categories()
+    {
+        var other = _book.AddExpenseCategory("其他", ExpenseNature.Special);
+        var gift = _book.AddSubCategory(other.Id, "禮金");
+
+        _book.ChangeExpenseNature(other.Id, ExpenseNature.Floating, hasPlannedExpenses: false);
+
+        other.Nature.Should().Be(ExpenseNature.Floating);
+        gift.Nature.Should().Be(ExpenseNature.Floating);
+    }
+
+    [Fact]
+    public void Nature_can_only_change_on_expense_main_category()
+    {
+        var salary = _book.AddIncomeCategory("薪資");
+        var food = _book.AddExpenseCategory("飲食", ExpenseNature.Floating);
+        var lunch = _book.AddSubCategory(food.Id, "午餐");
+
+        var onIncome = () => _book.ChangeExpenseNature(salary.Id, ExpenseNature.Fixed, hasPlannedExpenses: false);
+        var onSub = () => _book.ChangeExpenseNature(lunch.Id, ExpenseNature.Fixed, hasPlannedExpenses: false);
+
+        onIncome.Should().Throw<DomainException>();
+        onSub.Should().Throw<DomainException>();
+    }
+
+    [Fact]
+    public void Category_with_planned_expenses_cannot_become_floating()
+    {
+        var insurance = _book.AddExpenseCategory("保險", ExpenseNature.Fixed);
+
+        var toFloating = () => _book.ChangeExpenseNature(insurance.Id, ExpenseNature.Floating, hasPlannedExpenses: true);
+        toFloating.Should().Throw<DomainException>().Which.Code.Should().Be(DomainException.InUseCode);
+
+        // 固定 → 特別仍然是預定支出允許的性質
+        _book.ChangeExpenseNature(insurance.Id, ExpenseNature.Special, hasPlannedExpenses: true);
+        insurance.Nature.Should().Be(ExpenseNature.Special);
+    }
 }

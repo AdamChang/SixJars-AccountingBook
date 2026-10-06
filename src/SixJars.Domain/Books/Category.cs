@@ -37,4 +37,6 @@ public sealed class Category
     internal void Unarchive() => ArchivedAt = null;
 
     internal void MoveTo(int sortOrder) => SortOrder = sortOrder;
+
+    internal void ChangeNature(ExpenseNature nature) => Nature = nature;
 }
