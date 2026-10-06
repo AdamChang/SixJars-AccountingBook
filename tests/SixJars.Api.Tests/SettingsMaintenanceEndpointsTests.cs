@@ -198,6 +198,98 @@ public class SettingsMaintenanceEndpointsTests(PostgresFixture postgres)
         response.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
     }
 
+    [Fact]
+    public async Task Reorder_accounts()
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var book = await factory.SeedBookAsync(Ct);
+        var client = await factory.CreateMemberClientAsync();
+        var reversed = book.Accounts.OrderByDescending(a => a.SortOrder).Select(a => a.Id.Value).ToArray();
+
+        var response = await client.PutAsJsonAsync(Url(book, "/accounts/order"), new { ids = reversed }, ApiJson.Options, Ct);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        var dto = (await client.GetFromJsonAsync<BookDto>(Url(book, ""), ApiJson.Options, Ct))!;
+        dto.Accounts.Select(a => a.Id).Should().Equal(reversed);
+    }
+
+    [Fact]
+    public async Task Reorder_sub_categories_of_a_parent()
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var book = await factory.SeedBookAsync(Ct);
+        var client = await factory.CreateMemberClientAsync();
+        var food = book.FindCategory("主食")!.Id.Value;
+        await client.PostAsJsonAsync(Url(book, "/categories"), new { name = "晚餐", kind = "Expense", parentId = food }, ApiJson.Options, Ct);
+        var subs = (await client.GetFromJsonAsync<BookDto>(Url(book, ""), ApiJson.Options, Ct))!.Categories.Where(c => c.ParentId == food).ToList();
+
+        var response = await client.PutAsJsonAsync(Url(book, "/categories/order"),
+            new { parentId = food, ids = subs.Select(c => c.Id).Reverse() }, ApiJson.Options, Ct);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        var dto = (await client.GetFromJsonAsync<BookDto>(Url(book, ""), ApiJson.Options, Ct))!;
+        dto.Categories.Where(c => c.ParentId == food).Select(c => c.Name).Should().Equal("晚餐", "午餐");
+    }
+
+    [Fact]
+    public async Task Reorder_main_categories_of_a_kind()
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var book = await factory.SeedBookAsync(Ct);
+        var client = await factory.CreateMemberClientAsync();
+        var mains = book.Categories.Where(c => c.IsMain && c.Kind == CategoryKind.Expense).OrderByDescending(c => c.SortOrder).ToList();
+
+        var response = await client.PutAsJsonAsync(Url(book, "/categories/order"),
+            new { kind = "Expense", ids = mains.Select(c => c.Id.Value) }, ApiJson.Options, Ct);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        var dto = (await client.GetFromJsonAsync<BookDto>(Url(book, ""), ApiJson.Options, Ct))!;
+        dto.Categories.Where(c => c.ParentId == null && c.Kind == CategoryKind.Expense).Select(c => c.Name)
+            .Should().Equal("貸款支出", "固定支出", "主食");
+    }
+
+    [Fact]
+    public async Task Reorder_records_audit_only_for_moved_items()
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var book = await factory.SeedBookAsync(Ct);
+        var client = await factory.CreateMemberClientAsync();
+        var ids = book.Accounts.OrderBy(a => a.SortOrder).Select(a => a.Id.Value).ToList();
+        (ids[0], ids[1]) = (ids[1], ids[0]);   // 只交換前兩個
+
+        await client.PutAsJsonAsync(Url(book, "/accounts/order"), new { ids }, ApiJson.Options, Ct);
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SixJarsDbContext>();
+        (await db.AuditEntries.Where(e => e.EntityType == "Account").Select(e => e.EntityId).ToListAsync(Ct))
+            .Should().BeEquivalentTo(ids.Take(2));
+    }
+
+    [Fact]
+    public async Task Stale_order_is_422()
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var book = await factory.SeedBookAsync(Ct);
+
+        var response = await (await factory.CreateMemberClientAsync()).PutAsJsonAsync(Url(book, "/accounts/order"),
+            new { ids = book.Accounts.Skip(1).Select(a => a.Id.Value) }, ApiJson.Options, Ct);
+
+        response.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
+    }
+
+    [Fact]
+    public async Task Main_category_order_requires_kind()
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var book = await factory.SeedBookAsync(Ct);
+
+        var response = await (await factory.CreateMemberClientAsync()).PutAsJsonAsync(Url(book, "/categories/order"),
+            new { ids = Array.Empty<Guid>() }, ApiJson.Options, Ct);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await ReadProblemAsync(response)).GetProperty("errors").TryGetProperty("kind", out _).Should().BeTrue();
+    }
+
     internal static async Task<Guid> AddAccountAsync(HttpClient client, Book book, string name)
     {
         var response = await client.PostAsJsonAsync(Url(book, "/accounts"), new { name, type = "Bank", openingBalance = 0m }, ApiJson.Options, Ct);

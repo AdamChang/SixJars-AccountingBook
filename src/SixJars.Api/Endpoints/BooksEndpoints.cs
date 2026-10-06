@@ -1,5 +1,6 @@
 using MediatR;
 using SixJars.Application.Books;
+using SixJars.Domain.Books;
 
 namespace SixJars.Api.Endpoints;
 
@@ -38,13 +39,16 @@ internal static class BooksEndpoints
         return book;
     }
 
-    /// <summary>三種設定共用的動作：封存、解除封存。</summary>
+    /// <summary>三種設定共用的動作：封存、解除封存、重新排序。</summary>
     private static void MapSettingActions(RouteGroupBuilder book, string path, SettingKind kind)
     {
         book.MapPost($"/{path}/{{id:guid}}/archive", (Guid bookId, Guid id, ISender sender, CancellationToken ct) =>
             NoContent(sender.Send(new ArchiveSetting(bookId, kind, id), ct)));
         book.MapPost($"/{path}/{{id:guid}}/unarchive", (Guid bookId, Guid id, ISender sender, CancellationToken ct) =>
             NoContent(sender.Send(new UnarchiveSetting(bookId, kind, id), ct)));
+        // /{path}/order 不會被 /{path}/{id:guid} 接住（guid 限制）。
+        book.MapPut($"/{path}/order", (Guid bookId, ReorderBody body, ISender sender, CancellationToken ct) =>
+            NoContent(sender.Send(new ReorderSettings(bookId, kind, body.Kind, body.ParentId, body.Ids ?? []), ct)));
     }
 
     private static IResult Created(Guid bookId, Guid id) => Results.Created($"/api/books/{bookId}", new { id });
@@ -55,6 +59,9 @@ internal static class BooksEndpoints
         return Results.NoContent();
     }
 }
+
+/// <summary>重新排序的 body；<see cref="Kind"/>、<see cref="ParentId"/> 只用於分類。</summary>
+internal sealed record ReorderBody(CategoryKind? Kind, Guid? ParentId, IReadOnlyList<Guid>? Ids);
 
 /// <summary>設定鎖帳日的 body；<see cref="LockDate"/> 為 null 時清除。</summary>
 internal sealed record SetLockDateBody(DateOnly? LockDate);
