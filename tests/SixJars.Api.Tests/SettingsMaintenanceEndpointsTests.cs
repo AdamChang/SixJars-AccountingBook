@@ -4,8 +4,10 @@ using System.Text.Json;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using SixJars.Application.Auditing;
 using SixJars.Application.Books;
 using SixJars.Application.Ledger;
+using SixJars.Application.Transactions;
 using SixJars.Domain.Books;
 using SixJars.Infrastructure.Persistence;
 using SixJars.Tests.Shared;
@@ -288,6 +290,87 @@ public class SettingsMaintenanceEndpointsTests(PostgresFixture postgres)
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
         (await ReadProblemAsync(response)).GetProperty("errors").TryGetProperty("kind", out _).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Remove_unused_account()
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var book = await factory.SeedBookAsync(Ct);
+        var client = await factory.CreateMemberClientAsync();
+        var postOffice = await AddAccountAsync(client, book, "郵局");
+
+        (await client.DeleteAsync(Url(book, $"/accounts/{postOffice}"), Ct)).StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        var dto = (await client.GetFromJsonAsync<BookDto>(Url(book, ""), ApiJson.Options, Ct))!;
+        dto.Accounts.Should().NotContain(a => a.Id == postOffice);
+        dto.Accounts.Select(a => a.SortOrder).Should().Equal(0, 1, 2, 3, 4);
+    }
+
+    [Fact]
+    public async Task Category_used_only_by_deleted_transaction_cannot_be_removed()
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var book = await factory.SeedBookAsync(Ct);
+        var client = await factory.CreateMemberClientAsync();
+        var lunch = book.FindCategory("主食", "午餐")!;
+        var created = await client.PostAsJsonAsync(Url(book, "/transactions"), new
+        {
+            kind = "Expense", date = "2026-01-05", amount = -120m, note = "午餐",
+            accountId = book.FindAccount("現金")!.Id.Value, categoryId = lunch.Id.Value,
+        }, ApiJson.Options, Ct);
+        var transaction = (await created.Content.ReadFromJsonAsync<TransactionDto>(ApiJson.Options, Ct))!;
+        (await client.DeleteAsync(Url(book, $"/transactions/{transaction.Id}?version={transaction.Version}"), Ct))
+            .StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        var response = await client.DeleteAsync(Url(book, $"/categories/{lunch.Id.Value}"), Ct);
+
+        response.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
+        (await ReadProblemAsync(response)).GetProperty("code").GetString().Should().Be("in-use");
+    }
+
+    [Fact]
+    public async Task Account_used_by_planned_expense_cannot_be_removed()
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var book = await factory.SeedBookAsync(Ct);
+        var client = await factory.CreateMemberClientAsync();
+        await PlannedExpensesEndpointsTests.CreateAsync(client, book, PlannedExpensesEndpointsTests.InsuranceInput(book, 202602, -1200m, "保險"));
+
+        var response = await client.DeleteAsync(Url(book, $"/accounts/{book.FindAccount("國泰世華銀行")!.Id.Value}"), Ct);
+
+        response.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
+        (await ReadProblemAsync(response)).GetProperty("code").GetString().Should().Be("in-use");
+    }
+
+    [Fact]
+    public async Task Main_category_with_subs_cannot_be_removed_but_unused_fund_can()
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var book = await factory.SeedBookAsync(Ct);
+        var client = await factory.CreateMemberClientAsync();
+
+        var main = await client.DeleteAsync(Url(book, $"/categories/{book.FindCategory("主食")!.Id.Value}"), Ct);
+        var fund = await client.DeleteAsync(Url(book, $"/planning-funds/{book.PlanningFunds[0].Id.Value}"), Ct);
+
+        main.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
+        (await ReadProblemAsync(main)).GetProperty("code").GetString().Should().Be("in-use");
+        fund.StatusCode.Should().Be(HttpStatusCode.NoContent);
+    }
+
+    [Fact]
+    public async Task Remove_writes_delete_audit_entry()
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var book = await factory.SeedBookAsync(Ct);
+        var client = await factory.CreateMemberClientAsync();
+        var postOffice = await AddAccountAsync(client, book, "郵局");
+
+        await client.DeleteAsync(Url(book, $"/accounts/{postOffice}"), Ct);
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SixJarsDbContext>();
+        (await db.AuditEntries.CountAsync(e => e.EntityId == postOffice && e.Action == AuditAction.Delete, Ct)).Should().Be(1);
     }
 
     internal static async Task<Guid> AddAccountAsync(HttpClient client, Book book, string name)

@@ -39,13 +39,15 @@ internal static class BooksEndpoints
         return book;
     }
 
-    /// <summary>三種設定共用的動作：封存、解除封存、重新排序。</summary>
+    /// <summary>三種設定共用的動作：封存、解除封存、刪除、重新排序。</summary>
     private static void MapSettingActions(RouteGroupBuilder book, string path, SettingKind kind)
     {
         book.MapPost($"/{path}/{{id:guid}}/archive", (Guid bookId, Guid id, ISender sender, CancellationToken ct) =>
             NoContent(sender.Send(new ArchiveSetting(bookId, kind, id), ct)));
         book.MapPost($"/{path}/{{id:guid}}/unarchive", (Guid bookId, Guid id, ISender sender, CancellationToken ct) =>
             NoContent(sender.Send(new UnarchiveSetting(bookId, kind, id), ct)));
+        book.MapDelete($"/{path}/{{id:guid}}", (Guid bookId, Guid id, ISender sender, CancellationToken ct) =>
+            NoContent(sender.Send(new RemoveSetting(bookId, kind, id), ct)));
         // /{path}/order 不會被 /{path}/{id:guid} 接住（guid 限制）。
         book.MapPut($"/{path}/order", (Guid bookId, ReorderBody body, ISender sender, CancellationToken ct) =>
             NoContent(sender.Send(new ReorderSettings(bookId, kind, body.Kind, body.ParentId, body.Ids ?? []), ct)));
