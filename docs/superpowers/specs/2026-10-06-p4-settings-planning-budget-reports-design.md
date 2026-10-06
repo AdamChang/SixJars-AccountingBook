@@ -75,7 +75,7 @@
 |---|---|---|
 | PUT | `/categories/{id}`、`/accounts/{id}`、`/planning-funds/{id}` | 改名（帳戶另外可以改「計入可用現金」）；分類另外可以改支出性質 |
 | POST | `/…/{id}/archive`、`/…/{id}/unarchive` | |
-| DELETE | `/…/{id}` | 被參照時回 409 ProblemDetails |
+| DELETE | `/…/{id}` | 被參照時回 422 ProblemDetails，`code` 為 `in-use`（餘額不為 0 時封存回 `code: non-zero-balance`）。409 保留給並行衝突 |
 | PUT | `/categories/order`、`/accounts/order`、`/planning-funds/order` | body：`{ parentId?, kind?, ids: [] }`，一次送整個父層的新順序 |
 
 `GET /` 的 `BookDto` 加上 `sortOrder` 與 `archived`，並依 `SortOrder` 排序。記帳頁的下拉選單改成排除已封存的項目。
@@ -104,7 +104,7 @@
 | 方法 | 路徑 | 說明 |
 |---|---|---|
 | GET／POST | `/recurring-planned-expenses` | |
-| PUT／DELETE | `/recurring-planned-expenses/{id}` | DELETE 被參照時回 409 |
+| PUT／DELETE | `/recurring-planned-expenses/{id}` | DELETE 被參照時回 422，`code: in-use` |
 | POST | `/planned-expenses/generate?budgetMonth=` | 冪等。回傳 `{ created: [], skipped: [{ recurringId, reason }] }`，reason 是 `AlreadyGenerated` 或 `CategoryArchived`、`AccountArchived` |
 | POST | `/planned-expenses/refresh?budgetMonth=` | 只更新**未付、未刪除、有來源**的預定支出，改用週期項目的現值（分類、帳戶、金額、備註）；週期項目當月已不適用時不更動，列在結果中 |
 
@@ -181,7 +181,7 @@
 
 - 新增 `core/api`：`settings-api`（或擴充 `book-api`）、`planned-expense-api`、`recurring-planned-expense-api`、`budget-api`、`report-api`，DTO 一樣手寫。
 - app shell 的導覽列加上：預定支出、預算、報表、設定。
-- 沿用 P3 的錯誤分類與 snackbar；409（被參照、餘額不為 0、性質有預算）要在畫面上顯示後端的訊息。
+- 沿用 P3 的錯誤分類與 snackbar；422（被參照、餘額不為 0、性質有預算，以 `code` 區分）要在畫面上顯示後端的訊息。409 仍只代表並行衝突。
 
 ## 8. 測試
 
