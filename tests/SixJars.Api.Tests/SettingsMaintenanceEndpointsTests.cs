@@ -138,6 +138,73 @@ public class SettingsMaintenanceEndpointsTests(PostgresFixture postgres)
         entry.GetProperty("after").GetProperty("name").GetString().Should().Be("自由基金");
     }
 
+    [Fact]
+    public async Task Archive_and_unarchive_zero_balance_account()
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var book = await factory.SeedBookAsync(Ct);
+        var client = await factory.CreateMemberClientAsync();
+        var postOffice = await AddAccountAsync(client, book, "郵局");
+
+        (await client.PostAsync(Url(book, $"/accounts/{postOffice}/archive"), null, Ct)).StatusCode.Should().Be(HttpStatusCode.NoContent);
+        var archived = (await client.GetFromJsonAsync<BookDto>(Url(book, ""), ApiJson.Options, Ct))!;
+        archived.Accounts.Single(a => a.Id == postOffice).ArchivedAt.Should().NotBeNull();
+
+        (await client.PostAsync(Url(book, $"/accounts/{postOffice}/unarchive"), null, Ct)).StatusCode.Should().Be(HttpStatusCode.NoContent);
+        var restored = (await client.GetFromJsonAsync<BookDto>(Url(book, ""), ApiJson.Options, Ct))!;
+        restored.Accounts.Single(a => a.Id == postOffice).ArchivedAt.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Account_with_balance_cannot_be_archived()
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var book = await factory.SeedBookAsync(Ct);
+
+        var response = await (await factory.CreateMemberClientAsync()).PostAsync(
+            Url(book, $"/accounts/{book.FindAccount("現金")!.Id.Value}/archive"), null, Ct);   // 期初 1000
+
+        response.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
+        (await ReadProblemAsync(response)).GetProperty("code").GetString().Should().Be("non-zero-balance");
+    }
+
+    [Fact]
+    public async Task Archive_main_category_and_planning_fund()
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var book = await factory.SeedBookAsync(Ct);
+        var client = await factory.CreateMemberClientAsync();
+        var food = book.FindCategory("主食")!.Id.Value;
+
+        (await client.PostAsync(Url(book, $"/categories/{food}/archive"), null, Ct)).StatusCode.Should().Be(HttpStatusCode.NoContent);
+        var fund = await client.PostAsync(Url(book, $"/planning-funds/{book.PlanningFunds[0].Id.Value}/archive"), null, Ct);
+
+        fund.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);   // 財務自由帳戶期初 10000
+        (await ReadProblemAsync(fund)).GetProperty("code").GetString().Should().Be("non-zero-balance");
+        var dto = (await client.GetFromJsonAsync<BookDto>(Url(book, ""), ApiJson.Options, Ct))!;
+        dto.Categories.Single(c => c.Id == food).ArchivedAt.Should().NotBeNull();
+        dto.Categories.Single(c => c.Name == "午餐").ArchivedAt.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Archive_unknown_id_is_422()
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var book = await factory.SeedBookAsync(Ct);
+
+        var response = await (await factory.CreateMemberClientAsync()).PostAsync(Url(book, $"/categories/{Guid.NewGuid()}/archive"), null, Ct);
+
+        // 與既有的 GetCategory 一致：找不到設定項目是領域錯誤（422），不是 404
+        response.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
+    }
+
+    internal static async Task<Guid> AddAccountAsync(HttpClient client, Book book, string name)
+    {
+        var response = await client.PostAsJsonAsync(Url(book, "/accounts"), new { name, type = "Bank", openingBalance = 0m }, ApiJson.Options, Ct);
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+        return (await response.Content.ReadFromJsonAsync<JsonElement>(Ct)).GetProperty("id").GetGuid();
+    }
+
     internal static string Url(Book book, string path) => $"/api/books/{book.Id.Value}{path}";
 
     /// <summary>直接在資料庫裡把順序倒過來，證明輸出是依 SortOrder，而不是碰巧依插入順序。</summary>

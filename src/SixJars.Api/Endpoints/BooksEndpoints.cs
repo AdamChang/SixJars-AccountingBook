@@ -26,6 +26,9 @@ internal static class BooksEndpoints
             NoContent(sender.Send(command with { BookId = bookId, PlanningFundId = id }, ct)));
         book.MapPut("/categories/{id:guid}", (Guid bookId, Guid id, UpdateCategory command, ISender sender, CancellationToken ct) =>
             NoContent(sender.Send(command with { BookId = bookId, CategoryId = id }, ct)));
+        MapSettingActions(book, "accounts", SettingKind.Account);
+        MapSettingActions(book, "planning-funds", SettingKind.PlanningFund);
+        MapSettingActions(book, "categories", SettingKind.Category);
         // lockDate 為 null 時清除鎖帳日。
         book.MapPut("/lock-date", async (Guid bookId, SetLockDateBody body, ISender sender, CancellationToken ct) =>
         {
@@ -33,6 +36,15 @@ internal static class BooksEndpoints
             return Results.NoContent();
         });
         return book;
+    }
+
+    /// <summary>三種設定共用的動作：封存、解除封存。</summary>
+    private static void MapSettingActions(RouteGroupBuilder book, string path, SettingKind kind)
+    {
+        book.MapPost($"/{path}/{{id:guid}}/archive", (Guid bookId, Guid id, ISender sender, CancellationToken ct) =>
+            NoContent(sender.Send(new ArchiveSetting(bookId, kind, id), ct)));
+        book.MapPost($"/{path}/{{id:guid}}/unarchive", (Guid bookId, Guid id, ISender sender, CancellationToken ct) =>
+            NoContent(sender.Send(new UnarchiveSetting(bookId, kind, id), ct)));
     }
 
     private static IResult Created(Guid bookId, Guid id) => Results.Created($"/api/books/{bookId}", new { id });
