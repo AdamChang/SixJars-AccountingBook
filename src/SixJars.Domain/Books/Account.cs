@@ -28,4 +28,8 @@ public sealed class Account
     /// <summary>封存時間；封存的項目不再出現在新增交易的選項中，但既有資料不受影響。</summary>
     public DateTimeOffset? ArchivedAt { get; private set; }
     public bool IsArchived => ArchivedAt is not null;
+
+    internal void Rename(string name) => Name = name;
+
+    internal void SetCountsAsAvailableCash(bool value) => CountsAsAvailableCash = value;
 }

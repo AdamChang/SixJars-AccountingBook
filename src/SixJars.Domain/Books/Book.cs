@@ -102,6 +102,61 @@ public sealed class Book
     public void EnsureUnlocked(BudgetMonth month) =>
         EnsureUnlocked(new DateOnly(month.Year, month.Month, DateTime.DaysInMonth(month.Year, month.Month)));
 
+    // 改名沿用新增時的唯一性規則；改成原本的名字不算重複。
+
+    public void RenameAccount(AccountId id, string name)
+    {
+        var account = GetAccount(id);
+        name = RequireName(name);
+        if (FindAccount(name) is { } other && other.Id != id)
+        {
+            throw new DomainException($"帳戶名稱「{name}」已存在。");
+        }
+
+        account.Rename(name);
+    }
+
+    public void RenamePlanningFund(PlanningFundId id, string name)
+    {
+        var fund = GetPlanningFund(id);
+        name = RequireName(name);
+        if (FindPlanningFund(name) is { } other && other.Id != id)
+        {
+            throw new DomainException($"財務規劃帳戶名稱「{name}」已存在。");
+        }
+
+        fund.Rename(name);
+    }
+
+    public void RenameCategory(CategoryId id, string name)
+    {
+        var category = GetCategory(id);
+        name = RequireName(name);
+        var duplicate = category.IsMain
+            ? _categories.Find(c => c.IsMain && c.Name == name && c.Id != id)
+            : _categories.Find(c => c.ParentId == category.ParentId && c.Name == name && c.Id != id);
+        if (duplicate is not null)
+        {
+            throw new DomainException(category.IsMain
+                ? $"主分類名稱「{name}」已存在。"
+                : $"主分類「{GetCategory(category.ParentId!.Value).Name}」底下已有子分類「{name}」。");
+        }
+
+        category.Rename(name);
+    }
+
+    /// <summary>與新增時相同：只有現金帳戶可以計入可用現金。</summary>
+    public void SetCountsAsAvailableCash(AccountId id, bool countsAsAvailableCash)
+    {
+        var account = GetAccount(id);
+        if (countsAsAvailableCash && account.Type != AccountType.Cash)
+        {
+            throw new DomainException($"「{account.Name}」不是現金帳戶，不能計入可用現金。");
+        }
+
+        account.SetCountsAsAvailableCash(countsAsAvailableCash);
+    }
+
     public Account GetAccount(AccountId id) =>
         _accounts.Find(a => a.Id == id) ?? throw new DomainException($"找不到帳戶 {id.Value}。");
 
