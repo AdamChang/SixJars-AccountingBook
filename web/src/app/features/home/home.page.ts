@@ -12,14 +12,20 @@ import { NO_BOOKS_MESSAGE } from '../../core/errors/messages';
     @if (books.length === 0) {
       <p class="message">{{ noBooksMessage }}</p>
     } @else if (books.length > 1) {
-      <mat-nav-list>
+      <mat-nav-list class="ledger-sheet books">
         @for (book of books; track book.id) {
           <a mat-list-item [routerLink]="['/books', book.id, 'transactions']">{{ book.name }}</a>
         }
       </mat-nav-list>
     }
   `,
-  styles: `.message { padding: 16px; }`,
+  styles: `
+    :host { display: block; max-width: 480px; margin: 24px auto; padding: 0 16px; }
+    .message { padding: 16px; }
+    .books { padding: 0; }
+    .books a { font-family: var(--font-serif); font-size: 1.125rem; border-bottom: 1px solid var(--ledger-rule); }
+    .books a:last-child { border-bottom: none; }
+  `,
 })
 export class HomePage {
   protected readonly noBooksMessage = NO_BOOKS_MESSAGE;

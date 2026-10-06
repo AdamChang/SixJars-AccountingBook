@@ -53,10 +53,13 @@ export interface ReorderRequest { ids: string[]; revert(): void }
   `,
   styles: `
     ul { list-style: none; margin: 0; padding: 0; }
-    .row { display: flex; align-items: center; gap: 4px; min-height: 44px; }
+    .row { display: flex; align-items: center; gap: 4px; min-height: 44px; border-bottom: 1px solid var(--ledger-rule); }
+    .row:last-child { border-bottom: none; }
+    .row.cdk-drag-preview { background: var(--ledger-sheet); box-shadow: 0 4px 12px rgb(30 53 80 / 0.18); border-radius: 4px; }
+    .row.cdk-drag-placeholder { opacity: 0.3; }
     .label { flex: 1; }
     .detail { color: var(--mat-sys-on-surface-variant); font-size: 0.875rem; }
-    .handle { cursor: grab; padding: 0 8px; }
+    .handle { cursor: grab; padding: 0 8px; color: var(--ledger-rule-strong); }
     .archived .row { opacity: 0.6; }
   `,
 })

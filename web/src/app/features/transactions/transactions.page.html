@@ -1,6 +1,6 @@
 <app-month-nav [month]="month()" (monthChange)="changeMonth($event)" />
 @for (book of currentBookAsList(); track book.id) {
-  <section #formTop class="form-section">
+  <section #formTop class="form-section ledger-sheet">
     <app-transaction-form
       [book]="book"
       [editing]="editing()"
@@ -8,7 +8,7 @@
       (cancelled)="onCancelled()"
       (stale)="onStale()" />
   </section>
-  <app-transaction-list
+  <app-transaction-list class="ledger-sheet"
     [transactions]="transactions()"
     [book]="book"
     [editingId]="editingId()"

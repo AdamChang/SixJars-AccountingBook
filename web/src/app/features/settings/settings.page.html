@@ -1,4 +1,4 @@
-<mat-tab-group>
+<mat-tab-group class="ledger-sheet">
   <mat-tab label="分類">
     @for (group of categoryGroups(); track group.key) {
       <ng-container [ngTemplateOutlet]="groupTemplate" [ngTemplateOutletContext]="{ $implicit: group }" />

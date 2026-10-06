@@ -1,10 +1,41 @@
-:host { display: block; }
-table { width: 100%; }
+@use '@angular/material' as mat;
+
+:host {
+  display: block;
+  @include mat.table-overrides(
+    (
+      background-color: transparent,
+      row-item-outline-color: var(--ledger-rule),
+      header-headline-color: var(--ledger-heading),
+    )
+  );
+}
+
+// 窄螢幕不逐字換行，改由外層紙張橫向捲動
+table { width: 100%; min-width: 720px; }
+
+th.mat-mdc-header-cell {
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  border-bottom: 1px solid var(--ledger-rule-strong);
+}
+
+td.mat-mdc-cell { font-variant-numeric: tabular-nums; }
+tr.mat-mdc-row:hover { background: var(--mat-sys-surface-container-low); }
+
+// 金額欄前的紅色雙線
+.amount {
+  border-left: 3px double var(--ledger-red-rule);
+  padding-left: 12px;
+}
+
+td.amount { font-family: var(--font-serif); font-size: 1rem; }
 .empty { text-align: center; padding: 24px 0; color: var(--mat-sys-on-surface-variant); }
 tr.mat-mdc-row { cursor: pointer; }
 tr.mat-mdc-row.locked { cursor: default; }
-tr.mat-mdc-row.editing { background: var(--mat-sys-secondary-container); }
+tr.mat-mdc-row.editing, tr.mat-mdc-row.editing:hover { background: var(--mat-sys-secondary-container); }
 .amount { text-align: right; font-variant-numeric: tabular-nums; }
-.negative { color: var(--mat-sys-error); }
+.negative { color: var(--red-ink); }
 .actions { white-space: nowrap; text-align: right; }
 .lock { vertical-align: middle; color: var(--mat-sys-on-surface-variant); }
+

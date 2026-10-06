@@ -1,3 +1,5 @@
-:host { display: block; max-width: 960px; margin: 0 auto; padding-bottom: 24px; }
-app-month-nav { margin: 8px 0; }
+:host { display: flex; flex-direction: column; gap: 16px; max-width: 960px; margin: 0 auto; padding: 0 16px 32px; }
+app-month-nav { margin-top: 8px; }
 .form-section { scroll-margin-top: 72px; }
+// 欄位多，窄螢幕在紙張內橫向捲動，不撐開整頁
+app-transaction-list { overflow-x: auto; }
