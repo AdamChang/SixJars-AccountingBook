@@ -122,6 +122,43 @@ public class RecurringPlannerTests
     }
 
     [Fact]
+    public void Generate_skips_when_the_sub_category_itself_is_archived()
+    {
+        var item = Item();
+        _book.ArchiveCategory(_insurance.Id, At);   // 只封存子分類，主分類未封存
+
+        var result = RecurringPlanner.Generate(_book, April, [item], new HashSet<RecurringPlannedExpenseId>());
+
+        result.Created.Should().BeEmpty();
+        result.Skipped.Should().Equal(new RecurringSkip(item.Id, null, RecurringSkipReason.CategoryArchived));
+    }
+
+    [Fact]
+    public void Refresh_skips_items_whose_account_is_archived_and_leaves_them_unchanged()
+    {
+        var item = Item(account: _bank.Id);
+        var planned = Generated(item).Single();
+        item.Update(_book, _insurance.Id, _bank.Id, -2000m, "保費調漲", RecurrenceFrequency.Monthly, [], BudgetMonth.FromKey(202601), null);
+        _book.ArchiveAccount(_bank.Id, balance: 0m, At);
+
+        var result = RecurringPlanner.Refresh(_book, April, [item], [planned]);
+
+        result.Updated.Should().BeEmpty();
+        result.Skipped.Should().Equal(new RecurringSkip(item.Id, planned.Id, RecurringSkipReason.AccountArchived));
+        planned.EstimatedAmount.Should().Be(-1000m);
+    }
+
+    [Fact]
+    public void Refresh_with_missing_source_is_a_domain_error()
+    {
+        var planned = Generated(Item()).Single();
+
+        var act = () => RecurringPlanner.Refresh(_book, April, [], [planned]);
+
+        act.Should().Throw<DomainException>();
+    }
+
+    [Fact]
     public void Generated_planned_expense_cannot_move_to_another_month()
     {
         var planned = Generated(Item()).Single();

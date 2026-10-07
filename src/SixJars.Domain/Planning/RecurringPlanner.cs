@@ -52,7 +52,12 @@ public static class RecurringPlanner
         var skipped = new List<RecurringSkip>();
         foreach (var expense in planned.Where(p => p.BudgetMonth == month && !p.IsPaid && !p.IsDeleted && p.SourceId is not null))
         {
-            var source = sources[expense.SourceId!.Value];
+            // FK 與帳本條件保證來源存在；找不到表示呼叫端少給了週期項目，以 DomainException 明確回報。
+            if (!sources.TryGetValue(expense.SourceId!.Value, out var source))
+            {
+                throw new DomainException($"預定支出 {expense.Id.Value} 的來源週期項目 {expense.SourceId.Value.Value} 不存在。");
+            }
+
             var reason = source.IsDueIn(month) ? UnusableReason(book, source) : RecurringSkipReason.NotDue;
             if (reason is { } r)
             {

@@ -36,7 +36,7 @@ internal sealed class RefreshPlannedExpensesHandler(ISixJarsDbContext db, IAudit
             .ToListAsync(cancellationToken);
         var sourceIds = candidates.Select(p => p.SourceId!.Value).Distinct().ToList();
         var items = await db.RecurringPlannedExpenses.AsNoTracking()
-            .Where(r => sourceIds.Contains(r.Id)).ToListAsync(cancellationToken);
+            .Where(r => r.BookId == book.Id && sourceIds.Contains(r.Id)).ToListAsync(cancellationToken);
         // before 快照必須在 Refresh 之前取得。
         var before = candidates.ToDictionary(p => p.Id, p => PlannedExpenseDto.From(p, db.GetVersion(p)));
 
