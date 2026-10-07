@@ -29,7 +29,7 @@
 
 ### 基準線（2026-10-07 本機實測，master `bf7a377`）
 
-- 後端：`dotnet test` 總計 **426**，失敗 0，略過 0（`reference/` 存在，Acceptance 有實際執行）。
+- 後端：`dotnet test` 總計 **426**，失敗 0，略過 0（`reference/` 存在，Acceptance 有實際執行）。加上事實查核的 `PlanKEfAssumptionTests` 3 條之後是 **429**，K1 從 429 起算（以下各 Task 的預測數字都要再加 3）。
 - 前端：`ng test` **232 passed（28 個檔案）**。Playwright 5 個（J 段回寫的數字，本次沒有重跑）。
 - 任何時候數字低於基準線，就是弄壞了東西。各 Task 的「Expected」數字是**預測**，以實際為準，只要只增不減即可。
 
@@ -48,6 +48,8 @@
 - **段落順序**：K1–K9 是後端，K9 完成後是**後端 checkpoint**，停下來讓使用者檢視；K10–K17 是前端，K17 完成後是**前端 checkpoint**。
 
 ### 本計畫做的決定（spec 沒有寫死、或與 spec 不同的地方）
+
+使用者已於 2026-10-07 確認 D1、D2、D3、D5、D6、D11；其餘（D4、D7–D10、D12）沿用計畫的預設。
 
 | # | 決定 | 理由 | 被否決的選項 |
 |---|---|---|---|
@@ -1341,7 +1343,15 @@ internal static class RecurringPlannedExpensesEndpoints
 internal sealed record UpdateRecurringPlannedExpenseBody(uint Version, RecurringPlannedExpenseInput Input);
 ```
 
-`Program.cs`：在 `MapPlannedExpensesEndpoints()` 的旁邊加上 `.MapRecurringPlannedExpensesEndpoints()`（Step 3 前先看 `Program.cs` 實際的串接方式）。
+```diff
+--- a/src/SixJars.Api/Program.cs
++++ b/src/SixJars.Api/Program.cs
+@@
+-api.MapBooksEndpoints().MapTransactionsEndpoints().MapPlannedExpensesEndpoints().MapSummaryEndpoints().MapAuditEndpoints()
++api.MapBooksEndpoints().MapTransactionsEndpoints().MapPlannedExpensesEndpoints().MapRecurringPlannedExpensesEndpoints()
++    .MapSummaryEndpoints().MapAuditEndpoints()
+     .MapExportsEndpoints();
+```
 
 - [ ] **Step 4：跑單檔測試** — Expected：5 passed。另外跑 `--filter-class "*BookScopeConventionTests*"`，確認三個新 request 都有實作 `IBookScoped`。
 - [ ] **Step 5：跑全部測試** — Expected：總計約 **457**，失敗 0。
@@ -1470,7 +1480,7 @@ internal sealed class DeleteRecurringPlannedExpenseHandler(ISixJarsDbContext db,
          return book;
 ```
 
-> `ExpectVersion` 對「Remove」是否同樣做並行檢查，Step 3 前看 `SixJarsDbContext.ExpectVersion` 的實作（它會把 entity 標成 Modified；之後再 `Remove` 會改成 Deleted，原始版本仍然保留，DELETE 會帶 `WHERE xmin = @v`）。若不成立，改成先比對 `db.GetVersion(item) != request.Version` 時擲 `DbUpdateConcurrencyException`，並在偏差段落回報。
+> `ExpectVersion` 之後再 `Remove`，DELETE 仍帶 xmin 條件：已由 `PlanKEfAssumptionTests.Remove_after_expect_version_checks_xmin` 證實（2026-10-07）。
 
 變異檢查：拿掉 `IgnoreQueryFilters()`，`Delete_is_422_in_use_even_when_...` 必須變紅（變成 500）。
 
@@ -1685,7 +1695,7 @@ internal sealed class GeneratePlannedExpensesHandler(ISixJarsDbContext db, IAudi
 +            sender.Send(new GeneratePlannedExpenses(bookId, budgetMonth), ct));
 ```
 
-> `PlannedExpense.SourceId!.Value` 在 LINQ 中的翻譯：`SourceId` 是有 converter 的可空 struct，EF 對 `.Value` 的翻譯若失敗，改成 `.Select(p => p.SourceId)` 後在記憶體中 `.OfType<RecurringPlannedExpenseId>()`。
+> `p.SourceId!.Value` 的翻譯：同形狀的 `PlannedExpense.AccountId!.Value` 已由 `PlanKEfAssumptionTests.Nullable_strongly_typed_id_value_is_translated_in_projection` 證實可以翻譯（2026-10-07）。
 
 變異檢查：拿掉 `IgnoreQueryFilters()`，`Deleted_generated_item_is_not_recreated` 必須變紅（變成 500：撞到唯一索引）。這條同時證明了 K2 的索引在 API 層級的效果。
 
@@ -2151,11 +2161,12 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 `ExportBackup`：比照 `plannedExpenses` 的查詢，加上
 
 ```csharp
-        var recurring = await db.RecurringPlannedExpenses.AsNoTracking()
+        // 要追蹤變更，db.GetVersion 才讀得到 xmin（同 ExportBackup.cs:32 的 plannedExpenses，沒有 AsNoTracking）。
+        var recurring = await db.RecurringPlannedExpenses
             .Where(r => r.BookId == bookId).OrderBy(r => r.Id).ToListAsync(cancellationToken);
 ```
 
-並在建構 `BackupDocument` 時傳入 `RecurringPlannedExpenses: [.. recurring.Select(r => RecurringPlannedExpenseDto.From(r, db.GetVersion(r)))]`（`AsNoTracking` 時 `GetVersion` 能不能讀到 xmin，比照 `plannedExpenses` 的現有寫法決定要不要追蹤）。
+並在建構 `BackupDocument` 時傳入 `RecurringPlannedExpenses: [.. recurring.Select(r => RecurringPlannedExpenseDto.From(r, db.GetVersion(r)))]`。
 
 `RestoreBackup`：
 
@@ -2908,10 +2919,23 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 **尚未查證、開始執行前必須補完**（本 session 的讀檔數已接近上限，依全域指示停在這裡）：
 
-- [ ] Npgsql 對 field-only 的 `int[]` 屬性（`Property<int[]>("_months")`）的對應與 value comparer；不行的話改成 `IReadOnlyList<int>` 的公開屬性或 `List<int>`，並同步修改 K1。
-- [ ] EF 能否翻譯 `p.SourceId!.Value`（有 converter 的可空強型別 Id）；K6 已附替代寫法。
-- [ ] `SixJarsDbContext.ExpectVersion` 之後再 `Remove`，DELETE 是否帶 xmin 條件（K5 的注意事項）。
-- [ ] `Program.cs` 掛 endpoint 的實際寫法；`BackupJson.Options` 的名稱；`ExportBackup` 對預定支出是否 `AsNoTracking`。
+2026-10-07 補查（使用者要求以 unit test 查核；`tests/SixJars.Infrastructure.Tests/Persistence/PlanKEfAssumptionTests.cs`，對真實 PostgreSQL 17 執行，3 passed，留作回歸測試）：
+
+| 引用 | 結果 | 證據 | 變異檢查 |
+|---|---|---|---|
+| field-only `int[] _months` → `integer[]`、Ignore 公開的 `Months`、私有無參數建構子、換陣列後偵測得到變更 | ✅ | `Field_only_int_array_maps_to_integer_array_and_tracks_replacement` | 拿掉 `Property<int[]>("_months")` → 變紅 |
+| 可空強型別 Id 的 `.Value` 在投影中可翻譯（以 `AccountId!.Value` 代替 `SourceId!.Value`） | ✅ | `Nullable_strongly_typed_id_value_is_translated_in_projection` | —（翻譯成功與否本身就是結果） |
+| `ExpectVersion` 後 `Remove`，DELETE 帶 xmin 條件 | ✅ | `Remove_after_expect_version_checks_xmin`（實體在對方修改**之後**才載入，只有 ExpectVersion 能讓它失敗） | 拿掉 `ExpectVersion` → 變紅 |
+| `Program.cs` 的串接方式 | ✅ | `Program.cs:41` 是 `api.MapBooksEndpoints()...MapPlannedExpensesEndpoints()...` 的鏈 | K4 已改成具體 diff |
+| `BackupJson.Options` | ✅ | `src/SixJars.Application/Backup/BackupJson.cs:15` | — |
+| `ExportBackup` 的預定支出有追蹤（為了 `GetVersion`） | ✅ 追蹤，沒有 `AsNoTracking` | `ExportBackup.cs:32` | K9 的週期項目查詢改成同樣追蹤 |
+
+- [x] ~~Npgsql 對 field-only 的 `int[]` 屬性的對應~~（上表）
+- [x] ~~EF 能否翻譯 `p.SourceId!.Value`~~（上表）
+- [x] ~~`ExpectVersion` 之後再 `Remove`~~（上表）
+- [x] ~~`Program.cs`、`BackupJson.Options`、`ExportBackup` 的追蹤~~（上表）
+
+以下是讀檔即可確認的形狀細節，各 Task 的 Step 1 已註明「先確認」，在該 Task 開始時處理：
 - [ ] `RestoreBackupTests`、`BackupExportTests` 的既有結構（K9 Step 1 依賴）。
 - [ ] `SettingsMaintenanceEndpointsTests.Url` 的簽章；同一個 member client 能不能存取兩本 `SeedBookAsync` 的帳本（K4 的 404 測試）。
 - [ ] 前端 `book-fixture.ts` 的帳戶 Id 與分類、`formatBudgetMonth` 的輸出格式、`setting-dialog.ts` 的對話框寫法、`app.html` 的導覽寫法、`e2e/fixtures.ts`。
