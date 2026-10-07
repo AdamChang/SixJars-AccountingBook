@@ -1,0 +1,46 @@
+<app-month-nav [month]="month()" (monthChange)="changeMonth($event)" />
+<mat-tab-group class="ledger-sheet">
+  <mat-tab label="本月">
+    <section class="toolbar">
+      <button matButton="filled" type="button" class="generate" [disabled]="pending()" (click)="generate()">產生本月</button>
+      <button matButton="outlined" type="button" class="refresh" [disabled]="pending()" (click)="refresh()">以現值更新</button>
+      <button matButton type="button" class="add" (click)="add()">新增預定支出</button>
+    </section>
+    @for (group of groups(); track group.nature) {
+      <section class="group" [attr.data-group]="group.nature">
+        <h3>
+          <span class="title">{{ group.title }}</span>
+          <span class="total">未付 <span class="figure">{{ formatAmount(group.unpaidTotal) }}</span></span>
+        </h3>
+        <ul>
+          @for (row of group.rows; track row.planned.id) {
+            <li class="row" [class.paid]="row.planned.isPaid" [attr.data-row]="row.planned.id">
+              <span class="label">
+                {{ row.categoryLabel }}
+                @if (row.isRecurring) {
+                  <span class="recurring" title="由週期項目產生">週期</span>
+                }
+              </span>
+              <span class="account">{{ row.accountName ?? '' }}</span>
+              <span class="amount figure">{{ formatAmount(row.amount) }}</span>
+              <span class="note">{{ row.planned.note ?? '' }}</span>
+              <span class="status">{{ row.planned.isPaid ? '已付' : '未付' }}</span>
+              <button mat-button type="button" [matMenuTriggerFor]="menu" [attr.data-menu]="row.planned.id"
+                [attr.aria-label]="row.categoryLabel + ' 更多操作'">⋮</button>
+              <mat-menu #menu="matMenu">
+                @if (!row.planned.isPaid) {
+                  <button mat-menu-item type="button" (click)="pay(row)">付款</button>
+                  <button mat-menu-item type="button" (click)="edit(row)">修改</button>
+                }
+                <button mat-menu-item type="button" (click)="remove(row)">刪除</button>
+              </mat-menu>
+            </li>
+          }
+        </ul>
+      </section>
+    } @empty {
+      <p class="empty">本月沒有預定支出</p>
+    }
+  </mat-tab>
+  <mat-tab label="週期項目"></mat-tab>
+</mat-tab-group>
