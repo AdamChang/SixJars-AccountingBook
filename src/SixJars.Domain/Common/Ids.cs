@@ -6,3 +6,4 @@ public readonly record struct PlanningFundId(Guid Value) { public static Plannin
 public readonly record struct CategoryId(Guid Value) { public static CategoryId New() => new(Guid.CreateVersion7()); }
 public readonly record struct TransactionId(Guid Value) { public static TransactionId New() => new(Guid.CreateVersion7()); }
 public readonly record struct PlannedExpenseId(Guid Value) { public static PlannedExpenseId New() => new(Guid.CreateVersion7()); }
+public readonly record struct RecurringPlannedExpenseId(Guid Value) { public static RecurringPlannedExpenseId New() => new(Guid.CreateVersion7()); }
