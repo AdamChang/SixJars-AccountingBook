@@ -81,9 +81,9 @@ public class BackupExportTests(PostgresFixture postgres)
         backup.AuditEntries[2].After.Should().BeNull();
     }
 
-    /// <summary>格式版本為 2（P4 段 J 起）；檔案縮排、中文不跳脫，方便人工檢視。同一份資料匯出兩次，內容完全相同。</summary>
+    /// <summary>格式版本為 3（P4 段 K 起）；檔案縮排、中文不跳脫，方便人工檢視。同一份資料匯出兩次，內容完全相同。</summary>
     [Fact]
-    public async Task Backup_format_version_is_2()
+    public async Task Backup_format_version_is_3()
     {
         await using var factory = await CreateFactoryAsync();
         var book = await factory.SeedBookAsync(Ct);
@@ -94,10 +94,26 @@ public class BackupExportTests(PostgresFixture postgres)
         var json = await client.GetStringAsync(url, Ct);
 
         using var document = JsonDocument.Parse(json);
-        document.RootElement.GetProperty("formatVersion").GetInt32().Should().Be(2);
-        BackupDocument.CurrentFormatVersion.Should().Be(2);
-        json.Should().Contain("\n  \"formatVersion\": 2").And.Contain("測試帳本").And.Contain("\"kind\": \"Expense\"");
+        document.RootElement.GetProperty("formatVersion").GetInt32().Should().Be(3);
+        BackupDocument.CurrentFormatVersion.Should().Be(3);
+        json.Should().Contain("\n  \"formatVersion\": 3").And.Contain("測試帳本").And.Contain("\"kind\": \"Expense\"");
         (await client.GetStringAsync(url, Ct)).Should().Be(json);
+    }
+
+    [Fact]
+    public async Task Backup_contains_recurring_items_and_planned_expense_sources()
+    {
+        await using var factory = await CreateFactoryAsync();
+        var book = await factory.SeedBookAsync(Ct);
+        var client = await factory.CreateMemberClientAsync();
+        var item = await RecurringPlannedExpensesEndpointsTests.CreateAsync(client, book, RecurringPlannedExpensesEndpointsTests.Insurance(book));
+        await PlannedExpenseGenerationEndpointsTests.GenerateAsync(client, book, 202601);
+
+        var backup = (await client.GetFromJsonAsync<BackupDocument>(
+            $"/api/books/{book.Id.Value}/export/backup.json", BackupJson.Options, Ct))!;
+
+        backup.RecurringPlannedExpenses.Should().ContainSingle().Which.Id.Should().Be(item.Id);
+        backup.PlannedExpenses.Should().ContainSingle().Which.PlannedExpense.SourceId.Should().Be(item.Id);
     }
 
     [Fact]

@@ -19,6 +19,7 @@ using SixJars.Application.Planning;
 using SixJars.Application.Transactions;
 using SixJars.Domain.Books;
 using SixJars.Domain.Common;
+using SixJars.Domain.Planning;
 using SixJars.Domain.Transactions;
 using SixJars.Infrastructure.Persistence;
 using SixJars.Tests.Shared;
@@ -98,6 +99,27 @@ public class RestoreBackupTests(PostgresFixture postgres)
     }
 
     [Fact]
+    public async Task Restores_v2_backup_without_recurring_items()
+    {
+        var source = await Scenario.BuildAsync(postgres);
+        await using var _ = source;
+        var a = await source.ExportAsync();
+        // 模擬 P4 J 的 v2 備份：沒有週期項目，預定支出沒有 sourceId。
+        var json = JsonNode.Parse(BackupJson.SerializeToUtf8Bytes(a))!;
+        json["formatVersion"] = 2;
+        json.AsObject().Remove("recurringPlannedExpenses");
+        foreach (var item in json["plannedExpenses"]!.AsArray())
+        {
+            item!["plannedExpense"]!.AsObject().Remove("sourceId");
+        }
+
+        var v2 = json.Deserialize<BackupDocument>(BackupJson.Options)!;
+        var target = await postgres.CreateConnectionStringAsync(Ct);
+
+        (await RestoreAsync(target, v2)).Should().Be(a.Book.Id);
+    }
+
+    [Fact]
     public async Task Restore_into_database_with_same_book_is_rejected()
     {
         var source = await Scenario.BuildAsync(postgres);
@@ -146,6 +168,7 @@ public class RestoreBackupTests(PostgresFixture postgres)
     [InlineData("transaction-normalized-by-domain")]
     [InlineData("sub-category-kind-mismatch")]
     [InlineData("sort-order-gap")]
+    [InlineData("planned-expense-unknown-source")]
     public async Task Corrupted_backup_writes_nothing(string corruption)
     {
         var source = await Scenario.BuildAsync(postgres);
@@ -198,6 +221,10 @@ public class RestoreBackupTests(PostgresFixture postgres)
                 accounts[^1] = accounts[^1] with { SortOrder = accounts[^1].SortOrder + 1 };
                 return backup with { Book = backup.Book with { Accounts = accounts } };
             }
+            case "planned-expense-unknown-source":
+                // 預定支出的來源週期項目不在備份中：API 不會產生沒有來源的參照（FK），只可能是檔案被改過。
+                plans[0] = plans[0] with { PlannedExpense = plans[0].PlannedExpense with { SourceId = Guid.NewGuid() } };
+                return backup with { PlannedExpenses = plans };
             case "unknown-account":
                 transactions[0] = transactions[0] with { Transaction = transactions[0].Transaction with { AccountId = Guid.NewGuid() } };
                 return backup with { Transactions = transactions };
@@ -255,7 +282,7 @@ public class RestoreBackupTests(PostgresFixture postgres)
         }
     }
 
-    /// <summary>可比對的 JSON：排除 ExportedAt 與交易、預定支出的 xmin 版本（不同資料庫必然不同）。</summary>
+    /// <summary>可比對的 JSON：排除 ExportedAt 與交易、預定支出、週期項目的 xmin 版本（不同資料庫必然不同）。</summary>
     private static string Comparable(BackupDocument backup)
     {
         var node = JsonSerializer.SerializeToNode(backup, BackupJson.Options)!.AsObject();
@@ -268,6 +295,14 @@ public class RestoreBackupTests(PostgresFixture postgres)
         foreach (var item in node["plannedExpenses"]!.AsArray())
         {
             item!["plannedExpense"]!.AsObject().Remove("version");
+        }
+
+        if (node["recurringPlannedExpenses"] is JsonArray recurring)
+        {
+            foreach (var item in recurring)
+            {
+                item!.AsObject().Remove("version");
+            }
         }
 
         return node.ToJsonString(BackupJson.Options);
@@ -304,6 +339,7 @@ public class RestoreBackupTests(PostgresFixture postgres)
         (await db.Books.CountAsync(Ct)).Should().Be(0);
         (await db.Transactions.IgnoreQueryFilters().CountAsync(Ct)).Should().Be(0);
         (await db.PlannedExpenses.IgnoreQueryFilters().CountAsync(Ct)).Should().Be(0);
+        (await db.RecurringPlannedExpenses.CountAsync(Ct)).Should().Be(0);
         (await db.BookMembers.CountAsync(Ct)).Should().Be(0);
         (await db.AuditEntries.CountAsync(Ct)).Should().Be(0);
     }
@@ -411,6 +447,13 @@ public class RestoreBackupTests(PostgresFixture postgres)
             a.Book.Accounts.Should().Contain(x => x.Name == "舊存摺" && x.ArchivedAt != null);
             a.Book.Categories.Should().Contain(x => x.Name == "計程車" && x.ArchivedAt != null);
             a.Book.Accounts.Select(x => x.Id).Should().NotBeInAscendingOrder();
+            // (i) 週期項目：產生後刪除與未刪除的預定支出都帶著來源；另有已設結束月份的每月項目。
+            var recurring = a.RecurringPlannedExpenses!;
+            recurring.Should().HaveCount(2);
+            recurring.Should().Contain(r => r.Frequency == RecurrenceFrequency.Monthly && r.EndMonth != null);
+            var yearly = recurring.Single(r => r.Frequency == RecurrenceFrequency.Yearly).Id;
+            a.PlannedExpenses.Should().Contain(p => p.PlannedExpense.SourceId == yearly && p.PlannedExpense.BudgetMonth == 202601 && p.DeletedAt != null);
+            a.PlannedExpenses.Should().Contain(p => p.PlannedExpense.SourceId == yearly && p.PlannedExpense.BudgetMonth == 202607 && p.DeletedAt == null);
         }
 
         /// <summary>(h) 新增一個餘額為 0 的帳戶並封存、封存一個子分類，再把帳戶順序整個倒過來。</summary>
@@ -499,6 +542,15 @@ public class RestoreBackupTests(PostgresFixture postgres)
             var cancelled = await Plan(202602, fixedExpense, -100m, "未付後刪除");
             await DeleteAsync(PlansUrl(cancelled.Id), cancelled.Version);
 
+            // (i) 週期項目：每年 1、7 月的項目在 1 月產生後刪除、7 月產生後保留；已設結束月份的每月項目（1 月也會產生）。
+            var yearly = await PostForId("recurring-planned-expenses", new RecurringPlannedExpenseInput(
+                insurance, null, -3000m, "年繳保費", RecurrenceFrequency.Yearly, [1, 7], 202601, null));
+            await PostForId("recurring-planned-expenses", new RecurringPlannedExpenseInput(
+                fixedExpense, bank.Id.Value, -500m, "月租", RecurrenceFrequency.Monthly, [], 202601, 202603));
+            var generatedYearly = (await Generate(202601)).Created.Single(p => p.SourceId == yearly);
+            await DeleteAsync(PlansUrl(generatedYearly.Id), generatedYearly.Version);
+            await Generate(202607);
+
             // (e) 最後才鎖帳：之前的寫入都在開放期間。
             var locked = await Client.PutAsJsonAsync($"{BookUrl}/lock-date", new { lockDate = LockDate }, ApiJson.Options, Ct);
             locked.StatusCode.Should().Be(HttpStatusCode.NoContent);
@@ -532,6 +584,13 @@ public class RestoreBackupTests(PostgresFixture postgres)
                 new PlannedExpenseInput(budgetMonth, categoryId, null, amount, note), ApiJson.Options, Ct);
             response.StatusCode.Should().Be(HttpStatusCode.Created, await response.Content.ReadAsStringAsync(Ct));
             return (await response.Content.ReadFromJsonAsync<PlannedExpenseDto>(ApiJson.Options, Ct))!;
+        }
+
+        private async Task<GeneratePlannedExpensesResult> Generate(int budgetMonth)
+        {
+            var response = await Client.PostAsync($"{BookUrl}/planned-expenses/generate?budgetMonth={budgetMonth}", null, Ct);
+            response.StatusCode.Should().Be(HttpStatusCode.OK, await response.Content.ReadAsStringAsync(Ct));
+            return (await response.Content.ReadFromJsonAsync<GeneratePlannedExpensesResult>(ApiJson.Options, Ct))!;
         }
 
         private async Task<PayPlannedExpenseResult> Pay(
