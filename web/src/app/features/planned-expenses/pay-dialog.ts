@@ -1,18 +1,28 @@
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { FormBuilder, ReactiveFormsModule, ValidatorFn, Validators } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { map } from 'rxjs';
-import { BookDto, PayPlannedExpenseBody, PlannedExpenseDto } from '../../core/api/dto';
+import { AccountType, BookDto, PayPlannedExpenseBody, PlannedExpenseDto } from '../../core/api/dto';
 import { categoryLabel, loanAccounts } from './planned-expense-rules';
 
 // today 由頁面傳入（toDateString(new Date())），對話框不自己讀時鐘
 export interface PayDialogData { planned: PlannedExpenseDto; book: BookDto; today: string }
 export type PayDialogResult = Omit<PayPlannedExpenseBody, 'version'>;
+
+// 付款帳戶的類型限制與後端 TransactionFactory 一致：支出可用現金／銀行／信用卡／電子錢包，貸款繳款只能現金／銀行
+const EXPENSE_PAYER_TYPES: AccountType[] = ['Cash', 'Bank', 'CreditCard', 'EWallet'];
+const LOAN_PAYER_TYPES: AccountType[] = ['Cash', 'Bank'];
+
+// 本金必須介於 0 與繳款總額之間（後端同樣檢查）
+const principalWithinAmount: ValidatorFn = group => {
+  const { amount, loanPrincipal } = group.value as { amount: number | null; loanPrincipal: number | null };
+  return amount !== null && loanPrincipal !== null && loanPrincipal > amount ? { principalExceedsAmount: true } : null;
+};
 
 // 預定支出付款：貸款性質要選貸款帳戶（唯一時預選）並手動輸入本金（P4 K plan D2、Q20）
 @Component({
@@ -57,6 +67,9 @@ export type PayDialogResult = Omit<PayPlannedExpenseBody, 'version'>;
             <input matInput type="number" min="0" step="0.01" formControlName="loanPrincipal" />
             <mat-error>請輸入本金</mat-error>
           </mat-form-field>
+          @if (form.hasError('principalExceedsAmount')) {
+            <p class="error">本金不能大於繳款金額</p>
+          }
         }
       </mat-dialog-content>
       <mat-dialog-actions align="end">
@@ -67,6 +80,7 @@ export type PayDialogResult = Omit<PayPlannedExpenseBody, 'version'>;
   `,
   styles: `
     mat-dialog-content { display: flex; flex-direction: column; gap: 4px; }
+    .error { color: var(--mat-sys-error); font-size: 12px; margin: 0; }
   `,
 })
 export class PayDialog {
@@ -76,21 +90,25 @@ export class PayDialog {
   protected readonly label = categoryLabel(this.data.book, this.data.planned.categoryId);
   protected readonly isLoan =
     this.data.book.categories.find(c => c.id === this.data.planned.categoryId)?.nature === 'Loan';
-  // 未封存的帳戶；預定支出目前使用的帳戶即使已封存也保留
-  protected readonly accounts = this.data.book.accounts
-    .filter(a => a.archivedAt === null || a.id === this.data.planned.accountId);
+  // 後端接受的類型中未封存的帳戶；預定支出目前使用的帳戶即使已封存也保留
+  protected readonly accounts = this.data.book.accounts.filter(a =>
+    (this.isLoan ? LOAN_PAYER_TYPES : EXPENSE_PAYER_TYPES).includes(a.type)
+    && (a.archivedAt === null || a.id === this.data.planned.accountId));
+  // 預定支出的帳戶不能當付款帳戶時（例如貸款帳戶）不預選，讓使用者自己挑
+  private readonly defaultAccountId = this.accounts.some(a => a.id === this.data.planned.accountId)
+    ? this.data.planned.accountId! : '';
   protected readonly loans = loanAccounts(this.data.book);
 
   protected readonly form = inject(FormBuilder).nonNullable.group({
     date: [this.data.today, Validators.required],
     amount: [Math.abs(this.data.planned.estimatedAmount) as number | null, [Validators.required, Validators.min(0.01)]],
-    accountId: [this.data.planned.accountId ?? '', Validators.required],
+    accountId: [this.defaultAccountId, Validators.required],
     loanAccountId: [
       this.loans.length === 1 ? this.loans[0].id : (null as string | null), this.isLoan ? Validators.required : null,
     ],
     // 本金不預填（Q20）
     loanPrincipal: [null as number | null, this.isLoan ? [Validators.required, Validators.min(0)] : null],
-  });
+  }, { validators: this.isLoan ? principalWithinAmount : null });
 
   protected readonly invalid = toSignal(this.form.statusChanges.pipe(map(status => status !== 'VALID')), {
     initialValue: this.form.invalid,

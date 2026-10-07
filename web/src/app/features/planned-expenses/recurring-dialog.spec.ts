@@ -5,7 +5,8 @@ import { MatInputHarness } from '@angular/material/input/testing';
 import { MatSelectHarness } from '@angular/material/select/testing';
 import { BookDto } from '../../core/api/dto';
 import { BOOK } from '../transactions/testing/book-fixture';
-import { RecurringDialog, RecurringDialogData } from './recurring-dialog';
+import { FormBuilder } from '@angular/forms';
+import { RecurringDialog, RecurringDialogData, recurrenceValidator } from './recurring-dialog';
 
 const book: BookDto = {
   ...BOOK,
@@ -76,5 +77,14 @@ describe('RecurringDialog', () => {
     expect(submitButton().disabled).toBe(true);
     await (await input('endMonth')).setValue('2026-04');
     expect(submitButton().disabled).toBe(false);
+  });
+
+  // 不支援 type=month 的瀏覽器會退回文字框，使用者可能輸入無法解析的值；不能默默送出 null
+  it('unparseable_month_text_is_invalid', () => {
+    const form = (startMonth: string, endMonth: string) => new FormBuilder().group(
+      { frequency: 'Monthly', months: [[]], startMonth, endMonth }, { validators: recurrenceValidator });
+    expect(form('2026/05', '').errors).toEqual({ startFormat: true });
+    expect(form('2026-05', '2026/12').errors).toEqual({ endFormat: true });
+    expect(form('2026-05', '').errors).toBeNull();
   });
 });

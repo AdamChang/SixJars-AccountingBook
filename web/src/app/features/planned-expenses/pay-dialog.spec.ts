@@ -75,4 +75,34 @@ describe('PayDialog', () => {
     expect(close).toHaveBeenCalledTimes(1);
     expect(close.mock.calls[0][0]).toBeFalsy();
   });
+
+  it('payer_options_only_include_types_the_backend_accepts', async () => {
+    const fixed = await open({ planned: planned({}), book, today: '2026-04-05' });
+    const fixedAccounts = await fixed.loader.getHarness(MatSelectHarness.with({ selector: '[formControlName=accountId]' }));
+    await fixedAccounts.open();
+    expect(await Promise.all((await fixedAccounts.getOptions()).map(o => o.getText()))).toEqual(['現金', '銀行', '信用卡', '悠遊卡']);
+  });
+
+  it('loan_payer_must_be_cash_or_bank_and_is_not_preselected_otherwise', async () => {
+    const { loader, submitButton } = await open({
+      planned: planned({ categoryId: 'loan', accountId: 'acc-loan', estimatedAmount: -3000 }), book, today: '2026-04-05',
+    });
+    const payer = await loader.getHarness(MatSelectHarness.with({ selector: '[formControlName=accountId]' }));
+    expect(await payer.getValueText()).toBe('');
+    await (await loader.getHarness(MatInputHarness.with({ selector: '[formControlName=loanPrincipal]' }))).setValue('2000');
+    expect(submitButton().disabled).toBe(true);
+    await payer.open();
+    expect(await Promise.all((await payer.getOptions()).map(o => o.getText()))).toEqual(['現金', '銀行']);
+  });
+
+  it('principal_cannot_exceed_amount', async () => {
+    const { loader, submitButton } = await open({
+      planned: planned({ categoryId: 'loan', estimatedAmount: -3000 }), book, today: '2026-04-05',
+    });
+    const principal = await loader.getHarness(MatInputHarness.with({ selector: '[formControlName=loanPrincipal]' }));
+    await principal.setValue('5000');
+    expect(submitButton().disabled).toBe(true);
+    await principal.setValue('3000');
+    expect(submitButton().disabled).toBe(false);
+  });
 });

@@ -13,8 +13,9 @@ import { categoryLabel, categoryOptions, keyToMonthInput, monthInputToKey } from
 // item 有值時是修改；budgetMonth 是頁面目前的月份，新增時當作預設的開始月份
 export interface RecurringDialogData { book: BookDto; budgetMonth: number; item?: RecurringPlannedExpenseDto }
 
-// 每年至少選一個月；結束月份不得早於開始月份（後端仍會再檢查）
-const recurrenceValidator: ValidatorFn = group => {
+// 每年至少選一個月；結束月份不得早於開始月份（後端仍會再檢查）。
+// 不支援 type=month 的瀏覽器會退回文字框，無法解析的月份視為錯誤，不能默默當成未填
+export const recurrenceValidator: ValidatorFn = group => {
   const { frequency, months, startMonth, endMonth } = group.value as {
     frequency: RecurrenceFrequency; months: number[]; startMonth: string; endMonth: string;
   };
@@ -22,6 +23,8 @@ const recurrenceValidator: ValidatorFn = group => {
   if (frequency === 'Yearly' && months.length === 0) errors['months'] = true;
   const start = monthInputToKey(startMonth);
   const end = monthInputToKey(endMonth);
+  if (startMonth !== '' && start === null) errors['startFormat'] = true;
+  if (endMonth !== '' && end === null) errors['endFormat'] = true;
   if (start !== null && end !== null && end < start) errors['range'] = true;
   return Object.keys(errors).length > 0 ? errors : null;
 };
@@ -81,14 +84,17 @@ const recurrenceValidator: ValidatorFn = group => {
         }
         <mat-form-field>
           <mat-label>開始月份</mat-label>
-          <input matInput type="month" formControlName="startMonth" />
+          <input matInput type="month" formControlName="startMonth" placeholder="yyyy-MM" />
           <mat-error>請輸入開始月份</mat-error>
         </mat-form-field>
         <mat-form-field>
           <mat-label>結束月份</mat-label>
-          <input matInput type="month" formControlName="endMonth" />
+          <input matInput type="month" formControlName="endMonth" placeholder="yyyy-MM" />
           <mat-hint>空白代表沒有結束；已產生過的項目要停用時設這個欄位</mat-hint>
         </mat-form-field>
+        @if (form.hasError('startFormat') || form.hasError('endFormat')) {
+          <p class="error">月份格式應為 yyyy-MM，例如 2026-05</p>
+        }
         @if (form.hasError('range')) {
           <p class="error">結束月份不能早於開始月份</p>
         }
@@ -153,7 +159,8 @@ export class RecurringDialog {
       frequency: value.frequency,
       // 每月時月份一律為空（D10）
       months: value.frequency === 'Monthly' ? [] : [...value.months].sort((a, b) => a - b),
-      startMonth: monthInputToKey(value.startMonth)!,
+      // 驗證已確保開始月份可以解析
+      startMonth: monthInputToKey(value.startMonth) as number,
       endMonth: monthInputToKey(value.endMonth),
     });
   }
