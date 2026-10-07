@@ -1,7 +1,8 @@
 import { BookDto, GenerateResultDto, PlannedExpenseDto, RecurringPlannedExpenseDto } from '../../core/api/dto';
 import { BOOK } from '../transactions/testing/book-fixture';
 import {
-  categoryOptions, describeRecurrence, generationMessage, loanAccounts, plannedGroups, refreshMessage,
+  categoryOptions, describeRecurrence, generationMessage, keyToMonthInput, loanAccounts, monthInputToKey, plannedGroups,
+  refreshMessage,
 } from './planned-expense-rules';
 
 // BOOK 的分類只有浮動（飲食／午餐）與收入；這裡補上固定、貸款、特別各一組
@@ -100,5 +101,17 @@ describe('describeRecurrence', () => {
     expect(describeRecurrence(item({}))).toBe('每月，2026/01 起');
     expect(describeRecurrence(item({ frequency: 'Yearly', months: [1, 7], endMonth: 202712 })))
       .toBe('每年 1、7 月，2026/01–2027/12');
+  });
+});
+
+describe('month input conversion', () => {
+  it('month_input_to_key', () => {
+    expect(monthInputToKey('2026-04')).toBe(202604);
+    expect(monthInputToKey('')).toBeNull();
+  });
+
+  it('key_to_month_input', () => {
+    expect(keyToMonthInput(202604)).toBe('2026-04');
+    expect(keyToMonthInput(null)).toBe('');
   });
 });

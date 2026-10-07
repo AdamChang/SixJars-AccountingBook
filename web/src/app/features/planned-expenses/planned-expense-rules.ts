@@ -102,3 +102,13 @@ export function describeRecurrence(item: RecurringPlannedExpenseDto): string {
     : `${formatBudgetMonth(item.startMonth)}–${formatBudgetMonth(item.endMonth)}`;
   return `${frequency}，${range}`;
 }
+
+// <input type="month"> 的值是 yyyy-MM；空字串代表未填
+export function monthInputToKey(value: string): number | null {
+  if (!/^\d{4}-\d{2}$/.test(value)) return null;
+  return Number(value.slice(0, 4)) * 100 + Number(value.slice(5, 7));
+}
+
+export function keyToMonthInput(key: number | null): string {
+  return key === null ? '' : `${Math.floor(key / 100)}-${String(key % 100).padStart(2, '0')}`;
+}
