@@ -33,14 +33,17 @@ public sealed class PlannedExpense
     public string? Note { get; private set; }
     public TransactionId? PaidTransactionId { get; private set; }
     public bool IsPaid => PaidTransactionId is not null;
+    /// <summary>由哪個週期項目產生；手動新增的為 null。<c>(SourceId, BudgetMonth)</c> 唯一，含已刪除（ADR 0009）。</summary>
+    public RecurringPlannedExpenseId? SourceId { get; private set; }
     /// <summary>軟刪除的時間（ADR 0006）；null 表示未刪除。已刪除的預定支出不再占用月可用餘額。</summary>
     public DateTimeOffset? DeletedAt { get; private set; }
     public bool IsDeleted => DeletedAt is not null;
 
     /// <param name="id">只有還原備份（T42）時指定，保留原本的 Id；一般新增時省略，自動產生。驗證規則完全相同。</param>
+    /// <param name="sourceId">由週期項目產生時的來源；產生由 <see cref="RecurringPlanner"/> 負責，這裡只為了還原備份與測試開放。</param>
     public static PlannedExpense Create(
         Book book, BudgetMonth budgetMonth, CategoryId categoryId, AccountId? accountId, decimal estimatedAmount, string? note = null,
-        PlannedExpenseId? id = null)
+        PlannedExpenseId? id = null, RecurringPlannedExpenseId? sourceId = null)
     {
         Validate(book, categoryId, accountId);
         var planned = new PlannedExpense(book.Id, budgetMonth, categoryId, accountId, estimatedAmount, note);
@@ -49,6 +52,7 @@ public sealed class PlannedExpense
             planned.Id = fixedId;
         }
 
+        planned.SourceId = sourceId;
         return planned;
     }
 

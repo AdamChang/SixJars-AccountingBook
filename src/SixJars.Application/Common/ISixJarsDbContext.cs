@@ -15,6 +15,9 @@ public interface ISixJarsDbContext
     DbSet<Transaction> Transactions { get; }
     DbSet<PlannedExpense> PlannedExpenses { get; }
 
+    /// <summary>週期預定支出；硬刪除（P4 K plan D4），沒有 query filter。</summary>
+    DbSet<RecurringPlannedExpense> RecurringPlannedExpenses { get; }
+
     /// <summary>稽核記錄（append-only）；只由 <see cref="IAuditTrail"/> 加入。</summary>
     DbSet<AuditEntry> AuditEntries { get; }
 

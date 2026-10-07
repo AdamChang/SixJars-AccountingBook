@@ -16,5 +16,7 @@ internal sealed class CategoryIdConverter() : ValueConverter<CategoryId, Guid>(i
 internal sealed class TransactionIdConverter() : ValueConverter<TransactionId, Guid>(id => id.Value, value => new TransactionId(value));
 
 internal sealed class PlannedExpenseIdConverter() : ValueConverter<PlannedExpenseId, Guid>(id => id.Value, value => new PlannedExpenseId(value));
+internal sealed class RecurringPlannedExpenseIdConverter()
+    : ValueConverter<RecurringPlannedExpenseId, Guid>(id => id.Value, value => new RecurringPlannedExpenseId(value));
 
 internal sealed class BudgetMonthConverter() : ValueConverter<BudgetMonth, int>(month => month.Key, key => BudgetMonth.FromKey(key));
