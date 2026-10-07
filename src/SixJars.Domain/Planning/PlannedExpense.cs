@@ -71,12 +71,31 @@ public sealed class PlannedExpense
             throw new DomainException("帳本與預定支出不屬於同一本帳本。");
         }
 
+        // (SourceId, BudgetMonth) 唯一：搬月份會讓原月份可以再產生一次，或撞上目標月份的同來源（P4 K plan D1）。
+        if (SourceId is not null && budgetMonth != BudgetMonth)
+        {
+            throw new DomainException("由週期項目產生的預定支出不能改歸屬月份；請刪除後手動新增。");
+        }
+
         Validate(book, categoryId, accountId);
         BudgetMonth = budgetMonth;
         CategoryId = categoryId;
         AccountId = accountId;
         EstimatedAmount = estimatedAmount;
         Note = note;
+    }
+
+    /// <summary>以來源週期項目的現值更新（ADR 0009「以現值更新」）；回傳內容是否有改變。只由 <see cref="RecurringPlanner"/> 呼叫。</summary>
+    internal bool RefreshFrom(Book book, RecurringPlannedExpense source)
+    {
+        var changed = CategoryId != source.CategoryId || AccountId != source.AccountId
+            || EstimatedAmount != source.DefaultAmount || Note != source.Note;
+        if (changed)
+        {
+            Update(book, BudgetMonth, source.CategoryId, source.AccountId, source.DefaultAmount, source.Note);
+        }
+
+        return changed;
     }
 
     public void MarkPaid(Transaction transaction)

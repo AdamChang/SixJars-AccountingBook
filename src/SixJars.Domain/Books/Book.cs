@@ -271,6 +271,13 @@ public sealed class Book
     public Category GetCategory(CategoryId id) =>
         _categories.Find(c => c.Id == id) ?? throw new DomainException($"找不到分類 {id.Value}。");
 
+    /// <summary>分類自己或它的主分類已封存（spec §3.1：子分類是否可選 = 自己與主分類都未封存）。</summary>
+    public bool IsCategoryArchived(CategoryId id)
+    {
+        var category = GetCategory(id);
+        return category.IsArchived || (category.ParentId is { } parentId && GetCategory(parentId).IsArchived);
+    }
+
     public Account? FindAccount(string name) => _accounts.Find(a => a.Name == name);
 
     public PlanningFund? FindPlanningFund(string name) => _planningFunds.Find(f => f.Name == name);
