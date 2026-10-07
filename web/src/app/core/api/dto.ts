@@ -52,3 +52,24 @@ export interface LedgerSummaryDto {
   availableCash: number; availableCashWithEWallets: number;
   accounts: BalanceDto[]; planningFunds: BalanceDto[];
 }
+
+// 預定支出與週期預定支出：金額沿用支出的符號慣例（負數）
+export interface PlannedExpenseInput {
+  budgetMonth: number; categoryId: string; accountId: string | null; estimatedAmount: number; note: string | null;
+}
+export interface PlannedExpenseDto extends PlannedExpenseInput {
+  id: string; paidTransactionId: string | null; isPaid: boolean; version: number; sourceId: string | null;
+}
+export interface PayPlannedExpenseBody {
+  version: number; date: string; accountId: string; amount: number; loanAccountId: string | null; loanPrincipal: number | null;
+}
+export type RecurrenceFrequency = 'Monthly' | 'Yearly';
+export interface RecurringPlannedExpenseInput {
+  categoryId: string; accountId: string | null; defaultAmount: number; note: string | null;
+  frequency: RecurrenceFrequency; months: number[]; startMonth: number; endMonth: number | null;
+}
+export interface RecurringPlannedExpenseDto extends RecurringPlannedExpenseInput { id: string; version: number }
+export type RecurringSkipReason = 'AlreadyGenerated' | 'CategoryArchived' | 'AccountArchived' | 'NotDue';
+export interface RecurringSkipDto { recurringId: string; plannedExpenseId: string | null; reason: RecurringSkipReason }
+export interface GenerateResultDto { created: PlannedExpenseDto[]; skipped: RecurringSkipDto[] }
+export interface RefreshResultDto { updated: PlannedExpenseDto[]; skipped: RecurringSkipDto[] }
