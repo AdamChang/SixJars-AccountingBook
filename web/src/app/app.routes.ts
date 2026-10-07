@@ -20,6 +20,10 @@ export const routes: Routes = [
         loadComponent: () => import('./features/summary/summary.page').then((m) => m.SummaryPage),
       },
       {
+        path: 'planned-expenses',
+        loadComponent: () => import('./features/planned-expenses/planned-expenses.page').then((m) => m.PlannedExpensesPage),
+      },
+      {
         path: 'settings',
         loadComponent: () => import('./features/settings/settings.page').then((m) => m.SettingsPage),
       },

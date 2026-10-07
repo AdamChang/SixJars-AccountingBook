@@ -1,5 +1,5 @@
 <app-month-nav [month]="month()" (monthChange)="changeMonth($event)" />
-<mat-tab-group class="ledger-sheet">
+<mat-tab-group class="ledger-sheet" [selectedIndex]="selectedTab()" (selectedIndexChange)="selectedTab.set($event)">
   <mat-tab label="本月">
     <section class="toolbar">
       <button matButton="filled" type="button" class="generate" [disabled]="pending()" (click)="generate()">產生本月</button>
@@ -42,5 +42,36 @@
       <p class="empty">本月沒有預定支出</p>
     }
   </mat-tab>
-  <mat-tab label="週期項目"></mat-tab>
+  <mat-tab label="週期項目">
+    <section class="toolbar">
+      <button matButton type="button" class="add-recurring" (click)="addRecurring()">新增週期項目</button>
+    </section>
+    <section class="recurring-list">
+      <p class="hint">週期項目只是設定：在「本月」按「產生本月」才會建立預定支出。修改後要套用到未付的預定支出，請按「以現值更新」。</p>
+      <ul>
+        @for (row of recurringRows(); track row.item.id) {
+          <li class="row" [class.ended]="row.ended" [attr.data-recurring]="row.item.id">
+            <span class="label">
+              {{ row.categoryLabel }}
+              @if (row.ended) {
+                <span class="ended-tag">已結束</span>
+              }
+            </span>
+            <span class="description">{{ row.description }}</span>
+            <span class="amount figure">{{ formatAmount(row.amount) }}</span>
+            <span class="account">{{ row.accountName ?? '' }}</span>
+            <span class="note">{{ row.item.note ?? '' }}</span>
+            <button mat-button type="button" [matMenuTriggerFor]="recurringMenu" [attr.data-menu]="row.item.id"
+              [attr.aria-label]="row.categoryLabel + ' 更多操作'">⋮</button>
+            <mat-menu #recurringMenu="matMenu">
+              <button mat-menu-item type="button" (click)="editRecurring(row)">修改</button>
+              <button mat-menu-item type="button" (click)="removeRecurring(row)">刪除</button>
+            </mat-menu>
+          </li>
+        } @empty {
+          <li class="empty">尚未設定週期項目</li>
+        }
+      </ul>
+    </section>
+  </mat-tab>
 </mat-tab-group>

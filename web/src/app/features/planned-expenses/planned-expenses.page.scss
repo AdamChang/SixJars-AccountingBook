@@ -11,22 +11,27 @@ h3 {
   color: var(--ledger-heading); letter-spacing: 0.08em;
 }
 .total { font-weight: 400; font-size: 0.875rem; color: var(--mat-sys-on-surface-variant); }
+.hint { color: var(--mat-sys-on-surface-variant); font-size: 0.875rem; }
 ul { list-style: none; margin: 0; padding: 0; }
 .row {
   display: grid;
   grid-template-columns: minmax(8em, 2fr) minmax(4em, 1fr) minmax(5em, auto) minmax(0, 2fr) 3em auto;
   align-items: center; gap: 8px; padding: 4px 0; border-top: 1px solid var(--ledger-rule);
 }
+.recurring-list .row {
+  grid-template-columns: minmax(8em, 2fr) minmax(8em, 2fr) minmax(5em, auto) minmax(4em, 1fr) minmax(0, 1fr) auto;
+}
 .row.paid { color: var(--mat-sys-on-surface-variant); }
+.row.ended { color: var(--mat-sys-on-surface-variant); opacity: 0.6; }
 .amount { text-align: right; }
 .note { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.recurring {
+.recurring, .ended-tag {
   margin-left: 4px; padding: 0 6px; border: 1px solid var(--ledger-rule-strong); border-radius: 8px;
   font-size: 0.75rem; color: var(--ledger-heading);
 }
 .empty { padding: 16px; color: var(--mat-sys-on-surface-variant); }
 
 @media (max-width: 600px) {
-  .row { grid-template-columns: 1fr auto auto; }
-  .account, .note { display: none; }
+  .row, .recurring-list .row { grid-template-columns: 1fr auto auto; }
+  .account, .note, .description { display: none; }
 }

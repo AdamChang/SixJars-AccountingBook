@@ -5,9 +5,10 @@ import { TestBed } from '@angular/core/testing';
 import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { MatButtonHarness } from '@angular/material/button/testing';
 import { MatMenuHarness } from '@angular/material/menu/testing';
+import { MatTabGroupHarness } from '@angular/material/tabs/testing';
 import { provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
-import { BookDto, PlannedExpenseDto } from '../../core/api/dto';
+import { BookDto, PlannedExpenseDto, RecurringPlannedExpenseDto } from '../../core/api/dto';
 import { CurrentBook } from '../../core/book/current-book';
 import { BrowserLocation } from '../../core/browser-location';
 import { apiErrorInterceptor } from '../../core/errors/error-interceptor';
@@ -38,6 +39,17 @@ const LOAN = planned({ id: 'p-loan', categoryId: 'loan', estimatedAmount: -3000,
 const base = `/api/books/${book.id}/planned-expenses`;
 const LIST = `${base}?budgetMonth=202604`;
 const GENERATE = { method: 'POST', url: `${base}/generate?budgetMonth=202604` };
+const RECURRING = `/api/books/${book.id}/recurring-planned-expenses`;
+
+const MORTGAGE: RecurringPlannedExpenseDto = {
+  id: 'r1', categoryId: 'loan', accountId: 'acc-bank', defaultAmount: -3000, note: '房貸',
+  frequency: 'Monthly', months: [], startMonth: 202601, endMonth: null, version: 2,
+};
+// 結束月份早於頁面月份（2026/04）
+const ENDED: RecurringPlannedExpenseDto = {
+  id: 'r2', categoryId: 'ins', accountId: null, defaultAmount: -1200, note: null,
+  frequency: 'Yearly', months: [3, 9], startMonth: 202501, endMonth: 202512, version: 1,
+};
 
 async function setup(initial: PlannedExpenseDto[] = [FIXED, LOAN]) {
   const notifier = { show: vi.fn() };
@@ -71,7 +83,14 @@ async function setup(initial: PlannedExpenseDto[] = [FIXED, LOAN]) {
   };
   const menu = async (id: string, item: string) =>
     (await loader.getHarness(MatMenuHarness.with({ selector: `[data-menu="${id}"]` }))).clickItem({ text: item });
-  return { fixture, httpTesting, loader, rootLoader, el, notifier, flushList, button, click, menu };
+  // 週期項目在切到分頁時才載入；分頁內容在轉場結束後才掛上 DOM
+  const openRecurring = async (items: RecurringPlannedExpenseDto[]) => {
+    await (await loader.getHarness(MatTabGroupHarness)).selectTab({ label: '週期項目' });
+    await vi.waitFor(() => httpTesting.expectOne(RECURRING).flush(items));
+    await vi.waitFor(() => expect(el.querySelector('.mat-mdc-tab-body-active .recurring-list')).not.toBeNull());
+    await fixture.whenStable();
+  };
+  return { fixture, httpTesting, loader, rootLoader, el, notifier, flushList, button, click, menu, openRecurring };
 }
 
 describe('PlannedExpensesPage', () => {
@@ -143,5 +162,53 @@ describe('PlannedExpensesPage', () => {
     await fixture.whenStable();
     expect(notifier.show).toHaveBeenCalledWith(PLANNED_CONFLICT_MESSAGE);
     await flushList([FIXED, LOAN]);
+  });
+
+  it('recurring_tab_lists_items_with_description', async () => {
+    const { el, openRecurring } = await setup();
+    await openRecurring([MORTGAGE, ENDED]);
+    const mortgage = el.querySelector('[data-recurring="r1"]')!;
+    expect(mortgage.textContent).toContain('房屋貸款');
+    expect(mortgage.textContent).toContain('每月，2026/01 起');
+    expect(mortgage.classList).not.toContain('ended');
+    const ended = el.querySelector('[data-recurring="r2"]')!;
+    expect(ended.textContent).toContain('每年 3、9 月，2025/01–2025/12');
+    expect(ended.textContent).toContain('已結束');
+    expect(ended.classList).toContain('ended');
+  });
+
+  it('delete_in_use_shows_backend_message', async () => {
+    const { openRecurring, menu, rootLoader, httpTesting, notifier, fixture } = await setup();
+    await openRecurring([MORTGAGE]);
+    await menu('r1', '刪除');
+    await (await rootLoader.getHarness(MatButtonHarness.with({ text: '刪除' }))).click();
+    await fixture.whenStable();
+    const detail = '這個週期項目已產生過預定支出，不能刪除；請改設結束月份。';
+    await vi.waitFor(() => httpTesting.expectOne({ method: 'DELETE', url: `${RECURRING}/r1?version=2` })
+      .flush({ code: 'in-use', detail }, { status: 422, statusText: 'Unprocessable Entity' }));
+    await fixture.whenStable();
+    expect(notifier.show).toHaveBeenCalledWith(detail);
+  });
+
+  it('edit_puts_version_and_input', async () => {
+    const { openRecurring, menu, rootLoader, httpTesting, notifier, fixture } = await setup();
+    await openRecurring([MORTGAGE]);
+    await menu('r1', '修改');
+    await (await rootLoader.getHarness(MatButtonHarness.with({ text: '儲存' }))).click();
+    await fixture.whenStable();
+    await vi.waitFor(() => {
+      const request = httpTesting.expectOne({ method: 'PUT', url: `${RECURRING}/r1` });
+      expect(request.request.body).toEqual({
+        version: 2,
+        input: {
+          categoryId: 'loan', accountId: 'acc-bank', defaultAmount: -3000, note: '房貸',
+          frequency: 'Monthly', months: [], startMonth: 202601, endMonth: null,
+        },
+      });
+      request.flush({ ...MORTGAGE, version: 3 });
+    });
+    await fixture.whenStable();
+    expect(notifier.show).toHaveBeenCalledWith('已更新週期項目');
+    await vi.waitFor(() => httpTesting.expectOne(RECURRING).flush([{ ...MORTGAGE, version: 3 }]));
   });
 });
