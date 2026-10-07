@@ -318,4 +318,27 @@ public class BookSettingsTests
         _book.ChangeExpenseNature(insurance.Id, ExpenseNature.Special, hasPlannedExpenses: true);
         insurance.Nature.Should().Be(ExpenseNature.Special);
     }
+
+    [Theory]
+    [InlineData(ExpenseNature.Special)]
+    [InlineData(ExpenseNature.Floating)]
+    public void Category_with_recurring_items_can_only_be_fixed_or_loan(ExpenseNature nature)
+    {
+        var rent = _book.AddExpenseCategory("房租", ExpenseNature.Fixed);
+
+        var act = () => _book.ChangeExpenseNature(rent.Id, nature, hasPlannedExpenses: false, hasRecurringPlannedExpenses: true);
+
+        act.Should().Throw<DomainException>().Which.Code.Should().Be(DomainException.InUseCode);
+        rent.Nature.Should().Be(ExpenseNature.Fixed);
+    }
+
+    [Fact]
+    public void Category_with_recurring_items_can_switch_between_fixed_and_loan()
+    {
+        var rent = _book.AddExpenseCategory("房租", ExpenseNature.Fixed);
+
+        _book.ChangeExpenseNature(rent.Id, ExpenseNature.Loan, hasPlannedExpenses: true, hasRecurringPlannedExpenses: true);
+
+        rent.Nature.Should().Be(ExpenseNature.Loan);
+    }
 }

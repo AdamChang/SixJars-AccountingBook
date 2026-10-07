@@ -18,6 +18,7 @@ public sealed class SixJarsDbContext(DbContextOptions<SixJarsDbContext> options)
     public DbSet<Book> Books => Set<Book>();
     public DbSet<Transaction> Transactions => Set<Transaction>();
     public DbSet<PlannedExpense> PlannedExpenses => Set<PlannedExpense>();
+    public DbSet<RecurringPlannedExpense> RecurringPlannedExpenses => Set<RecurringPlannedExpense>();
     public DbSet<AuditEntry> AuditEntries => Set<AuditEntry>();
     public DbSet<BookMember> BookMembers => Set<BookMember>();
 
@@ -46,6 +47,7 @@ public sealed class SixJarsDbContext(DbContextOptions<SixJarsDbContext> options)
         configurationBuilder.Properties<CategoryId>().HaveConversion<CategoryIdConverter>();
         configurationBuilder.Properties<TransactionId>().HaveConversion<TransactionIdConverter>();
         configurationBuilder.Properties<PlannedExpenseId>().HaveConversion<PlannedExpenseIdConverter>();
+        configurationBuilder.Properties<RecurringPlannedExpenseId>().HaveConversion<RecurringPlannedExpenseIdConverter>();
         configurationBuilder.Properties<BudgetMonth>().HaveConversion<BudgetMonthConverter>();
         configurationBuilder.Properties<decimal>().HavePrecision(18, 4);
     }

@@ -51,8 +51,10 @@ internal sealed class RestoreBackupHandler(ISixJarsDbContext db, IAuditTrail aud
 
         // 2–5. 先在記憶體中經 Domain 重建全部資料，任何驗證失敗都發生在寫入之前。
         var book = RestoreBook(backup.Book, backup.FormatVersion);
+        var recurring = RestoreRecurringPlannedExpenses(book, backup.RecurringPlannedExpenses ?? []);
         var transactions = backup.Transactions.Select(t => RestoreTransaction(book, t)).ToList();
-        var plannedExpenses = RestorePlannedExpenses(book, backup.PlannedExpenses, transactions.ToDictionary(t => t.Transaction.Id));
+        var plannedExpenses = RestorePlannedExpenses(
+            book, backup.PlannedExpenses, transactions.ToDictionary(t => t.Transaction.Id), recurring.Select(r => r.Id).ToHashSet());
 
         // 交易的刪除放在付款連結（MarkPaid）之後：已刪除的預定支出可以連結到之後才被刪除的付款交易（spec §9 O2），
         // 照實際發生的順序重建，日後 MarkPaid 若加上「交易不可已刪除」的檢查也不受影響。
@@ -77,6 +79,8 @@ internal sealed class RestoreBackupHandler(ISixJarsDbContext db, IAuditTrail aud
         db.Books.Add(book);
         await db.SaveChangesAsync(cancellationToken);
 
+        // 週期項目在預定支出之前（預定支出的 SourceId 有 FK）。
+        db.RecurringPlannedExpenses.AddRange(recurring);
         db.Transactions.AddRange(transactions.Select(t => t.Transaction));
         db.PlannedExpenses.AddRange(plannedExpenses);
         await db.SaveChangesAsync(cancellationToken);
@@ -185,15 +189,23 @@ internal sealed class RestoreBackupHandler(ISixJarsDbContext db, IAuditTrail aud
     private static List<PlannedExpense> RestorePlannedExpenses(
         Book book,
         IReadOnlyList<BackupPlannedExpense> backups,
-        Dictionary<TransactionId, (Transaction Transaction, DateTimeOffset? DeletedAt)> transactions)
+        Dictionary<TransactionId, (Transaction Transaction, DateTimeOffset? DeletedAt)> transactions,
+        IReadOnlySet<RecurringPlannedExpenseId> recurringIds)
     {
         var paidTransactions = new HashSet<TransactionId>();
         var restored = new List<PlannedExpense>();
         foreach (var (dto, deletedAt) in backups)
         {
+            RecurringPlannedExpenseId? sourceId = dto.SourceId is { } s ? new RecurringPlannedExpenseId(s) : null;
+            if (sourceId is { } source && !recurringIds.Contains(source))
+            {
+                throw new DomainException($"預定支出 {dto.Id} 的來源週期項目 {dto.SourceId} 不在備份中，備份可能已損毀。");
+            }
+
             var planned = PlannedExpense.Create(
                 book, BudgetMonth.FromKey(dto.BudgetMonth), new CategoryId(dto.CategoryId),
-                dto.AccountId is { } accountId ? new AccountId(accountId) : null, dto.EstimatedAmount, dto.Note, new PlannedExpenseId(dto.Id));
+                dto.AccountId is { } accountId ? new AccountId(accountId) : null, dto.EstimatedAmount, dto.Note, new PlannedExpenseId(dto.Id),
+                sourceId);
 
             if (dto.PaidTransactionId is { } paidId)
             {
@@ -228,6 +240,28 @@ internal sealed class RestoreBackupHandler(ISixJarsDbContext db, IAuditTrail aud
             }
 
             restored.Add(planned);
+        }
+
+        return restored;
+    }
+
+    /// <summary>以 Domain 重建；Months 是集合，record 的 == 不逐項比，所以分開比對。</summary>
+    private static List<RecurringPlannedExpense> RestoreRecurringPlannedExpenses(Book book, IReadOnlyList<RecurringPlannedExpenseDto> backups)
+    {
+        var restored = new List<RecurringPlannedExpense>();
+        foreach (var dto in backups)
+        {
+            var item = RecurringPlannedExpense.Create(
+                book, new CategoryId(dto.CategoryId), dto.AccountId is { } a ? new AccountId(a) : null, dto.DefaultAmount, dto.Note,
+                dto.Frequency, dto.Months, BudgetMonth.FromKey(dto.StartMonth), dto.EndMonth is { } e ? BudgetMonth.FromKey(e) : null,
+                new RecurringPlannedExpenseId(dto.Id));
+            var rebuilt = RecurringPlannedExpenseDto.From(item, dto.Version);
+            if (rebuilt with { Months = dto.Months } != dto || !rebuilt.Months.SequenceEqual(dto.Months))
+            {
+                throw new DomainException($"週期預定支出 {dto.Id} 經 Domain 重建後與備份不一致，備份可能已損毀。");
+            }
+
+            restored.Add(item);
         }
 
         return restored;

@@ -373,6 +373,40 @@ public class SettingsMaintenanceEndpointsTests(PostgresFixture postgres)
         (await db.AuditEntries.CountAsync(e => e.EntityId == postOffice && e.Action == AuditAction.Delete, Ct)).Should().Be(1);
     }
 
+    [Fact]
+    public async Task Removing_category_or_account_used_by_recurring_item_is_422_in_use()
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var book = await factory.SeedBookAsync(Ct);
+        var client = await factory.CreateMemberClientAsync();
+        var postOffice = await AddAccountAsync(client, book, "郵局");
+        var insurance = book.FindCategory("固定支出", "保險費")!.Id.Value;
+        await RecurringPlannedExpensesEndpointsTests.CreateAsync(client, book,
+            RecurringPlannedExpensesEndpointsTests.Insurance(book) with { AccountId = postOffice });
+
+        var category = await client.DeleteAsync(Url(book, $"/categories/{insurance}"), Ct);
+        var account = await client.DeleteAsync(Url(book, $"/accounts/{postOffice}"), Ct);
+
+        (await ReadProblemAsync(category)).GetProperty("code").GetString().Should().Be("in-use");
+        (await ReadProblemAsync(account)).GetProperty("code").GetString().Should().Be("in-use");
+    }
+
+    [Fact]
+    public async Task Changing_main_category_with_recurring_sub_item_to_special_is_422_in_use()
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var book = await factory.SeedBookAsync(Ct);
+        var client = await factory.CreateMemberClientAsync();
+        await RecurringPlannedExpensesEndpointsTests.CreateAsync(client, book, RecurringPlannedExpensesEndpointsTests.Insurance(book));
+        var fixedMain = book.FindCategory("固定支出")!.Id.Value;
+
+        var response = await client.PutAsJsonAsync(Url(book, $"/categories/{fixedMain}"),
+            new { name = "固定支出", nature = "Special" }, ApiJson.Options, Ct);
+
+        response.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
+        (await ReadProblemAsync(response)).GetProperty("code").GetString().Should().Be("in-use");
+    }
+
     internal static async Task<Guid> AddAccountAsync(HttpClient client, Book book, string name)
     {
         var response = await client.PostAsJsonAsync(Url(book, "/accounts"), new { name, type = "Bank", openingBalance = 0m }, ApiJson.Options, Ct);

@@ -38,7 +38,8 @@ app.MapHealthEndpoints();
 app.MapAuthEndpoints();
 var api = app.MapGroup("/api").RequireAuthorization().AddEndpointFilter<AntiforgeryFilter>();
 api.MapAntiforgeryEndpoints().MapMeEndpoints();
-api.MapBooksEndpoints().MapTransactionsEndpoints().MapPlannedExpensesEndpoints().MapSummaryEndpoints().MapAuditEndpoints()
+api.MapBooksEndpoints().MapTransactionsEndpoints().MapPlannedExpensesEndpoints().MapRecurringPlannedExpensesEndpoints()
+    .MapSummaryEndpoints().MapAuditEndpoints()
     .MapExportsEndpoints();
 app.Run();
 

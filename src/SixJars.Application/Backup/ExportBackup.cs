@@ -33,6 +33,11 @@ internal sealed class ExportBackupHandler(ISixJarsDbContext db, TimeProvider clo
             .Where(p => p.BookId == bookId)
             .OrderBy(p => p.BudgetMonth).ThenBy(p => p.Id)
             .ToListAsync(cancellationToken);
+        // 週期項目沒有軟刪除；同樣用追蹤查詢讀 xmin。
+        var recurring = await db.RecurringPlannedExpenses
+            .Where(r => r.BookId == bookId)
+            .OrderBy(r => r.Id)
+            .ToListAsync(cancellationToken);
         var members = await db.BookMembers.AsNoTracking()
             .Where(m => m.BookId == bookId)
             .OrderBy(m => m.AddedAt).ThenBy(m => m.Id)
@@ -50,6 +55,7 @@ internal sealed class ExportBackupHandler(ISixJarsDbContext db, TimeProvider clo
             [.. transactions.Select(t => new BackupTransaction(TransactionDto.From(t, db.GetVersion(t)), t.DeletedAt))],
             [.. plannedExpenses.Select(p => new BackupPlannedExpense(PlannedExpenseDto.From(p, db.GetVersion(p)), p.DeletedAt))],
             [.. members.Select(m => new BackupMember(m.Id, m.Email, m.GoogleSubject, m.Role, m.AddedAt))],
-            [.. auditEntries.Select(AuditEntryDto.From)]);
+            [.. auditEntries.Select(AuditEntryDto.From)],
+            [.. recurring.Select(r => RecurringPlannedExpenseDto.From(r, db.GetVersion(r)))]);
     }
 }

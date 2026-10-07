@@ -235,9 +235,10 @@ public sealed class Book
     /// <summary>
     /// 改支出主分類的性質，回溯生效，子分類一起改（spec §3.1、Q4）。
     /// 預定支出只允許固定、貸款、特別，所以有預定支出（含已刪除）時不能改成浮動。
+    /// 週期預定支出只允許固定、貸款，所以有週期項目時只能在這兩者之間切換（P4 K plan D6）。
     /// L 段會再加上「有預算時拒絕」。
     /// </summary>
-    public void ChangeExpenseNature(CategoryId id, ExpenseNature nature, bool hasPlannedExpenses)
+    public void ChangeExpenseNature(CategoryId id, ExpenseNature nature, bool hasPlannedExpenses, bool hasRecurringPlannedExpenses = false)
     {
         var category = GetCategory(id);
         if (!category.IsMain || category.Kind != CategoryKind.Expense)
@@ -255,6 +256,11 @@ public sealed class Book
             throw new DomainException($"「{category.Name}」有預定支出，不能改成浮動支出。", DomainException.InUseCode);
         }
 
+        if (nature is not (ExpenseNature.Fixed or ExpenseNature.Loan) && hasRecurringPlannedExpenses)
+        {
+            throw new DomainException($"「{category.Name}」有週期預定支出，只能是固定或貸款支出。", DomainException.InUseCode);
+        }
+
         category.ChangeNature(nature);
         foreach (var sub in SubCategoriesOf(id))
         {
@@ -270,6 +276,13 @@ public sealed class Book
 
     public Category GetCategory(CategoryId id) =>
         _categories.Find(c => c.Id == id) ?? throw new DomainException($"找不到分類 {id.Value}。");
+
+    /// <summary>分類自己或它的主分類已封存（spec §3.1：子分類是否可選 = 自己與主分類都未封存）。</summary>
+    public bool IsCategoryArchived(CategoryId id)
+    {
+        var category = GetCategory(id);
+        return category.IsArchived || (category.ParentId is { } parentId && GetCategory(parentId).IsArchived);
+    }
 
     public Account? FindAccount(string name) => _accounts.Find(a => a.Name == name);
 
