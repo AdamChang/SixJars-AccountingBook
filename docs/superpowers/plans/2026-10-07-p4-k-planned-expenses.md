@@ -2966,3 +2966,32 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 | K9 | 計畫的 `rebuilt with { Months = [] } != dto with { Months = [] }` 依賴兩個空集合運算式是同一個實例（編譯器實作細節） | 改成 `rebuilt with { Months = dto.Months } != dto`＋`SequenceEqual`，語意相同；變異 (a) 證實只用 `rebuilt != dto` 會讓 round-trip 失敗 |
 | K9 | 新增的匯出測試用 `ApiFactory.CreateAsync` | 改用檔案既有的 `CreateFactoryAsync()`（固定時鐘），與同檔其他測試一致 |
 | K9 | (i) 情境的具體資料 | 每年 1、7 月「年繳保費」（保險費，無帳戶）＋每月「月租」（固定支出，國泰世華銀行，202601–202603）；產生 1 月後刪除年繳那筆、再產生 7 月；都在鎖帳之前。`Comparable` 另外排除週期項目的 `version`，`ShouldBeEmptyAsync` 加上週期項目 |
+
+### 前端 checkpoint（2026-10-07，K10–K17）
+
+- Commits：`59c850d` K10 → `c64f055` K11 → `bdc6d4a` K12 → `c490b78` K13 → `554adad` K14 → `510a7a4` K15 → `134a275` K16 → `3b4f7b0` K17 → `6234841` final review 修正。
+- 結果：`npx ng test --watch=false` **275 passed（35 個檔案）**；`npx playwright test` **6 passed**；`npx ng build` 0 warning，`planned-expenses-page` 是獨立的 lazy chunk；後端 `dotnet build` 0 warning、`dotnet test` **483 passed / 0 skipped**（前端階段沒有動到 `src/`、`tests/`）。
+- 每個 Task 都做了變異檢查，全部如預期變紅後還原。K17 的紅燈改用「暫時移除路由」取代「checkout K16 之前的 commit」，失敗原因相同（頁面進不去）。
+- secrets 掃描：`git diff master` 沒有連線字串或金鑰。
+- 整支前端審查（opus reviewer，`c370086..3b4f7b0`）：Critical 0、Important 3、Minor 9。Important 三項已以 TDD 修正（`6234841`）：
+  1. 付款帳戶只列後端接受的類型（支出：現金／銀行／信用卡／電子錢包；貸款繳款：現金／銀行）。預定支出的帳戶不合用時（例如週期項目選了貸款帳戶）不預選。
+  2. 本金大於繳款金額時不能送出。
+  3. 不支援 `type="month"` 的瀏覽器退回文字框時，無法解析的月份視為錯誤，不再默默送出 `null`（開始月份會變成 400，被誤報成「暫時無法連線」；結束月份會變成永不結束）。
+- Review Minor #7（稽核快照多了 `sourceId`）：前端目前沒有稽核 diff 的畫面，沒有東西要改；之後做稽核畫面時要把「缺欄位」與 `null` 視為相同。
+
+偏差與裁決：
+
+| Task | 偏差 | 處理 |
+|---|---|---|
+| K11 | 預測單檔約 11、全部約 252；實際 9、250 | 計畫列出的案例是 8 條，加上變異檢查註記要求的 `excludes_sub_categories_of_archived_main` 共 9 條；之後各 Task 的預測都少 2，以實際為準 |
+| K12–K14 | 計畫寫「以 `MatDialog.open` 開啟」 | 比照 `setting-dialog.spec.ts`：直接建立元件並注入 `MAT_DIALOG_DATA` 與 mock 的 `MatDialogRef`；真正經過 `MatDialog.open` 的路徑由 K15／K16 的頁面測試涵蓋 |
+| K12 | 日期欄位 | 用原生 `<input type="date">` 綁定 `PayDialogData.today` 的 `yyyy-MM-dd` 字串，不用 mat-datepicker（資料契約是字串，也省掉 DateAdapter） |
+| K13、K14 | 帳戶可不選、備註長度 | 帳戶選單加「（不指定）」；備註 `maxlength` 500，與後端 validator 一致 |
+| K14 | 對話框資料形狀未定 | `RecurringDialogData { book, budgetMonth, item? }`，新增時以頁面月份為預設開始月份 |
+| K15 | setup 方式 | 比照 `transactions.page.spec.ts` 用 `RouterTestingHarness`＋`CurrentBook` stub（需要 query `month`）；對話框送出的請求放在 `vi.waitFor` 內（關閉動畫），比照 `settings.page.spec.ts` |
+| K15 | 鎖帳與不存在的訊息 | 只有 `PLANNED_CONFLICT_MESSAGE` 放進 `messages.ts`（計畫列出的），其餘是頁面常數（設定頁的 `NOT_FOUND` 先例） |
+| K16 | `.scss` 不在計畫的 Files 清單 | 「已結束」灰色顯示需要樣式，一併修改 |
+| K16 | 週期項目的寫入錯誤訊息 | `run()` 改收 `WriteTarget`（要重新載入的清單＋衝突／不存在訊息），週期項目的訊息寫「週期項目」而不是「預定支出」 |
+| K16 | 導覽連結 | 保留 `queryParamsHandling="preserve"`：月份對這個頁面有意義，同記帳、總覽 |
+
+延後的 Minor（審查列出，未修）：貸款帳戶都封存時付款按鈕停用但沒有說明；產生／更新的訊息沒有寫月份（請求中換月）；分類缺失或浮動性質的預定支出被分組略過（正常操作到不了）；窄螢幕「本月」列的 ⋮ 會換行；刪除已付款的預定支出時沒有提示付款交易會保留；已付款的列顯示預估金額而非實付；付款日期鎖帳時訊息寫「這個月份已鎖帳」；清單載入失敗看起來像空的月份（與記帳頁一致）；每次切到週期項目分頁都重新載入。
