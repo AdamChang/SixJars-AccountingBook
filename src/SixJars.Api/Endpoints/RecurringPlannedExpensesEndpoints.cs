@@ -18,6 +18,13 @@ internal static class RecurringPlannedExpensesEndpoints
         book.MapPut("/recurring-planned-expenses/{recurringId:guid}",
             (Guid bookId, Guid recurringId, UpdateRecurringPlannedExpenseBody body, ISender sender, CancellationToken ct) =>
                 sender.Send(new UpdateRecurringPlannedExpense(bookId, recurringId, body.Version, body.Input), ct));
+        // DELETE 不帶 body，版本由 query string 的 ?version= 帶入（同預定支出）。
+        book.MapDelete("/recurring-planned-expenses/{recurringId:guid}",
+            async (Guid bookId, Guid recurringId, uint version, ISender sender, CancellationToken ct) =>
+            {
+                await sender.Send(new DeleteRecurringPlannedExpense(bookId, recurringId, version), ct);
+                return Results.NoContent();
+            });
         return book;
     }
 }

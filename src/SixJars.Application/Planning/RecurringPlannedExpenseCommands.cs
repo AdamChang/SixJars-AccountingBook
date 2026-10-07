@@ -83,6 +83,27 @@ internal sealed class UpdateRecurringPlannedExpenseHandler(ISixJarsDbContext db,
     }
 }
 
+/// <summary>刪除週期項目：只有從未產生過預定支出（含已刪除）時可以（ADR 0009、P4 K plan D4），硬刪除。</summary>
+public sealed record DeleteRecurringPlannedExpense(Guid BookId, Guid RecurringPlannedExpenseId, uint Version) : IRequest, IBookScoped;
+
+internal sealed class DeleteRecurringPlannedExpenseHandler(ISixJarsDbContext db, IAuditTrail audit)
+    : IRequestHandler<DeleteRecurringPlannedExpense>
+{
+    public async Task Handle(DeleteRecurringPlannedExpense request, CancellationToken cancellationToken)
+    {
+        var item = await db.FindRecurringPlannedExpenseAsync(request.BookId, request.RecurringPlannedExpenseId, cancellationToken);
+        // 已刪除的預定支出也算：來源參照仍然存在，而且 FK 會擋。
+        var hasGenerated = await db.PlannedExpenses.IgnoreQueryFilters().AnyAsync(p => p.SourceId == item.Id, cancellationToken);
+        item.EnsureRemovable(hasGenerated);
+
+        var before = RecurringPlannedExpenseDto.From(item, db.GetVersion(item));
+        db.ExpectVersion(item, request.Version);
+        db.RecurringPlannedExpenses.Remove(item);
+        audit.Record(request.BookId, AuditAction.Delete, AuditEntityTypes.RecurringPlannedExpense, item.Id.Value, before, null);
+        await db.SaveChangesAsync(cancellationToken);
+    }
+}
+
 internal static class RecurringPlannedExpenseLoading
 {
     /// <summary>帳本與 Id 一起當查詢條件（同 FindPlannedExpenseAsync）；找不到擲 <see cref="NotFoundException"/>。</summary>
