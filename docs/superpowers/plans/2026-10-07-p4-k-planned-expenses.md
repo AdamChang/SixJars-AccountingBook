@@ -2936,8 +2936,8 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - [x] ~~`Program.cs`、`BackupJson.Options`、`ExportBackup` 的追蹤~~（上表）
 
 以下是讀檔即可確認的形狀細節，各 Task 的 Step 1 已註明「先確認」，在該 Task 開始時處理：
-- [ ] `RestoreBackupTests`、`BackupExportTests` 的既有結構（K9 Step 1 依賴）。
-- [ ] `SettingsMaintenanceEndpointsTests.Url` 的簽章；同一個 member client 能不能存取兩本 `SeedBookAsync` 的帳本（K4 的 404 測試）。
+- [x] ~~`RestoreBackupTests`、`BackupExportTests` 的既有結構（K9 Step 1 依賴）~~（K9 執行時讀過，依既有寫法加入）。
+- [x] ~~`SettingsMaintenanceEndpointsTests.Url` 的簽章；同一個 member client 能不能存取兩本 `SeedBookAsync` 的帳本~~（`Url(Book, string path)`；兩本都以 `DefaultSubject` 為擁有者，可以）。
 - [ ] 前端 `book-fixture.ts` 的帳戶 Id 與分類、`formatBudgetMonth` 的輸出格式、`setting-dialog.ts` 的對話框寫法、`app.html` 的導覽寫法、`e2e/fixtures.ts`。
 - [ ] 檢查計畫內的測試碼是否有未 await、順序假設（尤其 K15 的「請求進行中 disabled」與 mat-tab 轉場）。
 
@@ -2946,3 +2946,23 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ## 執行結果與偏差
 
 （每個 checkpoint 結束時以 `docs(plans):` commit 回寫。）
+
+### 後端 checkpoint（2026-10-07，K1–K9）
+
+- Commits：`8178b8f` K1 → `2d7f074` K2 → `56a1542` K3 → `789eb7d` K4 → `4549984` K5 → `e469c25` K6 → `941b62e` K7 → `3e519a8` K8 → `067b6ba` K9。
+- 結果：`dotnet build` 0 warning；`dotnet test --solution SixJars.slnx` **480 passed / 0 failed / 0 skipped**（Acceptance 有實際執行）。預測 477＋3 查核測試＝480，一致。
+- 每個 Task 都做了計畫列出的變異檢查，全部如預期變紅後還原。
+- Migration：`20261007033801_AddRecurringPlannedExpenses`（`integer[]`、filter 只有 `"SourceId" IS NOT NULL`、FK Restrict、沒有動到其他表）。
+- secrets 掃描：`git diff master` 沒有連線字串或金鑰。
+
+偏差與裁決：
+
+| Task | 偏差 | 處理 |
+|---|---|---|
+| K1 | 單檔預測 14 passed，實際 15 | 計畫算錯（10 個 Fact＋5 個 Theory case），測試內容未改 |
+| K2 | 測試檔需要 `using SixJars.Infrastructure.Persistence;` | 計畫已註明要確認，補上 |
+| K5 | 失敗時是 405 而不是 404 | 同一路由模板已有 PUT，所以是 405；計畫已允許兩者 |
+| K6 | 測試檔需要 `SixJars.Domain.Common`、`SixJars.Infrastructure.Persistence` 的 using | 補上 |
+| K9 | 計畫的 `rebuilt with { Months = [] } != dto with { Months = [] }` 依賴兩個空集合運算式是同一個實例（編譯器實作細節） | 改成 `rebuilt with { Months = dto.Months } != dto`＋`SequenceEqual`，語意相同；變異 (a) 證實只用 `rebuilt != dto` 會讓 round-trip 失敗 |
+| K9 | 新增的匯出測試用 `ApiFactory.CreateAsync` | 改用檔案既有的 `CreateFactoryAsync()`（固定時鐘），與同檔其他測試一致 |
+| K9 | (i) 情境的具體資料 | 每年 1、7 月「年繳保費」（保險費，無帳戶）＋每月「月租」（固定支出，國泰世華銀行，202601–202603）；產生 1 月後刪除年繳那筆、再產生 7 月；都在鎖帳之前。`Comparable` 另外排除週期項目的 `version`，`ShouldBeEmptyAsync` 加上週期項目 |
