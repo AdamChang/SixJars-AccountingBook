@@ -19,6 +19,8 @@ internal static class PlannedExpensesEndpoints
         // 明確的產生動作（ADR 0009）；路徑不是 guid，不會和 /{plannedExpenseId:guid} 衝突。
         book.MapPost("/planned-expenses/generate", (Guid bookId, int budgetMonth, ISender sender, CancellationToken ct) =>
             sender.Send(new GeneratePlannedExpenses(bookId, budgetMonth), ct));
+        book.MapPost("/planned-expenses/refresh", (Guid bookId, int budgetMonth, ISender sender, CancellationToken ct) =>
+            sender.Send(new RefreshPlannedExpenses(bookId, budgetMonth), ct));
         book.MapGet("/planned-expenses/{plannedExpenseId:guid}", (Guid bookId, Guid plannedExpenseId, ISender sender, CancellationToken ct) =>
             sender.Send(new GetPlannedExpense(bookId, plannedExpenseId), ct));
         book.MapPut("/planned-expenses/{plannedExpenseId:guid}",

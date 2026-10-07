@@ -98,6 +98,94 @@ public class PlannedExpenseGenerationEndpointsTests(PostgresFixture postgres)
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
+    [Fact]
+    public async Task Refresh_applies_current_values_to_unpaid_generated_items_only()
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var book = await factory.SeedBookAsync(Ct);
+        var client = await factory.CreateMemberClientAsync();
+        var item = await CreateAsync(client, book, Insurance(book) with { Frequency = RecurrenceFrequency.Monthly, Months = [] });
+        await GenerateAsync(client, book, 202601);
+        var paid = (await GenerateAsync(client, book, 202602)).Created.Single();
+        await PayAsync(client, book, paid);
+        await client.PutAsJsonAsync(RecurringUrl(book, item.Id),
+            new { version = item.Version, input = Insurance(book) with { Frequency = RecurrenceFrequency.Monthly, Months = [], DefaultAmount = -3600m } },
+            ApiJson.Options, Ct);
+
+        var january = await RefreshAsync(client, book, 202601);
+        var february = await RefreshAsync(client, book, 202602);
+
+        january.Updated.Should().ContainSingle().Which.EstimatedAmount.Should().Be(-3600m);
+        february.Updated.Should().BeEmpty();   // 已付款的不更新
+    }
+
+    [Fact]
+    public async Task Refresh_reports_not_due_and_leaves_item_unchanged()
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var book = await factory.SeedBookAsync(Ct);
+        var client = await factory.CreateMemberClientAsync();
+        var item = await CreateAsync(client, book, Insurance(book));                  // 1、7 月
+        var generated = (await GenerateAsync(client, book, 202601)).Created.Single();
+        await client.PutAsJsonAsync(RecurringUrl(book, item.Id),
+            new { version = item.Version, input = Insurance(book) with { Months = [7], DefaultAmount = -1m } }, ApiJson.Options, Ct);
+
+        var result = await RefreshAsync(client, book, 202601);
+
+        result.Updated.Should().BeEmpty();
+        result.Skipped.Should().Equal(new RecurringSkipDto(item.Id, generated.Id, RecurringSkipReason.NotDue));
+    }
+
+    [Fact]
+    public async Task Refresh_writes_one_update_audit_per_changed_item()
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var book = await factory.SeedBookAsync(Ct);
+        var client = await factory.CreateMemberClientAsync();
+        var item = await CreateAsync(client, book, Insurance(book));
+        var generated = (await GenerateAsync(client, book, 202601)).Created.Single();
+        await client.PutAsJsonAsync(RecurringUrl(book, item.Id),
+            new { version = item.Version, input = Insurance(book) with { Note = "改備註" } }, ApiJson.Options, Ct);
+
+        await RefreshAsync(client, book, 202601);
+        await RefreshAsync(client, book, 202601);   // 第二次沒有改變，不寫稽核（D8）
+
+        var history = await client.GetFromJsonAsync<System.Text.Json.JsonElement>(
+            $"/api/books/{book.Id.Value}/audit?entityId={generated.Id}", ApiJson.Options, Ct);
+        history.EnumerateArray().Select(e => e.GetProperty("action").GetString()).Should().BeEquivalentTo("Create", "Update");
+    }
+
+    [Fact]
+    public async Task Refresh_on_locked_month_is_422_locked()
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var book = await factory.SeedBookAsync(Ct);
+        var client = await factory.CreateMemberClientAsync();
+        (await client.PutAsJsonAsync($"/api/books/{book.Id.Value}/lock-date", new { lockDate = "2026-01-31" }, ApiJson.Options, Ct))
+            .EnsureSuccessStatusCode();
+
+        var response = await client.PostAsync($"/api/books/{book.Id.Value}/planned-expenses/refresh?budgetMonth=202601", null, Ct);
+
+        response.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
+    }
+
+    private static string RecurringUrl(Book book, Guid id) => $"/api/books/{book.Id.Value}/recurring-planned-expenses/{id}";
+
+    private static async Task<RefreshPlannedExpensesResult> RefreshAsync(HttpClient client, Book book, int month)
+    {
+        var response = await client.PostAsync($"/api/books/{book.Id.Value}/planned-expenses/refresh?budgetMonth={month}", null, Ct);
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        return (await response.Content.ReadFromJsonAsync<RefreshPlannedExpensesResult>(ApiJson.Options, Ct))!;
+    }
+
+    private static async Task PayAsync(HttpClient client, Book book, PlannedExpenseDto planned)
+    {
+        var response = await client.PostAsJsonAsync($"/api/books/{book.Id.Value}/planned-expenses/{planned.Id}/pay",
+            new { version = planned.Version, date = "2026-02-05", accountId = book.FindAccount("國泰世華銀行")!.Id.Value, amount = -3000m },
+            ApiJson.Options, Ct);
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+    }
+
     internal static async Task<GeneratePlannedExpensesResult> GenerateAsync(HttpClient client, Book book, int month)
     {
         var response = await client.PostAsync($"/api/books/{book.Id.Value}/planned-expenses/generate?budgetMonth={month}", null, Ct);
