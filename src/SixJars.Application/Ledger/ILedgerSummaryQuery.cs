@@ -17,4 +17,11 @@ public interface ILedgerSummaryQuery
 
     /// <summary>每個歸屬月份的月可用餘額（含未付預定支出）；沒有資料的月份為 0。</summary>
     Task<IReadOnlyDictionary<BudgetMonth, decimal>> MonthlyDisposableAsync(Book book, BudgetMonth from, BudgetMonth to, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// 某歸屬月份各分類的支出交易（<c>Expense</c>）金額加總，沿用交易的符號（支出為負、退款為正）；
+    /// <b>包含</b>電子錢包帳戶的消費（ADR 0008，與月可用餘額不同）。沒有支出的分類不會出現在結果中。
+    /// 預算的 actual（P4 L plan D3）與 M 段的月報共用。
+    /// </summary>
+    Task<IReadOnlyDictionary<CategoryId, decimal>> ExpenseTotalsByCategoryAsync(BookId bookId, BudgetMonth month, CancellationToken cancellationToken);
 }

@@ -91,6 +91,18 @@ public sealed class SqlLedgerSummaryQuery(SixJarsDbContext db) : ILedgerSummaryQ
         return result;
     }
 
+    public async Task<IReadOnlyDictionary<CategoryId, decimal>> ExpenseTotalsByCategoryAsync(
+        BookId bookId, BudgetMonth month, CancellationToken cancellationToken)
+    {
+        // 不像 MonthlyDisposableAsync 排除電子錢包：預算與報表看的是「花到哪裡」（ADR 0008）。
+        var totals = await db.Transactions
+            .Where(t => t.BookId == bookId && t.BudgetMonth == month && t.Kind == TransactionKind.Expense && t.CategoryId != null)
+            .GroupBy(t => t.CategoryId)
+            .Select(g => new { CategoryId = g.Key, Total = g.Sum(t => t.Amount) })
+            .ToListAsync(cancellationToken);
+        return totals.ToDictionary(x => x.CategoryId!.Value, x => x.Total);
+    }
+
     /// <summary>依截止方式篩選交易；兩種都含截止當天／當月。</summary>
     private static IQueryable<Transaction> Through(IQueryable<Transaction> transactions, BalanceCutoff cutoff) => cutoff switch
     {
