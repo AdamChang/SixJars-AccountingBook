@@ -4,7 +4,7 @@ import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
-import { LedgerSummaryDto } from '../../core/api/dto';
+import { BudgetSheetDto, LedgerSummaryDto } from '../../core/api/dto';
 import { CurrentBook } from '../../core/book/current-book';
 import { BOOK } from '../transactions/testing/book-fixture';
 import { SummaryPage } from './summary.page';
@@ -22,8 +22,13 @@ const SUMMARY: LedgerSummaryDto = {
   planningFunds: [{ id: 'fund-travel', name: '旅遊基金', balance: 8000 }],
 };
 const url = (month: number) => `/api/books/${BOOK.id}/summary?budgetMonth=${month}`;
+const budgetsUrl = (month: number) => `/api/books/${BOOK.id}/budgets?budgetMonth=${month}`;
+const BUDGETS: BudgetSheetDto = {
+  rows: [{ categoryId: 'cat-food', defaultAmount: 3000, budget: 3000, source: 'Default', actual: 960, remaining: 2040 }],
+  totals: { budget: 3000, actual: 960, remaining: 2040 },
+};
 
-async function setup(path: string, summary: LedgerSummaryDto = SUMMARY, month = 202603) {
+async function setup(path: string, summary: LedgerSummaryDto = SUMMARY, month = 202603, budgets: BudgetSheetDto = BUDGETS) {
   TestBed.configureTestingModule({
     providers: [
       provideRouter([{ path: 'books/:bookId', children: [{ path: 'summary', component: SummaryPage }] }]),
@@ -36,6 +41,7 @@ async function setup(path: string, summary: LedgerSummaryDto = SUMMARY, month = 
   await harness.navigateByUrl(path, SummaryPage);
   const httpTesting = TestBed.inject(HttpTestingController);
   httpTesting.expectOne(url(month)).flush(summary);
+  httpTesting.expectOne(budgetsUrl(month)).flush(budgets);
   await harness.fixture.whenStable();
   const el = harness.fixture.nativeElement as HTMLElement;
   return { el, httpTesting };
@@ -90,5 +96,34 @@ describe('SummaryPage', () => {
     expect(section.textContent).toContain('財務規劃帳戶');
     expect(section.textContent).toContain('旅遊基金');
     expect(section.textContent).toContain('8,000');
+  });
+
+  it('shows_budget_card_with_totals', async () => {
+    const { el } = await setup('/books/book-1/summary?month=202603');
+    const card = el.querySelector('mat-card.budget-card')!.textContent ?? '';
+    expect(card).toContain('本月浮動預算');
+    expect(card).toContain('3,000');
+    expect(card).toContain('960');
+    expect(card).toContain('2,040');
+  });
+
+  it('budget_card_shows_overspending_in_red', async () => {
+    const { el } = await setup('/books/book-1/summary?month=202603', SUMMARY, 202603, {
+      rows: [{ ...BUDGETS.rows[0], actual: 3120, remaining: -120 }],
+      totals: { budget: 3000, actual: 3120, remaining: -120 },
+    });
+    const remaining = el.querySelector('mat-card.budget-card .remaining')!;
+    expect(remaining.textContent).toContain('-120');
+    expect(remaining.classList).toContain('red-ink');
+  });
+
+  it('budget_card_without_budgets_links_to_budgets_page', async () => {
+    const { el } = await setup('/books/book-1/summary?month=202603', SUMMARY, 202603, {
+      rows: [{ categoryId: 'cat-food', defaultAmount: null, budget: null, source: null, actual: 960, remaining: null }],
+      totals: { budget: 0, actual: 0, remaining: 0 },
+    });
+    const card = el.querySelector('mat-card.budget-card')!;
+    expect(card.textContent).toContain('尚未設定預算');
+    expect(card.querySelector('a')!.getAttribute('href')).toBe('/books/book-1/budgets?month=202603');
   });
 });

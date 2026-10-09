@@ -22,6 +22,23 @@
     </mat-card>
   </div>
 
+  @if (budgets(); as b) {
+    <mat-card class="budget-card" appearance="outlined">
+      <mat-card-content>
+        <div class="label">本月浮動預算</div>
+        @if (hasBudget()) {
+          <dl class="budget-figures">
+            <div><dt>預算</dt><dd class="figure">{{ format(b.totals.budget) }}</dd></div>
+            <div><dt>已用</dt><dd class="figure">{{ format(b.totals.actual) }}</dd></div>
+            <div><dt>剩餘</dt><dd class="figure remaining" [class.red-ink]="b.totals.remaining < 0">{{ format(b.totals.remaining) }}</dd></div>
+          </dl>
+        } @else {
+          <p class="unset">尚未設定預算，<a [routerLink]="['/books', bookId(), 'budgets']" [queryParams]="{ month: month() }">前往設定</a></p>
+        }
+      </mat-card-content>
+    </mat-card>
+  }
+
   <div class="balances">
     @for (group of groups(); track group.title) {
       <section class="account-group">
