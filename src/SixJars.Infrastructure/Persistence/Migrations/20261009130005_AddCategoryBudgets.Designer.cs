@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using SixJars.Infrastructure.Persistence;
@@ -11,9 +12,11 @@ using SixJars.Infrastructure.Persistence;
 namespace SixJars.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(SixJarsDbContext))]
-    partial class SixJarsDbContextModelSnapshot : ModelSnapshot
+    [Migration("20261009130005_AddCategoryBudgets")]
+    partial class AddCategoryBudgets
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
