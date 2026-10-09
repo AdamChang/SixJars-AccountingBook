@@ -5,9 +5,11 @@ namespace SixJars.Api.Endpoints;
 
 internal static class BudgetsEndpoints
 {
-    /// <summary>預算的設定與清除（spec §5.2）；掛在 <c>/books/{bookId}</c> 群組底下。查詢在 L6 加上。</summary>
+    /// <summary>預算的查詢、設定與清除（spec §5.2）；掛在 <c>/books/{bookId}</c> 群組底下。</summary>
     public static RouteGroupBuilder MapBudgetsEndpoints(this RouteGroupBuilder book)
     {
+        book.MapGet("/budgets", (Guid bookId, int budgetMonth, ISender sender, CancellationToken ct) =>
+            sender.Send(new GetBudgets(bookId, budgetMonth), ct));
         book.MapPut("/budgets/{categoryId:guid}/default",
             (Guid bookId, Guid categoryId, BudgetAmountBody body, ISender sender, CancellationToken ct) =>
                 sender.Send(new SetDefaultBudget(bookId, categoryId, body.Amount), ct));
