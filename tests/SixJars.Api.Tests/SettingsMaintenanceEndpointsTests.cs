@@ -407,6 +407,28 @@ public class SettingsMaintenanceEndpointsTests(PostgresFixture postgres)
         (await ReadProblemAsync(response)).GetProperty("code").GetString().Should().Be("in-use");
     }
 
+    [Fact]
+    public async Task Floating_category_with_budget_cannot_change_nature_or_be_removed_until_cleared()
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var book = await factory.SeedBookAsync(Ct);
+        var client = await factory.CreateMemberClientAsync();
+        // 沒有子分類的浮動主分類：刪除時不會先被「底下還有子分類」擋下
+        var travel = await BudgetsEndpointsTests.AddFloatingAsync(client, book, "旅遊");
+        await BudgetsEndpointsTests.SetDefaultAsync(client, book, travel, 1000m);
+
+        var nature = await client.PutAsJsonAsync(Url(book, $"/categories/{travel}"), new { name = "旅遊", nature = "Special" }, ApiJson.Options, Ct);
+        var remove = await client.DeleteAsync(Url(book, $"/categories/{travel}"), Ct);
+
+        nature.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
+        (await ReadProblemAsync(nature)).GetProperty("code").GetString().Should().Be("in-use");
+        remove.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
+        (await ReadProblemAsync(remove)).GetProperty("detail").GetString().Should().Contain("預算");
+
+        (await client.DeleteAsync(BudgetsEndpointsTests.Url(book, $"/{travel}/default"), Ct)).StatusCode.Should().Be(HttpStatusCode.NoContent);
+        (await client.DeleteAsync(Url(book, $"/categories/{travel}"), Ct)).StatusCode.Should().Be(HttpStatusCode.NoContent);
+    }
+
     internal static async Task<Guid> AddAccountAsync(HttpClient client, Book book, string name)
     {
         var response = await client.PostAsJsonAsync(Url(book, "/accounts"), new { name, type = "Bank", openingBalance = 0m }, ApiJson.Options, Ct);

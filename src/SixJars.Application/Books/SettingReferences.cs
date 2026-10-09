@@ -25,6 +25,10 @@ internal static class SettingReferences
         return db.RecurringPlannedExpenses.AnyAsync(r => r.BookId == book.Id && ids.Contains(r.CategoryId), cancellationToken);
     }
 
+    /// <summary>分類是否有預算。預算只會在浮動主分類上（CategoryBudget.Create），呼叫端只在這種分類時才需要查。</summary>
+    public static Task<bool> HasBudgetAsync(this ISixJarsDbContext db, BookId bookId, CategoryId id, CancellationToken cancellationToken) =>
+        db.CategoryBudgets.AnyAsync(b => b.BookId == bookId && b.CategoryId == id, cancellationToken);
+
     /// <summary>交易的帳戶、對方帳戶、分錄，以及預定支出與週期預定支出的帳戶。</summary>
     public static async Task<bool> IsAccountReferencedAsync(this ISixJarsDbContext db, BookId bookId, AccountId id, CancellationToken cancellationToken) =>
         await db.Transactions.IgnoreQueryFilters().AnyAsync(t => t.BookId == bookId

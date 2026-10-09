@@ -75,7 +75,10 @@ internal sealed class UpdateCategoryHandler(ISixJarsDbContext db, IAuditTrail au
                 && await db.HasPlannedExpensesAsync(book, id, cancellationToken);
             var hasRecurring = nature is not (ExpenseNature.Fixed or ExpenseNature.Loan)
                 && await db.HasRecurringPlannedExpensesAsync(book, id, cancellationToken);
-            book.ChangeExpenseNature(id, nature, hasPlannedExpenses, hasRecurring);
+            // 預算只在浮動主分類上；其他分類不必查（P4 L plan L7）。
+            var hasBudget = category is { IsMain: true, Nature: ExpenseNature.Floating }
+                && await db.HasBudgetAsync(book.Id, id, cancellationToken);
+            book.ChangeExpenseNature(id, nature, hasPlannedExpenses, hasRecurring, hasBudget);
         }
 
         audit.Record(request.BookId, AuditAction.Update, AuditEntityTypes.Category, id.Value, before, CategoryDto.From(category));

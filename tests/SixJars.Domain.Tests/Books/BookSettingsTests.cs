@@ -341,4 +341,29 @@ public class BookSettingsTests
 
         rent.Nature.Should().Be(ExpenseNature.Loan);
     }
+
+    [Fact]
+    public void Floating_category_with_budget_cannot_change_nature()
+    {
+        var food = _book.AddExpenseCategory("飲食", ExpenseNature.Floating);
+
+        var act = () => _book.ChangeExpenseNature(food.Id, ExpenseNature.Special, hasPlannedExpenses: false, hasBudget: true);
+
+        act.Should().Throw<DomainException>().Which.Code.Should().Be(DomainException.InUseCode);
+        food.Nature.Should().Be(ExpenseNature.Floating);
+        // 性質沒有改變時直接通過，不要求清除預算
+        _book.Invoking(b => b.ChangeExpenseNature(food.Id, ExpenseNature.Floating, hasPlannedExpenses: false, hasBudget: true))
+            .Should().NotThrow();
+    }
+
+    [Fact]
+    public void Main_category_with_budget_cannot_be_removed()
+    {
+        var food = _book.AddExpenseCategory("飲食", ExpenseNature.Floating);
+
+        var act = () => _book.RemoveCategory(food.Id, isReferenced: false, hasBudget: true);
+
+        act.Should().Throw<DomainException>().Where(e => e.Code == DomainException.InUseCode && e.Message.Contains("預算"));
+        _book.Categories.Should().Contain(food);
+    }
 }
