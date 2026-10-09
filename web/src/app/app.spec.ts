@@ -38,7 +38,7 @@ describe('App', () => {
     expect(toolbar.textContent).toContain('我的帳本');
     expect(toolbar.textContent).toContain('a@b.c');
     const hrefs = Array.from(toolbar.querySelectorAll('a')).map((a) => a.getAttribute('href'));
-    expect(hrefs).toEqual(['/books/b1/transactions', '/books/b1/summary', '/books/b1/planned-expenses', '/books/b1/settings']);
+    expect(hrefs).toEqual(['/books/b1/transactions', '/books/b1/summary', '/books/b1/planned-expenses', '/books/b1/budgets', '/books/b1/settings']);
     const button = Array.from(toolbar.querySelectorAll('button')).find((b) => b.textContent?.includes('登出'))!;
     button.click();
     fixture.detectChanges();
