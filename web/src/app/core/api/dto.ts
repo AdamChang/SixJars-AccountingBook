@@ -73,3 +73,14 @@ export type RecurringSkipReason = 'AlreadyGenerated' | 'CategoryArchived' | 'Acc
 export interface RecurringSkipDto { recurringId: string; plannedExpenseId: string | null; reason: RecurringSkipReason }
 export interface GenerateResultDto { created: PlannedExpenseDto[]; skipped: RecurringSkipDto[] }
 export interface RefreshResultDto { updated: PlannedExpenseDto[]; skipped: RecurringSkipDto[] }
+
+// 預算（P4 段 L）。金額一律為正數；budget／source／remaining 為 null 表示該月未設
+export type BudgetSource = 'Default' | 'Override';
+export interface BudgetRowDto {
+  categoryId: string; defaultAmount: number | null; budget: number | null; source: BudgetSource | null;
+  actual: number; remaining: number | null;
+}
+export interface BudgetTotalsDto { budget: number; actual: number; remaining: number }
+export interface BudgetSheetDto { rows: BudgetRowDto[]; totals: BudgetTotalsDto }
+export interface BudgetOverrideDto { budgetMonth: number; amount: number }
+export interface CategoryBudgetDto { categoryId: string; defaultAmount: number | null; overrides: BudgetOverrideDto[] }
