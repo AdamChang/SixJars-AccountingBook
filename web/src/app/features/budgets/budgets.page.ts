@@ -63,9 +63,9 @@ export class BudgetsPage {
   );
   // PUT 成功時只換掉該列（D5）；重新載入或換月時回到伺服器的資料
   private readonly rows = linkedSignal(() => this.sheet()?.rows ?? []);
-  // 同一時間只有一列在編輯；重新載入或換月時取消
-  protected readonly editing = linkedSignal<BudgetSheetDto | undefined, Editing | null>({
-    source: this.sheet, computation: () => null,
+  // 同一時間只有一列在編輯；重新載入或換月時取消。換月不等新的表回來就取消，否則 Enter 會把上個月的預填值寫進新月份
+  protected readonly editing = linkedSignal<{ sheet: BudgetSheetDto | undefined; month: number }, Editing | null>({
+    source: computed(() => ({ sheet: this.sheet(), month: this.month() })), computation: () => null,
   });
   protected readonly saving = signal(false);
   protected readonly amount = new FormControl('', { nonNullable: true, validators: budgetAmountValidator });
@@ -114,6 +114,11 @@ export class BudgetsPage {
       : this.api.setDefault(this.bookId(), editing.categoryId, amount);
     this.saving.set(true);
     this.run(request.pipe(finalize(() => this.saving.set(false))), budget => {
+      // 請求進行中換了月份：畫面上已是別月的列，回傳值不能套用，改為重新載入
+      if (this.month() !== month) {
+        this.reloadSheet();
+        return;
+      }
       this.rows.update(rows => rows.map(r => (r.categoryId === budget.categoryId ? applyBudget(r, budget, month) : r)));
       this.editing.set(null);
     });

@@ -72,7 +72,7 @@ async function setup(initial: BudgetSheetDto = sheet(FOOD, FUN)) {
     await fixture.whenStable();
   };
   const saveButton = (id: string) => row(id).querySelector<HTMLButtonElement>('button.save')!;
-  return { fixture, httpTesting, el, notifier, flushList, row, menu, editor, type, saveButton };
+  return { harness, fixture, httpTesting, el, notifier, flushList, row, menu, editor, type, saveButton };
 }
 
 describe('BudgetsPage', () => {
@@ -161,5 +161,37 @@ describe('BudgetsPage', () => {
       .flush({ code: 'rule', detail }, { status: 422, statusText: 'Unprocessable Entity' });
     await fixture.whenStable();
     expect(notifier.show).toHaveBeenCalledWith(detail);
+  });
+
+  // 最終審查 #1：PUT 進行中換月，回應不能套到新月份的列上（M1 的覆寫值不是 M2 的「本月」）
+  it('save_response_after_month_change_reloads_instead_of_applying', async () => {
+    const { harness, menu, editor, type, saveButton, httpTesting, row, fixture } = await setup();
+    await menu('cat-food', '設定本月預算');
+    await type(await editor('cat-food'), '1200');
+    saveButton('cat-food').click();
+    await fixture.whenStable();
+    const request = httpTesting.expectOne({ method: 'PUT', url: OVERRIDE });
+    await harness.navigateByUrl(`/books/${book.id}/budgets?month=202605`);
+    await fixture.whenStable();
+    const may = { ...FOOD, budget: 5000, source: 'Default' as const, remaining: 4000 };
+    httpTesting.expectOne(`${base}?budgetMonth=202605`).flush(sheet(may, FUN));
+    await fixture.whenStable();
+    request.flush({ categoryId: 'cat-food', defaultAmount: 5000, overrides: [{ budgetMonth: 202604, amount: 1200 }] });
+    await fixture.whenStable();
+    expect(row('cat-food').querySelector('.source')!.textContent!.trim()).toBe('預設');
+    httpTesting.expectOne(`${base}?budgetMonth=202605`).flush(sheet(may, FUN));
+    await fixture.whenStable();
+    expect(row('cat-food').querySelector('.budget-amount')!.textContent!.trim()).toBe('5,000');
+  });
+
+  // 最終審查 #1：換月時立刻取消編輯，不等新的表回來（否則 Enter 會把上個月的預填值寫進新月份）
+  it('month_change_cancels_editing_immediately', async () => {
+    const { harness, menu, editor, httpTesting, row, fixture } = await setup();
+    await menu('cat-food', '設定本月預算');
+    await editor('cat-food');
+    await harness.navigateByUrl(`/books/${book.id}/budgets?month=202605`);
+    await fixture.whenStable();
+    expect(row('cat-food').querySelector('input.amount-input')).toBeNull();
+    httpTesting.expectOne(`${base}?budgetMonth=202605`).flush(sheet(FOOD, FUN));
   });
 });
