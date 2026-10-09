@@ -3,6 +3,7 @@ using SixJars.Application.Ledger;
 using SixJars.Domain.Books;
 using SixJars.Domain.Common;
 using SixJars.Domain.Ledger;
+using SixJars.Domain.Planning;
 
 namespace SixJars.AcceptanceTests;
 
@@ -37,6 +38,47 @@ internal static class MonthFigureComparison
             LedgerBalances.AvailableCash(book, postings, includeEWallets: false),
             id => LedgerBalances.Account(book.GetAccount(id), postings),
             id => LedgerBalances.Fund(book.GetPlanningFund(id), funds)));
+    }
+
+    /// <summary>
+    /// L 段驗收（spec §9）：各浮動主分類的預算 actual = 「預算」工作表的實際支出欄。Excel 為支出符號（負數），系統為正數。
+    /// 對不上時逐筆列出，不調整規則；Excel 有、系統沒有的分類（匯入時略過的佔位名稱）只要求 Excel 為 0。
+    /// </summary>
+    public static async Task<IReadOnlyList<string>> CompareBudgetActualsAsync(
+        ILedgerSummaryQuery query, Book book, int year, LegacyMonthSheet sheet, CancellationToken cancellationToken)
+    {
+        var month = new BudgetMonth(year, sheet.Month);
+        var rows = BudgetSheet.Build(book, month, [], await query.ExpenseTotalsByCategoryAsync(book.Id, month, cancellationToken))
+            .Rows.ToDictionary(r => r.CategoryId);
+        var mismatches = new List<string>();
+        var compared = new HashSet<CategoryId>();
+        foreach (var excel in sheet.Figures.FloatingActuals)
+        {
+            var label = $"預算實際：{excel.Name}";
+            var expected = -excel.Amount + KnownExcelDifferences.AdjustmentFor(sheet.Month, label);
+            if (book.FindCategory(excel.Name) is not { } category || !rows.TryGetValue(category.Id, out var row))
+            {
+                if (Math.Round(expected, 2) != 0m)
+                {
+                    mismatches.Add($"{month} {label}：本系統沒有對應的浮動主分類，Excel {expected:N2}");
+                }
+
+                continue;
+            }
+
+            compared.Add(category.Id);
+            if (Math.Round(row.Actual, 2) != Math.Round(expected, 2))
+            {
+                mismatches.Add($"{month} {label}：本系統 {row.Actual:N2}，Excel {expected:N2}，差 {row.Actual - expected:N2}");
+            }
+        }
+
+        foreach (var row in rows.Values.Where(r => !compared.Contains(r.CategoryId) && r.Actual != 0m))
+        {
+            mismatches.Add($"{month} 預算實際：{book.GetCategory(row.CategoryId).Name} 不在 Excel 的預算表，本系統 {row.Actual:N2}");
+        }
+
+        return mismatches;
     }
 
     private static IReadOnlyList<string> CompareFigures(Book book, BudgetMonth month, LegacyMonthSheet sheet, SystemFigures system)

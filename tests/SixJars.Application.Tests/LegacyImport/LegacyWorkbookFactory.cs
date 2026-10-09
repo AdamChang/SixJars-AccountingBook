@@ -5,7 +5,7 @@ namespace SixJars.Application.Tests.LegacyImport;
 /// <summary>合成的舊記帳本；結構與真實檔案相同，但只保留測試需要的項目。</summary>
 internal static class LegacyWorkbookFactory
 {
-    private static readonly LegacyMonthFigures NoFigures = new(0m, 0m, 0m, [], [], [], [], []);
+    private static readonly LegacyMonthFigures NoFigures = new(0m, 0m, 0m, [], [], [], [], [], []);
 
     public static LegacySettings Settings(
         IReadOnlyList<LegacyNamedAmount>? loans = null,

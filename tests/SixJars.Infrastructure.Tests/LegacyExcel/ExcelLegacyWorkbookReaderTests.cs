@@ -67,4 +67,17 @@ public class ExcelLegacyWorkbookReaderTests
 
         floating.Single(c => c.Main == "主食").Subs.Should().Equal("早餐", "中餐", "晚餐", "宵夜");
     }
+
+    [Fact]
+    public async Task Reads_budget_sheet_actuals_for_each_floating_main_category()
+    {
+        var workbook = await ReadAsync();
+
+        foreach (var month in workbook.Months.Where(m => m.Month <= 3))
+        {
+            month.Figures.FloatingActuals.Select(a => a.Name)
+                .Should().Equal(workbook.FloatingCategories.Select(c => c.Main), $"{month.Month} 月的預算表與清單的浮動主分類一一對應");
+            month.Figures.FloatingActuals.Should().Contain(a => a.Amount < 0m, "Excel 的實際支出沿用支出符號");
+        }
+    }
 }
