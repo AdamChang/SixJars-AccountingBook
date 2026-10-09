@@ -81,9 +81,9 @@ public class BackupExportTests(PostgresFixture postgres)
         backup.AuditEntries[2].After.Should().BeNull();
     }
 
-    /// <summary>格式版本為 3（P4 段 K 起）；檔案縮排、中文不跳脫，方便人工檢視。同一份資料匯出兩次，內容完全相同。</summary>
+    /// <summary>格式版本為 4（P4 段 L 起）；檔案縮排、中文不跳脫，方便人工檢視。同一份資料匯出兩次，內容完全相同。</summary>
     [Fact]
-    public async Task Backup_format_version_is_3()
+    public async Task Backup_format_version_is_4()
     {
         await using var factory = await CreateFactoryAsync();
         var book = await factory.SeedBookAsync(Ct);
@@ -94,9 +94,9 @@ public class BackupExportTests(PostgresFixture postgres)
         var json = await client.GetStringAsync(url, Ct);
 
         using var document = JsonDocument.Parse(json);
-        document.RootElement.GetProperty("formatVersion").GetInt32().Should().Be(3);
-        BackupDocument.CurrentFormatVersion.Should().Be(3);
-        json.Should().Contain("\n  \"formatVersion\": 3").And.Contain("測試帳本").And.Contain("\"kind\": \"Expense\"");
+        document.RootElement.GetProperty("formatVersion").GetInt32().Should().Be(4);
+        BackupDocument.CurrentFormatVersion.Should().Be(4);
+        json.Should().Contain("\n  \"formatVersion\": 4").And.Contain("測試帳本").And.Contain("\"kind\": \"Expense\"");
         (await client.GetStringAsync(url, Ct)).Should().Be(json);
     }
 
@@ -114,6 +114,24 @@ public class BackupExportTests(PostgresFixture postgres)
 
         backup.RecurringPlannedExpenses.Should().ContainSingle().Which.Id.Should().Be(item.Id);
         backup.PlannedExpenses.Should().ContainSingle().Which.PlannedExpense.SourceId.Should().Be(item.Id);
+    }
+
+    [Fact]
+    public async Task Backup_contains_budgets()
+    {
+        await using var factory = await CreateFactoryAsync();
+        var book = await factory.SeedBookAsync(Ct);
+        var client = await factory.CreateMemberClientAsync();
+        var food = book.FindCategory("主食")!.Id.Value;
+        await BudgetsEndpointsTests.SetDefaultAsync(client, book, food, 5000m);
+        await BudgetsEndpointsTests.SetOverrideAsync(client, book, food, 202602, 3000m);
+
+        var backup = (await client.GetFromJsonAsync<BackupDocument>(
+            $"/api/books/{book.Id.Value}/export/backup.json", BackupJson.Options, Ct))!;
+
+        var budget = backup.Budgets.Should().ContainSingle().Subject;
+        (budget.CategoryId, budget.DefaultAmount).Should().Be((food, (decimal?)5000m));
+        budget.Overrides.Should().Equal(new BudgetOverrideDto(202602, 3000m));
     }
 
     [Fact]
