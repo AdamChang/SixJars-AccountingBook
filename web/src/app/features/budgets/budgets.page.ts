@@ -17,6 +17,7 @@ import { MonthNav } from '../../shared/month-nav';
 import { applyBudget, budgetAmountValidator, isOverBudget, parseBudgetAmount, sourceLabel, usagePercent } from './budget-rules';
 
 const BUDGET_NOT_FOUND_MESSAGE = '這筆預算已不存在';
+const BUDGET_CONFLICT_MESSAGE = '這筆預算已在其他裝置修改';
 
 // 行內編輯的對象：本月覆寫值或預設值
 type EditTarget = 'override' | 'default';
@@ -137,7 +138,8 @@ export class BudgetsPage {
     this.reload.update(count => count + 1);
   }
 
-  // 所有寫入的共同出口。離線、XSRF 等通用錯誤已由 interceptor 顯示；預算沒有樂觀並行，不會有 conflict（Q3）
+  // 所有寫入的共同出口。離線、XSRF 等通用錯誤已由 interceptor 顯示。
+  // 預算不做樂觀並行（Q3），但同時寫入仍可能衝突：兩個裝置同時清掉最後一個值時，第二個 DELETE 影響 0 列而回 409
   private run<T>(request: Observable<T>, success: (result: T) => void): void {
     request.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: success,
@@ -148,6 +150,10 @@ export class BudgetsPage {
             break;
           case 'validation':
             this.notifier.show(Object.values(error.fieldErrors)[0]?.[0] ?? '輸入的資料不正確');
+            break;
+          case 'conflict':
+            this.notifier.show(BUDGET_CONFLICT_MESSAGE);
+            this.reloadSheet();
             break;
           case 'notFound':
             this.notifier.show(BUDGET_NOT_FOUND_MESSAGE);

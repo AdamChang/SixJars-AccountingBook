@@ -150,6 +150,17 @@ describe('BudgetsPage', () => {
     await flushList(sheet(FOOD, FUN));
   });
 
+  // 預算不做樂觀並行（Q3），但兩個裝置同時清掉最後一個值時，第二個 DELETE 影響 0 列，後端回 409
+  it('conflict_shows_message_and_reloads', async () => {
+    const { menu, httpTesting, notifier, flushList, fixture } = await setup();
+    await menu('cat-food', '清除本月預算');
+    await vi.waitFor(() => httpTesting.expectOne({ method: 'DELETE', url: OVERRIDE })
+      .flush(null, { status: 409, statusText: 'Conflict' }));
+    await fixture.whenStable();
+    expect(notifier.show).toHaveBeenCalledWith('這筆預算已在其他裝置修改');
+    await flushList(sheet(FOOD, FUN));
+  });
+
   it('domain_error_shows_backend_message', async () => {
     const { menu, editor, type, saveButton, httpTesting, notifier, fixture } = await setup();
     await menu('cat-food', '設定本月預算');
