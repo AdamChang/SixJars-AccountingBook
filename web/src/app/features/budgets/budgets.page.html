@@ -1,0 +1,65 @@
+<app-month-nav [month]="month()" (monthChange)="changeMonth($event)" />
+<table class="ledger ledger-sheet">
+  <thead>
+    <tr>
+      <th>分類</th>
+      <th class="amount-head">預算</th>
+      <th class="amount-head">實際</th>
+      <th class="amount-head">剩餘</th>
+      <th>使用率</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    @for (view of viewRows(); track view.row.categoryId) {
+      <tr [attr.data-row]="view.row.categoryId" [class.over-budget]="view.over">
+        <td class="name">{{ view.name }}</td>
+        <td class="amount budget">
+          @if (isEditing(view.row)) {
+            <span class="editor">
+              <input class="amount-input figure" type="text" inputmode="decimal" [formControl]="amount"
+                [attr.aria-label]="view.name + (editing()?.target === 'override' ? ' 本月預算' : ' 預設預算')"
+                (keydown.enter)="save()" (keydown.escape)="cancelEdit()" />
+              <button matButton type="button" class="save" [disabled]="amount.invalid || saving()" (click)="save()">儲存</button>
+              <button matButton type="button" class="cancel" (click)="cancelEdit()">取消</button>
+            </span>
+          } @else {
+            @if (view.row.budget !== null) {
+              <span class="budget-amount">{{ formatAmount(view.row.budget) }}</span>
+            }
+            <span class="source" [class.unset]="view.row.source === null">{{ sourceLabel(view.row.source) }}</span>
+          }
+        </td>
+        <td class="amount actual">{{ formatAmount(view.row.actual) }}</td>
+        <td class="amount remaining" [class.red-ink]="view.row.remaining !== null && view.row.remaining < 0">
+          {{ view.row.remaining === null ? '' : formatAmount(view.row.remaining) }}
+        </td>
+        <td class="usage">
+          @if (view.usage !== null) {
+            <span class="usage-bar">
+              <mat-progress-bar mode="determinate" [value]="min(100, view.usage)" [color]="view.over ? 'warn' : 'primary'"
+                [attr.aria-label]="view.name + ' 使用率'" />
+              <span class="percent figure">{{ view.usage }}%</span>
+            </span>
+          }
+        </td>
+        <td class="actions">
+          <button mat-button type="button" [matMenuTriggerFor]="menu" [attr.data-menu]="view.row.categoryId"
+            [attr.aria-label]="view.name + ' 更多操作'">⋮</button>
+          <mat-menu #menu="matMenu">
+            <button mat-menu-item type="button" (click)="startEdit(view.row, 'override')">設定本月預算</button>
+            <button mat-menu-item type="button" (click)="startEdit(view.row, 'default')">設定預設預算</button>
+            @if (view.row.source === 'Override') {
+              <button mat-menu-item type="button" (click)="clearOverride(view.row)">清除本月預算</button>
+            }
+            @if (view.row.defaultAmount !== null) {
+              <button mat-menu-item type="button" (click)="clearDefault(view.row)">清除預設預算</button>
+            }
+          </mat-menu>
+        </td>
+      </tr>
+    } @empty {
+      <tr><td class="empty" colspan="6">沒有浮動支出的主分類</td></tr>
+    }
+  </tbody>
+</table>
