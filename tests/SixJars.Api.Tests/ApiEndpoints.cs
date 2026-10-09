@@ -41,14 +41,16 @@ internal static partial class ApiEndpoints
     }
 
     /// <summary>
-    /// 路由參數：<c>{bookId}</c> 代入指定的帳本，其他代入新的 Guid。
+    /// 路由參數：<c>{bookId}</c> 代入指定的帳本，<c>:int</c> 約束的（預算的歸屬月份）代入 202601，其他代入新的 Guid。
     /// handler 必填的 query 參數（例如 DELETE 的 <c>version</c>、稽核的 <c>entityId</c>）也要帶假值，
     /// 否則 minimal API 會在進入 MediatR 之前就因為綁定失敗回 400，測不到授權。
     /// </summary>
     public static string Url(RouteEndpoint endpoint, Guid bookId)
     {
         var path = RouteParameter().Replace(endpoint.RoutePattern.RawText!,
-            m => m.Groups["name"].Value == "bookId" ? bookId.ToString() : Guid.NewGuid().ToString());
+            m => m.Groups["name"].Value == "bookId" ? bookId.ToString()
+                : m.Value.EndsWith(":int}", StringComparison.Ordinal) ? "202601"
+                : Guid.NewGuid().ToString());
         var routeNames = endpoint.RoutePattern.Parameters.Select(p => p.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var handler = endpoint.Metadata.GetMetadata<MethodInfo>()
             ?? throw new InvalidOperationException($"{endpoint.RoutePattern.RawText} 沒有 handler 的 MethodInfo。");
