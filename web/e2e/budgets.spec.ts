@@ -62,3 +62,24 @@ test('budgets_keyboard_edit_focuses_amount_box', async ({ page }) => {
   await page.keyboard.press('Escape');
   await expect(amount).toHaveCount(0);
 });
+
+// 手機寬度：spec 不做手機專屬版面，但不能壞掉（計畫手動驗證第 8 項）。手動驗證發現行內編輯打開後頁面被撐寬
+test.describe('narrow viewport', () => {
+  test.use({ viewport: { width: 375, height: 812 } });
+
+  test('budgets_inline_edit_does_not_overflow_on_phone_width', async ({ page }) => {
+    await mockApi(page);
+    await page.route(`**/api/books/${BOOK_ID}/budgets?*`, route => route.fulfill({ json: SHEET }));
+    const overflow = () => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+
+    await page.goto(`/books/${BOOK_ID}/budgets?month=202604`);
+    await expect(page.locator('[data-row="cat-food"] .name')).toHaveText('飲食');
+    expect(await overflow()).toBe(0);
+
+    await page.getByRole('button', { name: '飲食 更多操作', exact: true }).click();
+    await page.getByRole('menuitem', { name: '設定本月預算', exact: true }).click();
+    await expect(page.getByRole('textbox', { name: '飲食 本月預算', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: '儲存', exact: true })).toBeVisible();
+    expect(await overflow()).toBe(0);
+  });
+});

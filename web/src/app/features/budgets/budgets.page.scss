@@ -27,4 +27,8 @@ td.actions { width: 3em; text-align: right; }
 @media (max-width: 600px) {
   th:nth-child(3), td.actual, th:nth-child(5), td.usage { display: none; }
   td.budget { width: auto; }
+  // 行內編輯：文字框一行、儲存／取消換到下一行，不把表格撐寬
+  .editor { flex-wrap: wrap; justify-content: flex-end; }
+  .amount-input { width: 100%; max-width: 7em; box-sizing: border-box; }
+  .editor button { min-width: 0; padding: 0 8px; }
 }
