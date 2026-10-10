@@ -19,6 +19,7 @@ public sealed class SixJarsDbContext(DbContextOptions<SixJarsDbContext> options)
     public DbSet<Transaction> Transactions => Set<Transaction>();
     public DbSet<PlannedExpense> PlannedExpenses => Set<PlannedExpense>();
     public DbSet<RecurringPlannedExpense> RecurringPlannedExpenses => Set<RecurringPlannedExpense>();
+    public DbSet<CategoryBudget> CategoryBudgets => Set<CategoryBudget>();
     public DbSet<AuditEntry> AuditEntries => Set<AuditEntry>();
     public DbSet<BookMember> BookMembers => Set<BookMember>();
 

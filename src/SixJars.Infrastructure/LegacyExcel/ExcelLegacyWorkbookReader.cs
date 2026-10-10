@@ -11,6 +11,7 @@ public sealed class ExcelLegacyWorkbookReader : ILegacyWorkbookReader
 {
     private const string SettingsSheet = "設定";
     private const string ListSheet = "清單";
+    private const string BudgetSheet = "預算";
 
     static ExcelLegacyWorkbookReader() => Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
 
@@ -21,9 +22,11 @@ public sealed class ExcelLegacyWorkbookReader : ILegacyWorkbookReader
         buffer.Position = 0;
 
         var sheets = SheetGrid.LoadAll(buffer);
+        // 「預算」工作表只供驗收比對（P4 L plan L9），缺表時不影響匯入
+        var budget = sheets.GetValueOrDefault(BudgetSheet);
         var months = Enumerable.Range(1, 12)
             .Where(month => sheets.ContainsKey($"{month}月"))
-            .Select(month => ReadMonth(month, sheets[$"{month}月"]))
+            .Select(month => ReadMonth(month, sheets[$"{month}月"], budget))
             .ToList();
 
         return new LegacyWorkbook(ReadSettings(sheets[SettingsSheet], sheets[ListSheet]), ReadFloatingCategories(sheets[ListSheet]), months);
@@ -48,12 +51,12 @@ public sealed class ExcelLegacyWorkbookReader : ILegacyWorkbookReader
             .Select(column => new LegacyCategoryList(list.Text($"{column}2")!, list.Texts(column, 4, 120))),
     ];
 
-    private static LegacyMonthSheet ReadMonth(int month, SheetGrid sheet) => new(
+    private static LegacyMonthSheet ReadMonth(int month, SheetGrid sheet, SheetGrid? budget) => new(
         month,
         ReadJournal(sheet),
         ReadTemplates(sheet),
         sheet.NamedAmounts("E", "N", 124, 131),
-        ReadFigures(sheet));
+        ReadFigures(sheet, budget, month));
 
     private static IReadOnlyList<LegacyJournalRow> ReadJournal(SheetGrid sheet) =>
     [
@@ -88,7 +91,7 @@ public sealed class ExcelLegacyWorkbookReader : ILegacyWorkbookReader
                 sheet.Date($"T{row}"),
                 noteColumn is null ? null : sheet.Text($"{noteColumn}{row}")));
 
-    private static LegacyMonthFigures ReadFigures(SheetGrid sheet) => new(
+    private static LegacyMonthFigures ReadFigures(SheetGrid sheet, SheetGrid? budget, int month) => new(
         MonthlyDisposable: sheet.Number("J6"),
         WalletAddBack: sheet.Number("N5"),
         AvailableCash: sheet.Number("E6"),
@@ -96,5 +99,10 @@ public sealed class ExcelLegacyWorkbookReader : ILegacyWorkbookReader
         EWalletBalances: sheet.NamedAmounts("E", "M", 22, 29),
         CardOutstanding: sheet.NamedAmounts("E", "X", 110, 119),
         LoanRemaining: sheet.NamedAmounts("E", "X", 124, 131),
-        FundBalances: sheet.NamedAmounts("S", "AA", 10, 17));
+        FundBalances: sheet.NamedAmounts("S", "AA", 10, 17),
+        FloatingActuals: budget?.NamedAmounts("C", BudgetActualColumn(month), 4, 28) ?? []);
+
+    /// <summary>「預算」工作表每月三欄（預算分配、實際支出、誤差），1 月的實際支出在 E 欄，12 月在 AL 欄。</summary>
+    private static string BudgetActualColumn(int month) =>
+        SheetGrid.Columns("E", "AL").Where((_, index) => index % 3 == 0).ElementAt(month - 1);
 }

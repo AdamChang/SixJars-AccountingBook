@@ -52,6 +52,7 @@ internal sealed class RestoreBackupHandler(ISixJarsDbContext db, IAuditTrail aud
         // 2–5. 先在記憶體中經 Domain 重建全部資料，任何驗證失敗都發生在寫入之前。
         var book = RestoreBook(backup.Book, backup.FormatVersion);
         var recurring = RestoreRecurringPlannedExpenses(book, backup.RecurringPlannedExpenses ?? []);
+        var budgets = RestoreBudgets(book, backup.Budgets ?? []);
         var transactions = backup.Transactions.Select(t => RestoreTransaction(book, t)).ToList();
         var plannedExpenses = RestorePlannedExpenses(
             book, backup.PlannedExpenses, transactions.ToDictionary(t => t.Transaction.Id), recurring.Select(r => r.Id).ToHashSet());
@@ -81,6 +82,7 @@ internal sealed class RestoreBackupHandler(ISixJarsDbContext db, IAuditTrail aud
 
         // 週期項目在預定支出之前（預定支出的 SourceId 有 FK）。
         db.RecurringPlannedExpenses.AddRange(recurring);
+        db.CategoryBudgets.AddRange(budgets);
         db.Transactions.AddRange(transactions.Select(t => t.Transaction));
         db.PlannedExpenses.AddRange(plannedExpenses);
         await db.SaveChangesAsync(cancellationToken);
@@ -270,4 +272,36 @@ internal sealed class RestoreBackupHandler(ISixJarsDbContext db, IAuditTrail aud
     /// <summary>Restore 稽核記錄的 After：來源檔名、備份的匯出時間與各類筆數。</summary>
     private sealed record RestoreSnapshot(
         string FileName, DateTimeOffset ExportedAt, int Transactions, int PlannedExpenses, int Members, int AuditEntries);
+
+    /// <summary>
+    /// 以 Domain 重建（重新套用「只限浮動主分類」；已封存的分類可以有預算，P4 L plan D4）。
+    /// 空的預算不會由 API 產生（Q1c），與 Overrides 不一致（集合要逐項比）一樣視為損毀。
+    /// </summary>
+    private static List<CategoryBudget> RestoreBudgets(Book book, IReadOnlyList<CategoryBudgetDto> backups)
+    {
+        var restored = new List<CategoryBudget>();
+        foreach (var dto in backups)
+        {
+            var budget = CategoryBudget.Create(book, new CategoryId(dto.CategoryId));
+            if (dto.DefaultAmount is { } amount)
+            {
+                budget.SetDefault(amount);
+            }
+
+            foreach (var monthOverride in dto.Overrides)
+            {
+                budget.SetOverride(BudgetMonth.FromKey(monthOverride.BudgetMonth), monthOverride.Amount);
+            }
+
+            var rebuilt = CategoryBudgetDto.From(budget);
+            if (budget.IsEmpty || rebuilt with { Overrides = dto.Overrides } != dto || !rebuilt.Overrides.SequenceEqual(dto.Overrides))
+            {
+                throw new DomainException($"分類 {dto.CategoryId} 的預算經 Domain 重建後與備份不一致，備份可能已損毀。");
+            }
+
+            restored.Add(budget);
+        }
+
+        return restored;
+    }
 }

@@ -1,3 +1,4 @@
+using ClosedXML.Excel;
 using FluentAssertions;
 using SixJars.Application.LegacyImport;
 using SixJars.Infrastructure.LegacyExcel;
@@ -66,5 +67,37 @@ public class ExcelLegacyWorkbookReaderTests
         var floating = (await ReadAsync()).FloatingCategories;
 
         floating.Single(c => c.Main == "主食").Subs.Should().Equal("早餐", "中餐", "晚餐", "宵夜");
+    }
+
+    [Fact]
+    public async Task Reads_budget_sheet_actuals_for_each_floating_main_category()
+    {
+        var workbook = await ReadAsync();
+
+        foreach (var month in workbook.Months.Where(m => m.Month <= 3))
+        {
+            month.Figures.FloatingActuals.Select(a => a.Name)
+                .Should().Equal(workbook.FloatingCategories.Select(c => c.Main), $"{month.Month} 月的預算表與清單的浮動主分類一一對應");
+            month.Figures.FloatingActuals.Should().Contain(a => a.Amount < 0m, "Excel 的實際支出沿用支出符號");
+        }
+    }
+
+    /// <summary>「預算」工作表只供驗收比對（L9），缺表時匯入仍要能讀；不需要 reference/，不會略過。</summary>
+    [Fact]
+    public async Task Missing_budget_sheet_reads_months_with_empty_floating_actuals()
+    {
+        using var workbook = new XLWorkbook();
+        workbook.AddWorksheet("設定").Cell("J4").Value = 2026;
+        workbook.AddWorksheet("清單");
+        workbook.AddWorksheet("1月").Cell("J6").Value = 100;
+        await using var stream = new MemoryStream();
+        workbook.SaveAs(stream);
+        stream.Position = 0;
+
+        var result = await new ExcelLegacyWorkbookReader().ReadAsync(stream, TestContext.Current.CancellationToken);
+
+        result.Months.Should().ContainSingle();
+        result.Months[0].Figures.MonthlyDisposable.Should().Be(100m);
+        result.Months[0].Figures.FloatingActuals.Should().BeEmpty();
     }
 }

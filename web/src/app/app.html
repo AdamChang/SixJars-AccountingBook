@@ -12,6 +12,8 @@
            routerLinkActive="active" ariaCurrentWhenActive="page" [routerLinkActiveOptions]="activeOptions">總覽</a>
         <a mat-button [routerLink]="['/books', book.id, 'planned-expenses']" queryParamsHandling="preserve"
            routerLinkActive="active" ariaCurrentWhenActive="page" [routerLinkActiveOptions]="activeOptions">預定支出</a>
+        <a mat-button [routerLink]="['/books', book.id, 'budgets']" queryParamsHandling="preserve"
+           routerLinkActive="active" ariaCurrentWhenActive="page" [routerLinkActiveOptions]="activeOptions">預算</a>
         <!-- 月份參數對設定頁沒有意義，不保留 query params -->
         <a mat-button [routerLink]="['/books', book.id, 'settings']"
            routerLinkActive="active" ariaCurrentWhenActive="page" [routerLinkActiveOptions]="activeOptions">設定</a>

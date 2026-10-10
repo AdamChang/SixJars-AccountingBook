@@ -38,6 +38,8 @@ public static class AuditEntityTypes
     public const string Transaction = "Transaction";
     public const string PlannedExpense = "PlannedExpense";
     public const string RecurringPlannedExpense = "RecurringPlannedExpense";
+    /// <summary>預算；EntityId 是分類 Id，刪除後重建仍是同一條歷史（P4 L plan Q6）。</summary>
+    public const string CategoryBudget = "CategoryBudget";
     /// <summary>帳本成員：CLI 加入成員（Create，操作者 <c>cli</c>）；第一次登入時綁定 Google sub（Update，操作者即被綁定的 sub）。</summary>
     public const string BookMember = "BookMember";
 }

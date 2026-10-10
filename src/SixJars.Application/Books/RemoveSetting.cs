@@ -29,8 +29,10 @@ internal sealed class RemoveSettingHandler(ISixJarsDbContext db, IAuditTrail aud
                 break;
             default:
                 var categoryId = new CategoryId(request.Id);
-                var category = CategoryDto.From(book.GetCategory(categoryId));
-                book.RemoveCategory(categoryId, await db.IsCategoryReferencedAsync(book.Id, categoryId, cancellationToken));
+                var target = book.GetCategory(categoryId);
+                var category = CategoryDto.From(target);
+                var hasBudget = target.IsMain && await db.HasBudgetAsync(book.Id, categoryId, cancellationToken);
+                book.RemoveCategory(categoryId, await db.IsCategoryReferencedAsync(book.Id, categoryId, cancellationToken), hasBudget);
                 audit.Record<CategoryDto>(request.BookId, AuditAction.Delete, AuditEntityTypes.Category, request.Id, category, null);
                 break;
         }

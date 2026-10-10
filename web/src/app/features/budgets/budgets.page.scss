@@ -1,0 +1,34 @@
+:host { display: block; max-width: 960px; margin: 0 auto; padding: 8px 16px 32px; }
+app-month-nav { margin-bottom: 8px; }
+table.ledger { overflow: hidden; }
+th {
+  padding: 8px 12px; text-align: left; font-family: var(--font-serif); font-weight: 700; font-size: 0.875rem;
+  color: var(--ledger-heading); letter-spacing: 0.08em; border-bottom: 1px solid var(--ledger-rule-strong);
+}
+th.amount-head { text-align: right; }
+td.budget { width: 14em; }
+.source {
+  margin-left: 6px; padding: 0 6px; border: 1px solid var(--ledger-rule-strong); border-radius: 8px;
+  font-family: var(--font-sans, inherit); font-size: 0.75rem; color: var(--ledger-heading);
+}
+.source.unset { color: var(--mat-sys-on-surface-variant); }
+.editor { display: inline-flex; align-items: center; gap: 4px; }
+.amount-input { width: 6em; padding: 4px 6px; text-align: right; border: 1px solid var(--ledger-rule-strong); border-radius: 4px; }
+td.usage { width: 10em; }
+.usage-bar { display: flex; align-items: center; gap: 8px; }
+.usage-bar mat-progress-bar { flex: 1; }
+.percent { min-width: 3.5em; text-align: right; font-size: 0.875rem; }
+tr.over-budget .percent { color: var(--red-ink); }
+// M3 主題不吃 color="warn"，超支時直接覆寫進度條的 token，與剩餘的赤字同色
+tr.over-budget mat-progress-bar { --mat-progress-bar-active-indicator-color: var(--red-ink); }
+td.actions { width: 3em; text-align: right; }
+.empty { padding: 16px; color: var(--mat-sys-on-surface-variant); }
+
+@media (max-width: 600px) {
+  th:nth-child(3), td.actual, th:nth-child(5), td.usage { display: none; }
+  td.budget { width: auto; }
+  // 行內編輯：文字框一行、儲存／取消換到下一行，不把表格撐寬
+  .editor { flex-wrap: wrap; justify-content: flex-end; }
+  .amount-input { width: 100%; max-width: 7em; box-sizing: border-box; }
+  .editor button { min-width: 0; padding: 0 8px; }
+}

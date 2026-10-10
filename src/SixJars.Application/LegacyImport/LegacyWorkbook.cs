@@ -35,6 +35,7 @@ public enum LegacyTemplateSection { Fixed, Loan, Special }
 public sealed record LegacyTemplateRow(int Row, LegacyTemplateSection Section, string Item, string? Method, decimal Amount, DateOnly? PaidDate, string? Note);
 
 /// <summary>Excel 算出的數字，只供驗收比對，不參與匯入。</summary>
+/// <param name="FloatingActuals">「預算」工作表 C4:C28 的浮動主分類與該月實際支出欄（Excel 原值，支出為負；spec §9 的 L 段）。</param>
 public sealed record LegacyMonthFigures(
     decimal MonthlyDisposable,
     decimal WalletAddBack,
@@ -43,4 +44,5 @@ public sealed record LegacyMonthFigures(
     IReadOnlyList<LegacyNamedAmount> EWalletBalances,
     IReadOnlyList<LegacyNamedAmount> CardOutstanding,
     IReadOnlyList<LegacyNamedAmount> LoanRemaining,
-    IReadOnlyList<LegacyNamedAmount> FundBalances);
+    IReadOnlyList<LegacyNamedAmount> FundBalances,
+    IReadOnlyList<LegacyNamedAmount> FloatingActuals);

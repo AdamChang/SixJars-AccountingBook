@@ -9,6 +9,17 @@ app-month-nav { margin: 8px 0 16px; }
   margin-bottom: 24px;
 }
 
+.budget-card {
+  margin-bottom: 24px;
+  background: var(--ledger-sheet);
+  border-color: var(--ledger-rule);
+
+  .budget-figures { display: flex; flex-wrap: wrap; gap: 8px 32px; margin: 8px 0 0; }
+  dt { color: var(--mat-sys-on-surface-variant); font-size: 0.85rem; }
+  dd { margin: 0; font-size: 1.25rem; font-weight: 700; }
+  .unset { margin: 8px 0 0; }
+}
+
 .metric {
   background: var(--ledger-sheet);
   border-color: var(--ledger-rule);

@@ -218,7 +218,8 @@ public sealed class Book
     }
 
     /// <param name="isReferenced">由呼叫端查詢：是否有交易或預定支出（含已軟刪除）使用這個分類。</param>
-    public void RemoveCategory(CategoryId id, bool isReferenced)
+    /// <param name="hasBudget">由呼叫端查詢：是否有預算。另給訊息：預算可以清除，不必改用封存（P4 L plan D7）。</param>
+    public void RemoveCategory(CategoryId id, bool isReferenced, bool hasBudget = false)
     {
         var category = GetCategory(id);
         if (category.IsMain && SubCategoriesOf(id).Any())
@@ -227,6 +228,11 @@ public sealed class Book
         }
 
         EnsureUnreferenced(category.Name, isReferenced);
+        if (hasBudget)
+        {
+            throw new DomainException($"「{category.Name}」有預算，請先清除預算再刪除。", DomainException.InUseCode);
+        }
+
         _categories.Remove(category);
         var siblings = category.ParentId is { } parentId ? SubCategoriesOf(parentId) : MainCategoriesOf(category.Kind);
         Compact(siblings, c => c.SortOrder, (c, order) => c.MoveTo(order));
@@ -236,9 +242,10 @@ public sealed class Book
     /// 改支出主分類的性質，回溯生效，子分類一起改（spec §3.1、Q4）。
     /// 預定支出只允許固定、貸款、特別，所以有預定支出（含已刪除）時不能改成浮動。
     /// 週期預定支出只允許固定、貸款，所以有週期項目時只能在這兩者之間切換（P4 K plan D6）。
-    /// L 段會再加上「有預算時拒絕」。
+    /// 預算只允許浮動，所以有預算時不能改成任何其他性質，必須先清除預算（spec Q4、P4 L plan L7）。
     /// </summary>
-    public void ChangeExpenseNature(CategoryId id, ExpenseNature nature, bool hasPlannedExpenses, bool hasRecurringPlannedExpenses = false)
+    public void ChangeExpenseNature(
+        CategoryId id, ExpenseNature nature, bool hasPlannedExpenses, bool hasRecurringPlannedExpenses = false, bool hasBudget = false)
     {
         var category = GetCategory(id);
         if (!category.IsMain || category.Kind != CategoryKind.Expense)
@@ -259,6 +266,11 @@ public sealed class Book
         if (nature is not (ExpenseNature.Fixed or ExpenseNature.Loan) && hasRecurringPlannedExpenses)
         {
             throw new DomainException($"「{category.Name}」有週期預定支出，只能是固定或貸款支出。", DomainException.InUseCode);
+        }
+
+        if (hasBudget)
+        {
+            throw new DomainException($"「{category.Name}」有預算，請先清除預算再修改支出性質。", DomainException.InUseCode);
         }
 
         category.ChangeNature(nature);
