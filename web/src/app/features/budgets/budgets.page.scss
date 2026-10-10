@@ -19,6 +19,8 @@ td.usage { width: 10em; }
 .usage-bar mat-progress-bar { flex: 1; }
 .percent { min-width: 3.5em; text-align: right; font-size: 0.875rem; }
 tr.over-budget .percent { color: var(--red-ink); }
+// M3 主題不吃 color="warn"，超支時直接覆寫進度條的 token，與剩餘的赤字同色
+tr.over-budget mat-progress-bar { --mat-progress-bar-active-indicator-color: var(--red-ink); }
 td.actions { width: 3em; text-align: right; }
 .empty { padding: 16px; color: var(--mat-sys-on-surface-variant); }
 

@@ -37,7 +37,7 @@
         <td class="usage">
           @if (view.usage !== null) {
             <span class="usage-bar">
-              <mat-progress-bar mode="determinate" [value]="min(100, view.usage)" [color]="view.over ? 'warn' : 'primary'"
+              <mat-progress-bar mode="determinate" [value]="min(100, view.usage)"
                 [attr.aria-label]="view.name + ' 使用率'" />
               <span class="percent figure">{{ view.usage }}%</span>
             </span>

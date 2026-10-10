@@ -1,5 +1,10 @@
-import { expect, test } from '@playwright/test';
+import { Locator, expect, test } from '@playwright/test';
 import { BOOK_ID, mockApi } from './fixtures';
+
+// 進度條實際畫出來的顏色與「剩餘」的赤字紅（--red-ink）
+const barColor = (row: Locator) =>
+  row.locator('.mdc-linear-progress__primary-bar .mdc-linear-progress__bar-inner').evaluate(el => getComputedStyle(el).borderTopColor);
+const redInk = (row: Locator) => row.locator('.remaining').evaluate(el => getComputedStyle(el).color);
 
 const SHEET = {
   rows: [{ categoryId: 'cat-food', defaultAmount: 5000, budget: 5000, source: 'Default', actual: 1200, remaining: 3800 }],
@@ -23,6 +28,7 @@ test('budgets_set_month_override_inline', async ({ page }) => {
   const row = page.locator('[data-row="cat-food"]');
   await expect(row.locator('.name')).toHaveText('飲食');
   await expect(row.locator('.remaining')).toHaveText('3,800');
+  const normalBar = await barColor(row);
 
   await page.getByRole('button', { name: '飲食 更多操作', exact: true }).click();
   await page.getByRole('menuitem', { name: '設定本月預算', exact: true }).click();
@@ -34,6 +40,9 @@ test('budgets_set_month_override_inline', async ({ page }) => {
   await expect(row.locator('.source')).toHaveText('本月');
   await expect(row.locator('.remaining')).toHaveText('-200');
   await expect(row).toHaveClass(/over-budget/);
+  // 手動驗證發現 color="warn" 在這個 M3 主題沒有效果，超支時進度條仍是一般色
+  expect(await barColor(row)).toBe(await redInk(row));
+  expect(await barColor(row)).not.toBe(normalBar);
   expect(putTokens).toEqual(['e2e-token']);
   expect(putBodies).toEqual([{ amount: 1000 }]);
 });
