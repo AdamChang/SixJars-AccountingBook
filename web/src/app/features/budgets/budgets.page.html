@@ -17,7 +17,7 @@
         <td class="amount budget">
           @if (isEditing(view.row)) {
             <span class="editor">
-              <input class="amount-input figure" type="text" inputmode="decimal" [formControl]="amount"
+              <input #amountInput class="amount-input figure" type="text" inputmode="decimal" [formControl]="amount"
                 [attr.aria-label]="view.name + (editing()?.target === 'override' ? ' 本月預算' : ' 預設預算')"
                 (keydown.enter)="save()" (keydown.escape)="cancelEdit()" />
               <button matButton type="button" class="save" [disabled]="amount.invalid || saving()" (click)="save()">儲存</button>

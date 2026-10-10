@@ -26,12 +26,30 @@ test('budgets_set_month_override_inline', async ({ page }) => {
 
   await page.getByRole('button', { name: '飲食 更多操作', exact: true }).click();
   await page.getByRole('menuitem', { name: '設定本月預算', exact: true }).click();
-  await page.getByRole('textbox', { name: '飲食 本月預算', exact: true }).fill('1,000');
-  await page.getByRole('button', { name: '儲存', exact: true }).click();
+  // 選單關閉後焦點要在文字框上，直接打字、按 Enter 送出（手動驗證發現焦點回到 ⋮）
+  await expect(page.getByRole('textbox', { name: '飲食 本月預算', exact: true })).toBeFocused();
+  await page.keyboard.type('1,000');
+  await page.keyboard.press('Enter');
 
   await expect(row.locator('.source')).toHaveText('本月');
   await expect(row.locator('.remaining')).toHaveText('-200');
   await expect(row).toHaveClass(/over-budget/);
   expect(putTokens).toEqual(['e2e-token']);
   expect(putBodies).toEqual([{ amount: 1000 }]);
+});
+
+// 只用鍵盤：Tab 到 ⋮、Enter 開選單、Enter 選項目，焦點要落在文字框，Esc 取消
+test('budgets_keyboard_edit_focuses_amount_box', async ({ page }) => {
+  await mockApi(page);
+  await page.route(`**/api/books/${BOOK_ID}/budgets?*`, route => route.fulfill({ json: SHEET }));
+
+  await page.goto(`/books/${BOOK_ID}/budgets?month=202604`);
+  await page.getByRole('button', { name: '飲食 更多操作', exact: true }).focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('menuitem', { name: '設定本月預算', exact: true })).toBeFocused();
+  await page.keyboard.press('Enter');
+  const amount = page.getByRole('textbox', { name: '飲食 本月預算', exact: true });
+  await expect(amount).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(amount).toHaveCount(0);
 });

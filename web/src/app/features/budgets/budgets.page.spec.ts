@@ -120,6 +120,17 @@ describe('BudgetsPage', () => {
     expect((await editor('cat-food')).value).toBe('5000');
   });
 
+  // 手動驗證發現：選單關閉後焦點回到 ⋮，要再點一次文字框，Enter／Esc 也沒作用
+  it('choosing_edit_from_menu_focuses_the_amount_box', async () => {
+    const { menu, editor, fixture } = await setup();
+    await menu('cat-food', '設定本月預算');
+    const input = await editor('cat-food');
+    await vi.waitFor(() => expect(document.activeElement).toBe(input));
+    await new Promise(resolve => setTimeout(resolve, 200));
+    await fixture.whenStable();
+    expect(document.activeElement).toBe(input);
+  });
+
   it('invalid_amount_disables_save', async () => {
     const { menu, editor, type, saveButton } = await setup();
     await menu('cat-fun', '設定本月預算');

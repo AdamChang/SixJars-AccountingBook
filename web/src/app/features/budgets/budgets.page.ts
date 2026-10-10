@@ -1,4 +1,6 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, linkedSignal, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy, Component, DestroyRef, ElementRef, computed, effect, inject, linkedSignal, signal, viewChild,
+} from '@angular/core';
 import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -70,6 +72,9 @@ export class BudgetsPage {
   });
   protected readonly saving = signal(false);
   protected readonly amount = new FormControl('', { nonNullable: true, validators: budgetAmountValidator });
+  // 從 ⋮ 選單選了之後，文字框出現時立刻取得焦點，Enter／Esc 才有作用（手動驗證發現焦點停在 ⋮）
+  private readonly amountInput = viewChild<ElementRef<HTMLInputElement>>('amountInput');
+  private readonly focusAmountInput = effect(() => this.amountInput()?.nativeElement.focus());
 
   protected readonly viewRows = computed<BudgetViewRow[]>(() => {
     const categories = this.currentBook.book()?.categories ?? [];
