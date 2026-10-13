@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using SixJars.Application.Ledger;
 using SixJars.Domain.Books;
 using SixJars.Domain.Common;
+using SixJars.Domain.Reports;
 using SixJars.Domain.Transactions;
 using SixJars.Infrastructure.Persistence;
 
@@ -101,6 +102,42 @@ public sealed class SqlLedgerSummaryQuery(SixJarsDbContext db) : ILedgerSummaryQ
             .Select(g => new { CategoryId = g.Key, Total = g.Sum(t => t.Amount) })
             .ToListAsync(cancellationToken);
         return totals.ToDictionary(x => x.CategoryId!.Value, x => x.Total);
+    }
+
+    public async Task<IReadOnlyList<ReportFlow>> ReportFlowsAsync(
+        BookId bookId, BudgetMonth from, BudgetMonth to, CancellationToken cancellationToken)
+    {
+        // Kind 以字串存（TransactionConfiguration），用明確的 || 而不是 array.Contains，不依賴 primitive collection 的翻譯（D2）。
+        // 不像 MonthlyDisposableAsync 排除電子錢包：報表看的是「花到哪裡」（ADR 0008）。
+        var rows = await db.Transactions
+            .Where(t => t.BookId == bookId && t.BudgetMonth >= from && t.BudgetMonth <= to
+                && (t.Kind == TransactionKind.Income || t.Kind == TransactionKind.Expense || t.Kind == TransactionKind.LoanPayment
+                    || t.Kind == TransactionKind.FundAllocation || t.Kind == TransactionKind.FundWithdrawal || t.Kind == TransactionKind.FundReturn))
+            .GroupBy(t => new { t.BudgetMonth, t.Kind, t.CategoryId, t.CounterAccountId, t.PlanningFundId })
+            .Select(g => new
+            {
+                g.Key.BudgetMonth,
+                g.Key.Kind,
+                g.Key.CategoryId,
+                g.Key.CounterAccountId,
+                g.Key.PlanningFundId,
+                Amount = g.Sum(t => t.Amount),
+                Principal = g.Sum(t => t.LoanPrincipal ?? 0m),
+            })
+            .ToListAsync(cancellationToken);
+        return [.. rows.Select(r => new ReportFlow(r.BudgetMonth, r.Kind, r.CategoryId, r.CounterAccountId, r.PlanningFundId, r.Amount, r.Principal))];
+    }
+
+    public async Task<IReadOnlyDictionary<CategoryId, decimal>> UnpaidPlannedByCategoryAsync(
+        BookId bookId, BudgetMonth month, CancellationToken cancellationToken)
+    {
+        // IsPaid 是計算屬性，EF 翻譯不了，改用 PaidTransactionId 判斷（同 MonthlyDisposableAsync）。
+        var totals = await db.PlannedExpenses
+            .Where(p => p.BookId == bookId && p.BudgetMonth == month && p.PaidTransactionId == null)
+            .GroupBy(p => p.CategoryId)
+            .Select(g => new { CategoryId = g.Key, Total = g.Sum(p => p.EstimatedAmount) })
+            .ToListAsync(cancellationToken);
+        return totals.ToDictionary(x => x.CategoryId, x => x.Total);
     }
 
     /// <summary>依截止方式篩選交易；兩種都含截止當天／當月。</summary>
