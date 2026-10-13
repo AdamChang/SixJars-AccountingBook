@@ -4,6 +4,7 @@ using SixJars.Domain.Books;
 using SixJars.Domain.Common;
 using SixJars.Domain.Ledger;
 using SixJars.Domain.Planning;
+using SixJars.Domain.Reports;
 
 namespace SixJars.AcceptanceTests;
 
@@ -79,6 +80,107 @@ internal static class MonthFigureComparison
         }
 
         return mismatches;
+    }
+
+    /// <summary>M 段驗收（spec §9）：月報 vs. 月工作表。口徑見 P4 M plan Task 7 的表。</summary>
+    public static async Task<IReadOnlyList<string>> CompareMonthlyReportAsync(
+        ILedgerSummaryQuery query, Book book, int year, LegacyMonthSheet sheet, CancellationToken cancellationToken)
+    {
+        var month = new BudgetMonth(year, sheet.Month);
+        var report = MonthlyReport.Build(
+            book, month,
+            await query.ReportFlowsAsync(book.Id, month, month, cancellationToken),
+            await query.UnpaidPlannedByCategoryAsync(book.Id, month, cancellationToken));
+        var excel = sheet.Figures.Report ?? throw new InvalidOperationException($"{month} 沒有讀到月報對照數字");
+        var mismatches = new List<string>();
+        var checker = new Checker(sheet.Month, $"{month} ", mismatches);
+        var floating = Section(report.Expenses, ReportSectionKind.Floating);
+
+        checker.Named("月報收入", excel.IncomeItems, report.Income.Lines.ToDictionary(l => l.Name, l => l.Amount), sign: 1m);
+        checker.Named("月報浮動", excel.FloatingMains, floating.Lines.ToDictionary(l => l.Name, l => l.Amount), sign: -1m);
+        checker.Check("月報浮動合計", floating.Total, -excel.FloatingTotal);
+        checker.Check("月報固定合計（含未付）", Paid(ReportSectionKind.Fixed), -excel.FixedTotal);
+        checker.Check("月報貸款合計（含未付）", Paid(ReportSectionKind.Loan), -excel.LoanTotal);
+        checker.Check("月報特別合計（含未付）", Paid(ReportSectionKind.Special), -excel.SpecialTotal);
+        checker.Named("月報入新資金", excel.FundAllocations, report.Planning.ToDictionary(p => p.Name, p => p.Allocation), sign: 1m);
+        checker.Named("月報出資金", excel.FundWithdrawals, report.Planning.ToDictionary(p => p.Name, p => p.Withdrawal), sign: -1m);
+        checker.Named("月報資金回流", excel.FundReturns, report.Planning.ToDictionary(p => p.Name, p => p.Return), sign: 1m);
+        return mismatches;
+
+        decimal Paid(ReportSectionKind kind)
+        {
+            var section = Section(report.Expenses, kind);
+            return section.Total + (section.Unpaid ?? 0m);
+        }
+    }
+
+    /// <summary>M 段驗收（spec §9）：年報的年總計 vs.「總表」的 AU 欄；固定、貸款、特別加上全年的未付預定（年報本身不列）。</summary>
+    public static async Task<IReadOnlyList<string>> CompareYearlyReportAsync(
+        ILedgerSummaryQuery query, Book book, LegacyWorkbook workbook, CancellationToken cancellationToken)
+    {
+        var year = workbook.Settings.Year;
+        var excel = workbook.YearTotals ?? throw new InvalidOperationException("沒有讀到「總表」");
+        var report = YearlyReport.Build(
+            book, year,
+            await query.ReportFlowsAsync(book.Id, new BudgetMonth(year, 1), new BudgetMonth(year, 12), cancellationToken),
+            new BudgetMonth(year + 1, 1));
+        var unpaid = new Dictionary<ReportSectionKind, decimal>();
+        for (var m = 1; m <= 12; m++)
+        {
+            var month = new BudgetMonth(year, m);
+            var monthly = MonthlyReport.Build(book, month, [], await query.UnpaidPlannedByCategoryAsync(book.Id, month, cancellationToken));
+            foreach (var section in monthly.Expenses.Where(s => s.Unpaid is not null))
+            {
+                unpaid[section.Kind] = unpaid.GetValueOrDefault(section.Kind) + section.Unpaid!.Value;
+            }
+        }
+
+        var mismatches = new List<string>();
+        var checker = new Checker(0, $"{year} 年 ", mismatches);   // 月份 0 = 年度（KnownExcelDifferences）
+        var floating = YearSection(ReportSectionKind.Floating);
+        checker.Named("年報收入", excel.IncomeItems, report.Income.Lines.ToDictionary(l => l.Name, l => l.Figures.Total), sign: 1m);
+        checker.Named("年報浮動", excel.FloatingMains, floating.Lines.ToDictionary(l => l.Name, l => l.Figures.Total), sign: -1m);
+        checker.Check("年報浮動合計", floating.Figures.Total, -excel.FloatingTotal);
+        checker.Check("年報固定合計（含未付）", WithUnpaid(ReportSectionKind.Fixed), -excel.FixedTotal);
+        checker.Check("年報貸款合計（含未付）", WithUnpaid(ReportSectionKind.Loan), -excel.LoanTotal);
+        checker.Check("年報特別合計（含未付）", WithUnpaid(ReportSectionKind.Special), -excel.SpecialTotal);
+        checker.Named("年報入新資金", excel.FundAllocations, report.Planning.Allocation.ToDictionary(l => l.Name, l => l.Figures.Total), sign: 1m);
+        return mismatches;
+
+        YearlyReportSection YearSection(ReportSectionKind kind) => report.Expenses.Single(s => s.Kind == kind);
+        decimal WithUnpaid(ReportSectionKind kind) => YearSection(kind).Figures.Total + unpaid.GetValueOrDefault(kind);
+    }
+
+    private static MonthlyReportSection Section(IEnumerable<MonthlyReportSection> sections, ReportSectionKind kind) =>
+        sections.Single(s => s.Kind == kind);
+
+    /// <summary>比對一個數字並套用 <see cref="KnownExcelDifferences"/>；依名稱比對時，系統沒有的名稱只要求 Excel 為 0。</summary>
+    private sealed class Checker(int month, string prefix, List<string> mismatches)
+    {
+        public void Check(string label, decimal actual, decimal excel)
+        {
+            var expected = excel + KnownExcelDifferences.AdjustmentFor(month, label);
+            if (Math.Round(actual, 2) != Math.Round(expected, 2))
+            {
+                mismatches.Add($"{prefix}{label}：本系統 {actual:N2}，Excel {expected:N2}，差 {actual - expected:N2}");
+            }
+        }
+
+        /// <param name="sign">Excel 原值換成系統口徑的符號：支出 −1、收入 1。</param>
+        public void Named(string group, IEnumerable<LegacyNamedAmount> excel, IReadOnlyDictionary<string, decimal> system, decimal sign)
+        {
+            var compared = new HashSet<string>();
+            foreach (var item in excel)
+            {
+                compared.Add(item.Name);
+                Check($"{group}：{item.Name}", system.GetValueOrDefault(item.Name), sign * item.Amount);
+            }
+
+            foreach (var (name, amount) in system.Where(p => !compared.Contains(p.Key) && p.Value != 0m))
+            {
+                mismatches.Add($"{prefix}{group}：{name} 不在 Excel，本系統 {amount:N2}");
+            }
+        }
     }
 
     private static IReadOnlyList<string> CompareFigures(Book book, BudgetMonth month, LegacyMonthSheet sheet, SystemFigures system)
