@@ -16,7 +16,7 @@ const MONTHLY = {
 };
 const figures = (january: number) => ({ months: Array.from({ length: 12 }, (_, i) => (i === 0 ? january : 0)), total: january, shareOfIncome: null, monthlyAverage: null });
 const YEARLY = {
-  year: 2026, averageDivisor: 4,
+  year: 2026, averageDivisor: 4, averageFromMonth: 1,
   income: { kind: 'Income', figures: figures(50000), lines: [] },
   expenses: ['Floating', 'Fixed', 'Loan', 'Special'].map(kind => ({ kind, figures: figures(kind === 'Floating' ? 150 : 0), lines: [] })),
   expenseTotal: figures(150), planning: { allocation: [], withdrawal: [], return: [] },

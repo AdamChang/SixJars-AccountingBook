@@ -73,7 +73,7 @@ describe('yearlyStackedBar', () => {
   it('stacks_four_expense_natures_over_twelve_months', () => {
     const figures = (n: number) => ({ months: Array.from({ length: 12 }, (_, i) => (i === 0 ? n : 0)), total: n, shareOfIncome: null, monthlyAverage: null });
     const report: YearlyReportDto = {
-      year: 2026, averageDivisor: 12, income: { kind: 'Income', figures: figures(9), lines: [] },
+      year: 2026, averageDivisor: 12, averageFromMonth: 1, income: { kind: 'Income', figures: figures(9), lines: [] },
       expenses: (['Floating', 'Fixed', 'Loan', 'Special'] as const).map((kind, i) => ({ kind, figures: figures(i + 1), lines: [] })),
       expenseTotal: figures(10), planning: { allocation: [], withdrawal: [], return: [] },
     };

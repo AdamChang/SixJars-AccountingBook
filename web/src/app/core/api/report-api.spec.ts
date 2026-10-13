@@ -11,7 +11,7 @@ const MONTHLY: MonthlyReportDto = {
   expenses: [], expenseTotal: 0, unpaidTotal: 0, planning: [],
 };
 const YEARLY: YearlyReportDto = {
-  year: 2026, averageDivisor: 12, income: { kind: 'Income', figures: FIGURES, lines: [] },
+  year: 2026, averageDivisor: 12, averageFromMonth: 1, income: { kind: 'Income', figures: FIGURES, lines: [] },
   expenses: [], expenseTotal: FIGURES, planning: { allocation: [], withdrawal: [], return: [] },
 };
 

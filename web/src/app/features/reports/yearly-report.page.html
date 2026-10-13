@@ -26,10 +26,11 @@
     </figure>
   }
 
-  @if (r.averageDivisor === null) {
-    <p class="note">未來的年份不計算月平均</p>
+  @if (r.averageDivisor === null || r.averageFromMonth === null) {
+    <p class="note">未來的年份與開帳之前不計算月平均</p>
   } @else if (r.averageDivisor < 12) {
-    <p class="note">月平均以 1–{{ r.averageDivisor }} 月計算</p>
+    <!-- 今年算到本月；開帳那一年從開帳月份算起（spec Q10） -->
+    <p class="note">月平均以 {{ r.averageFromMonth }}–{{ r.averageFromMonth + r.averageDivisor - 1 }} 月計算</p>
   }
 
   <div class="table-wrap ledger-sheet">

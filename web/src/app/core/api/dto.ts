@@ -121,6 +121,7 @@ export interface YearlyLineDto { kind: ReportLineKind; id: string; name: string;
 export interface YearlySectionDto { kind: ReportSectionKind; figures: YearlyFiguresDto; lines: YearlyLineDto[] }
 export interface YearlyPlanningDto { allocation: YearlyLineDto[]; withdrawal: YearlyLineDto[]; return: YearlyLineDto[] }
 export interface YearlyReportDto {
-  year: number; averageDivisor: number | null; income: YearlySectionDto; expenses: YearlySectionDto[];
+  // averageFromMonth：月平均從幾月算起（開帳那一年是開帳月份），沒有月平均時為 null
+  year: number; averageDivisor: number | null; averageFromMonth: number | null; income: YearlySectionDto; expenses: YearlySectionDto[];
   expenseTotal: YearlyFiguresDto; planning: YearlyPlanningDto;
 }

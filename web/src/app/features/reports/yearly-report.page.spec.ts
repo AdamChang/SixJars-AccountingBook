@@ -16,6 +16,7 @@ const figures = (january: number, share: number | null, average: number | null):
 const REPORT: YearlyReportDto = {
   year: 2026,
   averageDivisor: 4,
+  averageFromMonth: 1,
   income: { kind: 'Income', figures: figures(40000, 1, 10000), lines: [] },
   expenses: (['Floating', 'Fixed', 'Loan', 'Special'] as const).map(kind => ({
     kind, figures: figures(kind === 'Floating' ? 1000 : 0, kind === 'Floating' ? 0.025 : 0, 250), lines: [],
@@ -72,10 +73,16 @@ describe('YearlyReportPage', () => {
   });
 
   it('shows_dash_for_future_year_average', async () => {
-    const future = { ...REPORT, averageDivisor: null, expenseTotal: figures(1000, 0.025, null) };
+    const future = { ...REPORT, averageDivisor: null, averageFromMonth: null, expenseTotal: figures(1000, 0.025, null) };
     const { el } = await setup(future);
     expect(el.querySelector('[data-row="expense-total"] .average')!.textContent!.trim()).toBe('—');
-    expect(el.textContent).toContain('未來的年份不計算月平均');
+    expect(el.textContent).toContain('未來的年份與開帳之前不計算月平均');
+  });
+
+  // 年中開帳：開帳那一年的月平均從開帳月份算起（spec Q10）
+  it('explains_an_average_that_starts_at_the_opening_month', async () => {
+    const { el } = await setup({ ...REPORT, averageDivisor: 5, averageFromMonth: 8 });
+    expect(el.textContent).toContain('月平均以 8–12 月計算');
   });
 
   it('year_nav_moves_the_month_param_by_a_year', async () => {
