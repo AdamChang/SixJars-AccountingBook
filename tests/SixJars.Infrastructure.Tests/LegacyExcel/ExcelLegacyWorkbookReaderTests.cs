@@ -82,6 +82,35 @@ public class ExcelLegacyWorkbookReaderTests
         }
     }
 
+    [Fact]
+    public async Task Month_sheets_expose_report_figures()
+    {
+        var workbook = await ReadAsync();
+
+        foreach (var month in workbook.Months.Where(m => m.Month <= 3))
+        {
+            var report = month.Figures.Report!;
+            report.Should().NotBeNull();
+            // 浮動主分類與「預算」工作表來自同一份清單（清單!B4:B28）
+            report.FloatingMains.Select(f => f.Name).Should().Equal(month.Figures.FloatingActuals.Select(f => f.Name));
+            report.FloatingTotal.Should().Be(report.FloatingMains.Sum(f => f.Amount), "X46 是 J34:J46 與 X34:X45 的加總");
+            report.FundWithdrawals.Select(f => f.Name).Should().Equal(report.FundAllocations.Select(f => f.Name));
+            report.FundReturns.Select(f => f.Name).Should().Equal(report.FundAllocations.Select(f => f.Name));
+            report.IncomeItems.Should().NotBeEmpty();
+        }
+    }
+
+    [Fact]
+    public async Task Summary_sheet_exposes_year_totals()
+    {
+        var workbook = await ReadAsync();
+
+        var year = workbook.YearTotals!;
+        year.Should().NotBeNull();
+        year.FloatingTotal.Should().Be(year.FloatingMains.Sum(f => f.Amount), "AU76 是 AU51:AU75 的加總");
+        year.IncomeItems.Select(i => i.Name).Should().Equal(workbook.Months[0].Figures.Report!.IncomeItems.Select(i => i.Name));
+    }
+
     /// <summary>「預算」工作表只供驗收比對（L9），缺表時匯入仍要能讀；不需要 reference/，不會略過。</summary>
     [Fact]
     public async Task Missing_budget_sheet_reads_months_with_empty_floating_actuals()
@@ -99,5 +128,6 @@ public class ExcelLegacyWorkbookReaderTests
         result.Months.Should().ContainSingle();
         result.Months[0].Figures.MonthlyDisposable.Should().Be(100m);
         result.Months[0].Figures.FloatingActuals.Should().BeEmpty();
+        result.YearTotals.Should().BeNull();
     }
 }
