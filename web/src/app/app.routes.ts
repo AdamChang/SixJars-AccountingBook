@@ -33,6 +33,10 @@ export const routes: Routes = [
         loadComponent: () => import('./features/reports/monthly-report.page').then((m) => m.MonthlyReportPage),
       },
       {
+        path: 'reports/yearly',
+        loadComponent: () => import('./features/reports/yearly-report.page').then((m) => m.YearlyReportPage),
+      },
+      {
         path: 'settings',
         loadComponent: () => import('./features/settings/settings.page').then((m) => m.SettingsPage),
       },
