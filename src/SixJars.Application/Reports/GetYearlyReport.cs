@@ -25,10 +25,12 @@ public sealed record YearlySectionDto(ReportSectionKind Kind, YearlyFiguresDto F
 
 public sealed record YearlyPlanningDto(IReadOnlyList<YearlyLineDto> Allocation, IReadOnlyList<YearlyLineDto> Withdrawal, IReadOnlyList<YearlyLineDto> Return);
 
-/// <param name="AverageDivisor">月平均的分母；未來的年份為 null（spec Q10）。</param>
+/// <param name="AverageDivisor">月平均的分母；未來的年份與開帳之前為 null（spec Q10）。</param>
+/// <param name="AverageFromMonth">月平均從幾月算起（開帳那一年是開帳月份）；沒有月平均時為 null。</param>
 public sealed record YearlyReportDto(
     int Year,
     int? AverageDivisor,
+    int? AverageFromMonth,
     YearlySectionDto Income,
     IReadOnlyList<YearlySectionDto> Expenses,
     YearlyFiguresDto ExpenseTotal,
@@ -37,6 +39,7 @@ public sealed record YearlyReportDto(
     public static YearlyReportDto From(YearlyReportResult report) => new(
         report.Year,
         report.AverageDivisor,
+        report.AverageFromMonth,
         Section(report.Income),
         [.. report.Expenses.Select(Section)],
         YearlyFiguresDto.From(report.ExpenseTotal),

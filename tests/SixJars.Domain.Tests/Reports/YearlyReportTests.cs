@@ -83,6 +83,45 @@ public class YearlyReportTests
             divisor is { } d ? Math.Round(100000m / d, 2, MidpointRounding.AwayFromZero) : null);
     }
 
+    // 開帳前的月份不可能有交易，不該攤進月平均（spec Q10 修訂，2026-10-13 最終審查）
+    [Theory]
+    [InlineData(202610, 3)]  // 開帳那一年是今年：8–10 月
+    [InlineData(202703, 5)]  // 開帳那一年已經過去：8–12 月
+    public void Average_divisor_starts_at_the_opening_month(int todayKey, int divisor)
+    {
+        var book = new Book("年中開帳", new DateOnly(2026, 8, 1));
+        var food = book.AddExpenseCategory("飲食", ExpenseNature.Floating);
+        ReportFlow[] flows = [new(BudgetMonth.FromKey(202608), TransactionKind.Expense, food.Id, null, null, -30000m)];
+
+        var report = YearlyReport.Build(book, 2026, flows, BudgetMonth.FromKey(todayKey));
+
+        report.AverageFromMonth.Should().Be(8);
+        report.AverageDivisor.Should().Be(divisor);
+        report.ExpenseTotal.MonthlyAverage.Should().Be(Math.Round(30000m / divisor, 2, MidpointRounding.AwayFromZero));
+    }
+
+    [Theory]
+    [InlineData(2025, 202703)] // 整年都在開帳之前
+    [InlineData(2026, 202607)] // 開帳那一年，但開帳月份還沒到
+    public void No_average_before_the_opening_month(int year, int todayKey)
+    {
+        var book = new Book("年中開帳", new DateOnly(2026, 8, 1));
+
+        var report = YearlyReport.Build(book, year, [], BudgetMonth.FromKey(todayKey));
+
+        report.AverageFromMonth.Should().BeNull();
+        report.AverageDivisor.Should().BeNull();
+        report.ExpenseTotal.MonthlyAverage.Should().BeNull();
+    }
+
+    [Fact]
+    public void Average_starts_in_january_after_the_opening_year()
+    {
+        var report = YearlyReport.Build(_book, 2026, Year2026(), PastYearToday);
+
+        report.AverageFromMonth.Should().Be(1);
+    }
+
     [Fact]
     public void Share_of_income_is_null_without_income()
     {

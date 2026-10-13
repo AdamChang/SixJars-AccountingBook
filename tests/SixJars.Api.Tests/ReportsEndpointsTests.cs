@@ -110,6 +110,7 @@ public class ReportsEndpointsTests(PostgresFixture postgres)
 
         report.Year.Should().Be(2026);
         report.AverageDivisor.Should().Be(4);
+        report.AverageFromMonth.Should().Be(1);
         report.Income.Figures.Months.Should().Equal(40000m, 0m, 60000m, 0m, 0m, 0m, 0m, 0m, 0m, 0m, 0m, 0m);
         report.Income.Figures.MonthlyAverage.Should().Be(25000m);
         report.ExpenseTotal.Total.Should().Be(1000m);

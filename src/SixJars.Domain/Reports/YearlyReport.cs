@@ -16,10 +16,15 @@ public sealed record YearlyReportSection(ReportSectionKind Kind, YearlyFigures F
 public sealed record YearlyPlanning(
     IReadOnlyList<YearlyReportLine> Allocation, IReadOnlyList<YearlyReportLine> Withdrawal, IReadOnlyList<YearlyReportLine> Return);
 
-/// <param name="AverageDivisor">月平均的分母（spec Q10）：過去的年 12、今年 = 本月月份、未來的年 null。</param>
+/// <param name="AverageDivisor">
+/// 月平均的分母（spec Q10）：從 <paramref name="AverageFromMonth"/> 算到結束月份（過去的年 12 月、今年 = 本月）的月份數；
+/// 未來的年、整年都在開帳之前、或開帳月份還沒到時為 null。
+/// </param>
+/// <param name="AverageFromMonth">月平均從幾月算起：開帳那一年是開帳月份，其他年份是 1 月；沒有月平均時為 null。</param>
 public sealed record YearlyReportResult(
     int Year,
     int? AverageDivisor,
+    int? AverageFromMonth,
     YearlyReportSection Income,
     IReadOnlyList<YearlyReportSection> Expenses,
     YearlyFigures ExpenseTotal,
@@ -32,7 +37,7 @@ public static class YearlyReport
     public static YearlyReportResult Build(Book book, int year, IEnumerable<ReportFlow> flows, BudgetMonth today)
     {
         var tree = ReportTree.Build(book, flows, width: 12, m => m.Year == year ? m.Month - 1 : null);
-        int? divisor = year < today.Year ? 12 : year == today.Year ? today.Month : null;
+        var (averageFrom, divisor) = AverageMonths(book.OpeningDate, year, today);
         var incomeTotal = tree.Income.Totals.Sum();
 
         YearlyFigures Figures(decimal[] months)
@@ -62,9 +67,23 @@ public static class YearlyReport
         return new YearlyReportResult(
             year,
             divisor,
+            averageFrom,
             Section(tree.Income),
             [.. tree.Expenses.Select(Section)],
             Figures(expenseMonths),
             new YearlyPlanning(Funds(f => f.Allocation), Funds(f => f.Withdrawal), Funds(f => f.Return)));
+    }
+
+    /// <summary>開帳前的月份不可能有交易，不攤進月平均（spec Q10）。</summary>
+    private static (int? From, int? Divisor) AverageMonths(DateOnly openingDate, int year, BudgetMonth today)
+    {
+        int? to = year < today.Year ? 12 : year == today.Year ? today.Month : null;
+        if (to is not { } end || year < openingDate.Year)
+        {
+            return (null, null);
+        }
+
+        var from = year == openingDate.Year ? openingDate.Month : 1;
+        return end >= from ? (from, end - from + 1) : (null, null);
     }
 }
