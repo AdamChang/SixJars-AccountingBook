@@ -10,6 +10,8 @@ internal static class ReportsEndpoints
     {
         book.MapGet("/reports/monthly", (Guid bookId, int budgetMonth, ISender sender, CancellationToken ct) =>
             sender.Send(new GetMonthlyReport(bookId, budgetMonth), ct));
+        book.MapGet("/reports/yearly", (Guid bookId, int year, ISender sender, CancellationToken ct) =>
+            sender.Send(new GetYearlyReport(bookId, year), ct));
         return book;
     }
 }

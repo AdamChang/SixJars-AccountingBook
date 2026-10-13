@@ -92,6 +92,67 @@ public class ReportsEndpointsTests(PostgresFixture postgres)
         (await SettingsMaintenanceEndpointsTests.ReadProblemAsync(response)).GetProperty("errors").TryGetProperty("budgetMonth", out _).Should().BeTrue();
     }
 
+    [Fact]
+    public async Task Yearly_report_places_months_and_uses_taipei_today_for_the_average()
+    {
+        // UTC 2026-03-31 16:30 = 台北 2026-04-01 00:30：今年的分母是 4（D9、spec Q10）
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct,
+            services => services.AddSingleton<TimeProvider>(new FixedTimeProvider(new DateTimeOffset(2026, 3, 31, 16, 30, 0, TimeSpan.Zero))));
+        var book = await factory.SeedBookAsync(Ct);
+        var client = await factory.CreateMemberClientAsync();
+        var salary = Category(book, "工作薪資");
+        var bank = Account(book, "國泰世華銀行");
+        await PostTransactionAsync(client, book, new { kind = "Income", date = "2026-01-05", amount = 40000m, accountId = bank, categoryId = salary });
+        await PostTransactionAsync(client, book, new { kind = "Income", date = "2026-03-05", amount = 60000m, accountId = bank, categoryId = salary });
+        await PostTransactionAsync(client, book, new { kind = "Expense", date = "2026-03-06", amount = -1000m, accountId = bank, categoryId = Category(book, "主食") });
+
+        var report = await GetYearlyAsync(client, book, 2026);
+
+        report.Year.Should().Be(2026);
+        report.AverageDivisor.Should().Be(4);
+        report.Income.Figures.Months.Should().Equal(40000m, 0m, 60000m, 0m, 0m, 0m, 0m, 0m, 0m, 0m, 0m, 0m);
+        report.Income.Figures.MonthlyAverage.Should().Be(25000m);
+        report.ExpenseTotal.Total.Should().Be(1000m);
+        report.ExpenseTotal.ShareOfIncome.Should().Be(0.01m);
+    }
+
+    [Fact]
+    public async Task Yearly_report_uses_at_most_four_database_round_trips()
+    {
+        var counter = new CommandCounter();
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct, services => services.AddSingleton<IInterceptor>(counter));
+        var book = await factory.SeedBookAsync(Ct);
+        var client = await factory.CreateMemberClientAsync();
+        await PostTransactionAsync(client, book, new { kind = "Expense", date = "2026-02-11", amount = -60m, accountId = Account(book, "現金"), categoryId = Category(book, "主食") });
+
+        counter.Reset();
+        await GetYearlyAsync(client, book, 2026);
+
+        // 成員授權 1 + 帳本 1 + report flows 1（D4）
+        counter.Count.Should().BeLessThanOrEqualTo(4);
+    }
+
+    [Theory]
+    [InlineData("?year=0")]
+    [InlineData("?year=10000")]
+    public async Task Invalid_year_is_400(string query)
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var book = await factory.SeedBookAsync(Ct);
+
+        var response = await (await factory.CreateMemberClientAsync()).GetAsync($"/api/books/{book.Id.Value}/reports/yearly{query}", Ct);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await SettingsMaintenanceEndpointsTests.ReadProblemAsync(response)).GetProperty("errors").TryGetProperty("year", out _).Should().BeTrue();
+    }
+
+    private static async Task<YearlyReportDto> GetYearlyAsync(HttpClient client, Book book, int year)
+    {
+        var response = await client.GetAsync($"/api/books/{book.Id.Value}/reports/yearly?year={year}", Ct);
+        response.StatusCode.Should().Be(HttpStatusCode.OK, await response.Content.ReadAsStringAsync(Ct));
+        return (await response.Content.ReadFromJsonAsync<YearlyReportDto>(ApiJson.Options, Ct))!;
+    }
+
     internal static Guid Account(Book book, string name) => book.FindAccount(name)!.Id.Value;
 
     internal static Guid Category(Book book, string main, string? sub = null) => book.FindCategory(main, sub)!.Id.Value;
