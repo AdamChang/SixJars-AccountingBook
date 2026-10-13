@@ -110,4 +110,18 @@ describe('MonthlyReportPage', () => {
     expect(TestBed.inject(Router).url).toBe('/books/b1/reports/monthly?month=202605');
     http.expectOne('/api/books/b1/reports/monthly?budgetMonth=202605').flush(REPORT);
   });
+
+  // 換月後新的報表還沒回來或載入失敗：不能在 5 月的標題下繼續顯示 4 月的數字（最終審查 Important #1）
+  it('hides_previous_month_figures_while_loading_and_after_a_failed_load', async () => {
+    const { el, fixture, http } = await setup();
+    el.querySelector<HTMLButtonElement>('button[aria-label="下個月"]')!.click();
+    await fixture.whenStable();
+    expect(el.querySelector('.disposable')).toBeNull();
+    expect(el.textContent).toContain('載入中');
+    http.expectOne('/api/books/b1/reports/monthly?budgetMonth=202605').flush(null, { status: 500, statusText: 'Server Error' });
+    await fixture.whenStable();
+    expect(el.querySelector('.disposable')).toBeNull();
+    expect(el.querySelector('table')).toBeNull();
+    expect(el.textContent).toContain('無法載入這個月份的報表');
+  });
 });

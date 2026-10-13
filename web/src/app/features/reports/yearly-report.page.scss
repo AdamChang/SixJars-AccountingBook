@@ -11,6 +11,7 @@
 figure { margin: 0 0 16px; padding: 12px; }
 figcaption { margin-bottom: 8px; font-family: var(--font-serif); font-weight: 700; color: var(--ledger-heading); }
 app-chart { height: 280px; }
+.status { padding: 16px; color: var(--mat-sys-on-surface-variant); }
 .note { margin: 0 0 8px; font-size: 0.8125rem; color: var(--mat-sys-on-surface-variant); }
 
 // 18 欄很寬：表格在自己的容器內橫向捲動，第一欄固定在左側

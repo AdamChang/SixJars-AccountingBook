@@ -90,4 +90,8 @@
       }
     </table>
   </div>
+} @else if (failed()) {
+  <p class="status ledger-sheet" role="alert">無法載入這一年的報表</p>
+} @else {
+  <p class="status ledger-sheet">載入中…</p>
 }

@@ -3,8 +3,8 @@ import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@a
 import { toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { EMPTY, catchError, map, switchMap } from 'rxjs';
-import { ReportLineDto, ReportSectionDto } from '../../core/api/dto';
+import { catchError, map, of, switchMap } from 'rxjs';
+import { MonthlyReportDto, ReportLineDto, ReportSectionDto } from '../../core/api/dto';
 import { ReportApi } from '../../core/api/report-api';
 import { ChartComponent } from '../../shared/chart';
 import { budgetMonthOf, parseBudgetMonth } from '../../shared/dates';
@@ -36,12 +36,24 @@ export class MonthlyReportPage {
     { requireSync: true },
   );
 
-  // 載入失敗時 interceptor 已通知，保留上一次的報表
-  protected readonly report = toSignal(
+  // 每個回應都標上它是哪個月份的；失敗時 data 為 null（interceptor 已通知）
+  private readonly response = toSignal(
     toObservable(computed(() => ({ bookId: this.bookId(), month: this.month() }))).pipe(
-      switchMap(({ bookId, month }) => this.api.monthly(bookId, month).pipe(catchError(() => EMPTY))),
+      switchMap(({ bookId, month }) => this.api.monthly(bookId, month).pipe(
+        map((data): { month: number; data: MonthlyReportDto | null } => ({ month, data })),
+        catchError(() => of({ month, data: null })),
+      )),
     ),
   );
+  // 只顯示與網址月份相同的報表：換月後新的還沒回來或載入失敗時，不能在新月份的標題下留著上個月的數字
+  protected readonly report = computed(() => {
+    const response = this.response();
+    return response?.month === this.month() ? response.data ?? undefined : undefined;
+  });
+  protected readonly failed = computed(() => {
+    const response = this.response();
+    return response?.month === this.month() && response.data === null;
+  });
 
   // 換月時不清空：同一個分類在不同月份通常還在，保留展開狀態比較順
   private readonly expanded = signal<ReadonlySet<string>>(new Set());

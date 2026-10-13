@@ -3,8 +3,8 @@ import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@a
 import { toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { EMPTY, catchError, map, switchMap } from 'rxjs';
-import { YearlyLineDto, YearlySectionDto } from '../../core/api/dto';
+import { catchError, map, of, switchMap } from 'rxjs';
+import { YearlyLineDto, YearlyReportDto, YearlySectionDto } from '../../core/api/dto';
 import { ReportApi } from '../../core/api/report-api';
 import { ChartComponent } from '../../shared/chart';
 import { budgetMonthOf, parseBudgetMonth } from '../../shared/dates';
@@ -39,12 +39,24 @@ export class YearlyReportPage {
   );
   protected readonly year = computed(() => Math.floor(this.month() / 100));
 
-  // 載入失敗時 interceptor 已通知，保留上一次的報表
-  protected readonly report = toSignal(
+  // 每個回應都標上它是哪一年的；失敗時 data 為 null（interceptor 已通知）
+  private readonly response = toSignal(
     toObservable(computed(() => ({ bookId: this.bookId(), year: this.year() }))).pipe(
-      switchMap(({ bookId, year }) => this.api.yearly(bookId, year).pipe(catchError(() => EMPTY))),
+      switchMap(({ bookId, year }) => this.api.yearly(bookId, year).pipe(
+        map((data): { year: number; data: YearlyReportDto | null } => ({ year, data })),
+        catchError(() => of({ year, data: null })),
+      )),
     ),
   );
+  // 只顯示與網址年份相同的報表：換年後新的還沒回來或載入失敗時，不能在新年份的標題下留著前一年的數字
+  protected readonly report = computed(() => {
+    const response = this.response();
+    return response?.year === this.year() ? response.data ?? undefined : undefined;
+  });
+  protected readonly failed = computed(() => {
+    const response = this.response();
+    return response?.year === this.year() && response.data === null;
+  });
 
   private readonly expanded = signal<ReadonlySet<string>>(new Set());
   private readonly palette = readChartPalette(getComputedStyle(inject(DOCUMENT).documentElement));

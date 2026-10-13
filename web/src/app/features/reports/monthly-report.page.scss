@@ -13,7 +13,7 @@ app-month-nav { margin-bottom: 4px; }
 figure { margin: 0; padding: 12px; }
 figcaption { margin-bottom: 8px; font-family: var(--font-serif); font-weight: 700; color: var(--ledger-heading); }
 app-chart { height: 260px; }
-.no-spending { padding: 16px; margin-bottom: 16px; color: var(--mat-sys-on-surface-variant); }
+.no-spending, .status { padding: 16px; margin-bottom: 16px; color: var(--mat-sys-on-surface-variant); }
 
 // 手機寬度不撐寬頁面：表格在自己的容器內橫向捲動
 .table-wrap { overflow-x: auto; margin-bottom: 16px; }

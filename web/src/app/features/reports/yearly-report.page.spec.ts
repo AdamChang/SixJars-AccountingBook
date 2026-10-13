@@ -86,6 +86,21 @@ describe('YearlyReportPage', () => {
     http.expectOne('/api/books/b1/reports/yearly?year=2027').flush(REPORT);
   });
 
+  // 換年後新的報表還沒回來或載入失敗：不能在 2027 年的標題下繼續顯示 2026 年的數字（最終審查 Important #1）
+  it('hides_previous_year_figures_while_loading_and_after_a_failed_load', async () => {
+    const { el, fixture, http, charts } = await setup();
+    el.querySelector<HTMLButtonElement>('button[aria-label="下一年"]')!.click();
+    await fixture.whenStable();
+    expect(el.querySelector('table')).toBeNull();
+    expect(el.textContent).toContain('載入中');
+    http.expectOne('/api/books/b1/reports/yearly?year=2027').flush(null, { status: 500, statusText: 'Server Error' });
+    await fixture.whenStable();
+    expect(el.querySelector('table')).toBeNull();
+    expect(el.querySelector('app-chart')).toBeNull();
+    expect(charts).toHaveLength(1);
+    expect(el.textContent).toContain('無法載入這一年的報表');
+  });
+
   it('draws_a_stacked_bar_of_the_four_natures', async () => {
     const { charts } = await setup();
     expect(charts).toHaveLength(1);
