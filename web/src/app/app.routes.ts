@@ -27,6 +27,11 @@ export const routes: Routes = [
         path: 'budgets',
         loadComponent: () => import('./features/budgets/budgets.page').then((m) => m.BudgetsPage),
       },
+      { path: 'reports', pathMatch: 'full', redirectTo: 'reports/monthly' },
+      {
+        path: 'reports/monthly',
+        loadComponent: () => import('./features/reports/monthly-report.page').then((m) => m.MonthlyReportPage),
+      },
       {
         path: 'settings',
         loadComponent: () => import('./features/settings/settings.page').then((m) => m.SettingsPage),

@@ -1,0 +1,101 @@
+<app-month-nav [month]="month()" (monthChange)="changeMonth($event)" />
+<nav class="report-switch" aria-label="報表種類">
+  <a mat-button aria-current="page" [routerLink]="['/books', bookId(), 'reports', 'monthly']" queryParamsHandling="preserve">月報</a>
+  <a mat-button [routerLink]="['/books', bookId(), 'reports', 'yearly']" queryParamsHandling="preserve">年報</a>
+</nav>
+
+@if (report(); as r) {
+  <section class="summary ledger-sheet">
+    <dl>
+      <div><dt>月可用餘額</dt><dd class="disposable figure" [class.red-ink]="r.monthlyDisposable < 0">{{ formatAmount(r.monthlyDisposable) }}</dd></div>
+      <div><dt>支出合計</dt><dd class="expense-total figure">{{ formatAmount(r.expenseTotal) }}</dd></div>
+      <div><dt>未付預定合計</dt><dd class="unpaid-total figure">{{ formatAmount(r.unpaidTotal) }}</dd></div>
+    </dl>
+    <p class="difference-note">報表依分類計入電子錢包消費、不計加值，也不含未付預定與入新資金，所以支出合計不等於月可用餘額。</p>
+  </section>
+
+  @if (natureChart(); as nature) {
+    <div class="charts">
+      <figure class="ledger-sheet">
+        <figcaption>支出依性質</figcaption>
+        <app-chart [config]="nature" label="本月支出依性質的比例，數字見下方表格" />
+      </figure>
+      @if (floatingChart(); as floating) {
+        <figure class="ledger-sheet">
+          <figcaption>浮動支出依主分類</figcaption>
+          <app-chart [config]="floating" label="本月浮動支出依主分類的比例，數字見下方表格" />
+        </figure>
+      }
+    </div>
+  } @else {
+    <p class="no-spending ledger-sheet">本月沒有支出</p>
+  }
+
+  <div class="table-wrap ledger-sheet">
+    <table class="ledger">
+      <thead>
+        <tr><th>項目</th><th class="amount-head">金額</th></tr>
+      </thead>
+      @for (view of sections(); track view.section.kind) {
+        <tbody [attr.data-section]="view.section.kind">
+          <tr class="section-head">
+            <th scope="rowgroup">{{ view.title }}</th>
+            <td class="amount figure" [class.red-ink]="view.section.total < 0">{{ formatAmount(view.section.total) }}</td>
+          </tr>
+          @for (row of view.rows; track row.key) {
+            <tr [attr.data-line]="row.key">
+              <td class="name" [style.padding-left.em]="1 + row.depth * 1.5">
+                <span class="name-cell">
+                @if (row.expandable) {
+                  <button matIconButton type="button" class="toggle" [attr.aria-expanded]="row.expanded"
+                    [attr.aria-label]="(row.expanded ? '收合 ' : '展開 ') + row.line.name" (click)="toggleLine(row.key)">
+                    {{ row.expanded ? '▾' : '▸' }}
+                  </button>
+                }
+                <span class="line-name">{{ row.line.name }}</span>
+                @if (row.line.principal !== null) {
+                  <small class="loan-split figure">本金 {{ formatAmount(row.line.principal) }}・利息 {{ formatAmount(row.line.interest ?? 0) }}</small>
+                }
+                </span>
+              </td>
+              <td class="amount figure" [class.red-ink]="row.line.amount < 0">{{ formatAmount(row.line.amount) }}</td>
+            </tr>
+          }
+          @if (view.section.unpaid) {
+            <tr class="unpaid" [attr.data-unpaid]="view.section.kind">
+              <td class="name">未付預定（不計入合計）</td>
+              <td class="amount figure">{{ formatAmount(view.section.unpaid) }}</td>
+            </tr>
+          }
+        </tbody>
+      }
+      <tfoot>
+        <tr class="grand-total">
+          <th scope="row">支出合計</th>
+          <td class="amount figure">{{ formatAmount(r.expenseTotal) }}</td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+
+  @if (r.planning.length > 0) {
+    <div class="table-wrap ledger-sheet">
+      <table class="ledger planning">
+        <caption>財務規劃</caption>
+        <thead>
+          <tr><th>財務規劃帳戶</th><th class="amount-head">入新資金</th><th class="amount-head">出資金</th><th class="amount-head">資金回流</th></tr>
+        </thead>
+        <tbody>
+          @for (fund of r.planning; track fund.fundId) {
+            <tr [attr.data-fund]="fund.fundId">
+              <td class="name">{{ fund.name }}</td>
+              <td class="amount figure">{{ formatAmount(fund.allocation) }}</td>
+              <td class="amount figure">{{ formatAmount(fund.withdrawal) }}</td>
+              <td class="amount figure">{{ formatAmount(fund.return) }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+}
