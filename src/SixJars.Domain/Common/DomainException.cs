@@ -15,5 +15,8 @@ public sealed class DomainException(string message, string code = DomainExceptio
     /// <summary>設定項目仍被使用（交易、預定支出、子分類……），不能刪除或變更。</summary>
     public const string InUseCode = "in-use";
 
+    /// <summary>確認用的名稱與實際名稱不同（刪除帳本，issue #6）。</summary>
+    public const string NameMismatchCode = "name-mismatch";
+
     public string Code { get; } = code;
 }

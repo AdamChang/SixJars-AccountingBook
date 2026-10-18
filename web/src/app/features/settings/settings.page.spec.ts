@@ -1,6 +1,7 @@
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
+import { Router } from '@angular/router';
 import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { MatButtonHarness } from '@angular/material/button/testing';
 import { MatDialogHarness } from '@angular/material/dialog/testing';
@@ -154,5 +155,75 @@ describe('SettingsPage', () => {
       `/api/books/${BOOK.id}/export/transactions.xlsx`,
       `/api/books/${BOOK.id}/export/backup.json`,
     ]);
+  });
+
+  const PREVIEW = {
+    name: BOOK.name, openingDate: '2026-01-01', lockDate: null, transactions: 0, plannedExpenses: 0,
+    recurringPlannedExpenses: 0, categoryBudgets: 0, members: 1, auditEntries: 0,
+  };
+
+  // 開啟刪除對話框、輸入名稱並按「永久刪除」，回傳送出的 DELETE 請求
+  async function confirmDelete(ctx: Awaited<ReturnType<typeof setup>>) {
+    await ctx.openTab('鎖帳日與資料', '.delete-book');
+    ctx.el.querySelector<HTMLButtonElement>('.delete-book button')!.click();
+    await ctx.fixture.whenStable();
+    ctx.httpTesting.expectOne(`/api/books/${BOOK.id}/deletion-preview`).flush(PREVIEW);
+    await ctx.fixture.whenStable();
+    await (await ctx.rootLoader.getHarness(MatInputHarness.with({ selector: '.confirm-name input' }))).setValue(BOOK.name);
+    await (await ctx.rootLoader.getHarness(MatButtonHarness.with({ text: '永久刪除' }))).click();
+    // afterClosed 在對話框的關閉動畫結束後才發出，DELETE 會比 whenStable 晚送出
+    return vi.waitFor(() => ctx.httpTesting.expectOne({ method: 'DELETE', url: `/api/books/${BOOK.id}` }));
+  }
+
+  // 真實的 navigate 在新路由啟用後才 resolve，這一頁已經被銷毀；只 mock 成 true 會讓頁面在 CurrentBook.clear() 後還在跑變更偵測。
+  // 導頁期間舊頁面仍會重新渲染，所以先等變更偵測跑完再銷毀：clear() 若搬到導頁之前，這裡就會讀到 undefined 的 book
+  function leaveOnNavigate(ctx: Awaited<ReturnType<typeof setup>>) {
+    return vi.spyOn(TestBed.inject(Router), 'navigate').mockImplementation(async () => {
+      await ctx.fixture.whenStable();
+      ctx.fixture.destroy();
+      return true;
+    });
+  }
+
+  async function expectMeReload(httpTesting: HttpTestingController) {
+    await vi.waitFor(() => httpTesting.expectOne('/api/me').flush({ subject: 's', email: null, books: [] }));
+    await vi.waitFor(() => httpTesting.expectOne('/api/antiforgery/token').flush(null));
+  }
+
+  it('delete_book_reloads_session_then_goes_home_and_clears_current_book', async () => {
+    const ctx = await setup();
+    const navigate = leaveOnNavigate(ctx);
+
+    const request = await confirmDelete(ctx);
+    expect(request.request.body).toEqual({ confirmName: BOOK.name });
+    request.flush(null, { status: 204, statusText: '' });
+    await expectMeReload(ctx.httpTesting);
+
+    await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith(['/']));
+    await vi.waitFor(() => expect(TestBed.inject(CurrentBook).book()).toBeUndefined());
+    expect(ctx.notifier.show).toHaveBeenCalledWith(`已刪除帳本「${BOOK.name}」`);
+  });
+
+  it('delete_book_domain_error_shows_backend_message_and_stays', async () => {
+    const ctx = await setup();
+    const navigate = leaveOnNavigate(ctx);
+
+    (await confirmDelete(ctx)).flush(
+      { code: 'name-mismatch', detail: '輸入的名稱與帳本名稱不同，沒有刪除。' }, { status: 422, statusText: '' });
+    await ctx.fixture.whenStable();
+
+    expect(ctx.notifier.show).toHaveBeenCalledWith('輸入的名稱與帳本名稱不同，沒有刪除。');
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it('delete_book_not_found_leaves_without_success_message', async () => {
+    const ctx = await setup();
+    const navigate = leaveOnNavigate(ctx);
+
+    (await confirmDelete(ctx)).flush(null, { status: 404, statusText: '' });
+    await expectMeReload(ctx.httpTesting);
+
+    await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith(['/']));
+    expect(ctx.notifier.show).not.toHaveBeenCalled();
   });
 });

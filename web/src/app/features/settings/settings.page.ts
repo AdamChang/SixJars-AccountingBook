@@ -6,12 +6,15 @@ import { MatDialog } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatTabsModule } from '@angular/material/tabs';
-import { Observable, filter } from 'rxjs';
+import { Router } from '@angular/router';
+import { Observable, filter, switchMap } from 'rxjs';
 import { BookApi } from '../../core/api/book-api';
+import { SessionService } from '../../core/auth/session.service';
 import { CurrentBook } from '../../core/book/current-book';
 import { ApiError } from '../../core/errors/api-error';
 import { Notifier } from '../../core/errors/notifier';
 import { confirm } from '../../shared/confirm-dialog';
+import { DeleteBookDialog, DeleteBookDialogData } from './delete-book-dialog';
 import { SettingDialog, SettingDialogData, SettingDialogResult } from './setting-dialog';
 import { ReorderRequest, SettingList } from './setting-list';
 import { SettingGroup, accountGroup, categoryGroups, fundGroup, reorderRequest } from './settings-rules';
@@ -34,6 +37,8 @@ export class SettingsPage {
   private readonly dialog = inject(MatDialog);
   private readonly notifier = inject(Notifier);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly session = inject(SessionService);
+  private readonly router = inject(Router);
 
   // bookGuard 已經載入帳本
   protected readonly book = computed(() => this.currentBook.book()!);
@@ -129,6 +134,42 @@ export class SettingsPage {
   protected clearLockDate(): void {
     this.lockDate.set('');
     this.saveLockDate();
+  }
+
+  protected onDeleteBook(): void {
+    const book = this.book();
+    this.dialog.open<DeleteBookDialog, DeleteBookDialogData, string>(DeleteBookDialog, { data: { bookId: book.id, name: book.name } })
+      .afterClosed()
+      .pipe(
+        filter((name): name is string => name !== undefined),
+        switchMap(name => this.api.delete(book.id, name)),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe({
+        next: () => void this.leaveDeletedBook(`已刪除帳本「${book.name}」`),
+        error: (error: ApiError) => {
+          switch (error.kind) {
+            case 'notFound':
+              // 帳本已經不存在（例如在其他分頁刪掉了），結果與刪除成功相同
+              void this.leaveDeletedBook(null);
+              break;
+            case 'domain':
+              this.notifier.show(error.message);
+              break;
+          }
+        },
+      });
+  }
+
+  // spec F3：先重新載入 me，首頁才不會列出（或自動導回）已刪除的帳本；
+  // clear 放在導頁之後，否則這一頁的 book()! 會在離開前拿到 undefined
+  private async leaveDeletedBook(message: string | null): Promise<void> {
+    await this.session.reload();
+    await this.router.navigate(['/']);
+    this.currentBook.clear();
+    if (message) {
+      this.notifier.show(message);
+    }
   }
 
   private openDialog(data: SettingDialogData, save: (result: SettingDialogResult) => void): void {

@@ -31,9 +31,11 @@ describe('HomePage', () => {
     expect(links.map((a) => a.getAttribute('href'))).toEqual(['/books/b1/transactions', '/books/b2/transactions']);
   });
 
-  it('home_shows_message_when_none', () => {
+  // 刪掉最後一本帳本後也會到這裡；Web 沒有建立帳本的入口，要告訴使用者下一步找誰（issue #6 後續）
+  it('home_shows_next_step_hint_when_none', () => {
     const { navigate, el } = setup([]);
     expect(navigate).not.toHaveBeenCalled();
     expect(el.textContent).toContain(NO_BOOKS_MESSAGE);
+    expect(NO_BOOKS_MESSAGE).toBe('沒有可存取的帳本。請管理者用 CLI 匯入帳本，或把你加為帳本成員。');
   });
 });

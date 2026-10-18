@@ -39,4 +39,10 @@ export class CurrentBook {
     this.cached = undefined;
     return this.load(bookId);
   }
+
+  // 帳本已刪除時呼叫：丟掉快取與目前的帳本，避免返回鍵讓 bookGuard 用快取放行
+  clear(): void {
+    this.cached = undefined;
+    this.bookState.set(undefined);
+  }
 }

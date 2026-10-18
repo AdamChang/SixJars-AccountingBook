@@ -2,7 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import {
-  AddAccountBody, AddCategoryBody, AddPlanningFundBody, BookDto, ExpenseNature, ReorderBody, SettingPath,
+  AddAccountBody, AddCategoryBody, AddPlanningFundBody, BookDeletionPreviewDto, BookDto, ExpenseNature, ReorderBody, SettingPath,
 } from './dto';
 
 @Injectable({ providedIn: 'root' })
@@ -11,6 +11,15 @@ export class BookApi {
 
   get(bookId: string): Observable<BookDto> {
     return this.http.get<BookDto>(`/api/books/${bookId}`);
+  }
+
+  deletionPreview(bookId: string): Observable<BookDeletionPreviewDto> {
+    return this.http.get<BookDeletionPreviewDto>(`/api/books/${bookId}/deletion-preview`);
+  }
+
+  // 名稱放在 body（後端 spec D1）；必須與帳本名稱完全相同，否則 422 name-mismatch
+  delete(bookId: string, confirmName: string): Observable<void> {
+    return this.http.delete<void>(`/api/books/${bookId}`, { body: { confirmName } });
   }
 
   add(bookId: string, path: 'accounts', body: AddAccountBody): Observable<{ id: string }>;

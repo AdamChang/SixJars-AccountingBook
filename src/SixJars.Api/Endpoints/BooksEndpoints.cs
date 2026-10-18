@@ -1,4 +1,5 @@
 using MediatR;
+using Microsoft.AspNetCore.Mvc;
 using SixJars.Application.Books;
 using SixJars.Domain.Books;
 
@@ -12,6 +13,12 @@ internal static class BooksEndpoints
         api.MapGet("/books", (ISender sender, CancellationToken ct) => sender.Send(new ListBooks(), ct));
         var book = api.MapGroup("/books/{bookId:guid}");
         book.MapGet("/", (Guid bookId, ISender sender, CancellationToken ct) => sender.Send(new GetBook(bookId), ct));
+        book.MapGet("/deletion-preview", (Guid bookId, ISender sender, CancellationToken ct) =>
+            sender.Send(new GetBookDeletionPreview(bookId), ct));
+        // 帳本名稱放在 body（spec D1）：中文名稱放在 query string 要做 URL 編碼，也會進到 request log。
+        // minimal API 對 DELETE 不推斷 body，所以必須標 [FromBody]。
+        book.MapDelete("/", (Guid bookId, [FromBody] DeleteBookBody body, ISender sender, CancellationToken ct) =>
+            NoContent(sender.Send(new DeleteBook(bookId, body.ConfirmName ?? ""), ct)));
 
         // 帳本 Id 一律以路由為準，覆寫 body 裡的值。
         book.MapPost("/accounts", async (Guid bookId, AddAccount command, ISender sender, CancellationToken ct) =>
@@ -67,3 +74,6 @@ internal sealed record ReorderBody(CategoryKind? Kind, Guid? ParentId, IReadOnly
 
 /// <summary>設定鎖帳日的 body；<see cref="LockDate"/> 為 null 時清除。</summary>
 internal sealed record SetLockDateBody(DateOnly? LockDate);
+
+/// <summary>刪除帳本的 body；<see cref="ConfirmName"/> 必須與帳本名稱完全相同。</summary>
+internal sealed record DeleteBookBody(string? ConfirmName);

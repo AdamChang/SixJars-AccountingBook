@@ -33,6 +33,13 @@ export interface BookDto {
   accounts: AccountDto[]; planningFunds: PlanningFundDto[]; categories: CategoryDto[];
 }
 
+// 刪除帳本前的統計；transactions、plannedExpenses 只算未刪除的（後端 spec D3）
+export interface BookDeletionPreviewDto {
+  name: string; openingDate: string; lockDate: string | null;
+  transactions: number; plannedExpenses: number; recurringPlannedExpenses: number;
+  categoryBudgets: number; members: number; auditEntries: number;
+}
+
 export interface PostingDto { accountId: string; amount: number }
 export interface TransactionDto {
   id: string; kind: TransactionKind; date: string; budgetMonth: number; amount: number;

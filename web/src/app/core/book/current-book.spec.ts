@@ -20,6 +20,20 @@ describe('CurrentBook', () => {
   });
   afterEach(() => httpTesting.verify());
 
+  it('clear_drops_cached_book', async () => {
+    const first = current.load('b1');
+    httpTesting.expectOne('/api/books/b1').flush(book('b1'));
+    await first;
+
+    current.clear();
+    expect(current.book()).toBeUndefined();
+
+    // 快取也清掉了：同一個 id 會重新請求
+    const again = current.load('b1');
+    httpTesting.expectOne('/api/books/b1').flush(book('b1'));
+    expect((await again).id).toBe('b1');
+  });
+
   it('current_book_reuses_cached_book_for_same_id', async () => {
     const first = current.load('b1');
     httpTesting.expectOne('/api/books/b1').flush(book('b1'));

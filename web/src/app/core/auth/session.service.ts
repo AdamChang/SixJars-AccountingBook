@@ -22,6 +22,12 @@ export class SessionService {
     return this.pending;
   }
 
+  // 成員關係改變後呼叫（例如刪除帳本）：丟掉快取重新取得 me
+  reload(): Promise<MeDto> {
+    this.pending = undefined;
+    return this.load();
+  }
+
   async logout(): Promise<void> {
     await firstValueFrom(this.api.logout());
     this.location.assign('/');

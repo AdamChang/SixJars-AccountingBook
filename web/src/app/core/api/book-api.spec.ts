@@ -3,7 +3,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { firstValueFrom } from 'rxjs';
 import { BookApi } from './book-api';
-import { BookDto } from './dto';
+import { BookDeletionPreviewDto, BookDto } from './dto';
 
 describe('BookApi', () => {
   let api: BookApi;
@@ -25,6 +25,25 @@ describe('BookApi', () => {
     api.get('b1').subscribe((v) => (result = v));
     httpTesting.expectOne({ method: 'GET', url: '/api/books/b1' }).flush(book);
     expect(result).toEqual(book);
+  });
+
+  it('deletion_preview_gets_counts', () => {
+    const preview: BookDeletionPreviewDto = {
+      name: '帳本', openingDate: '2026-01-01', lockDate: null, transactions: 3, plannedExpenses: 1,
+      recurringPlannedExpenses: 0, categoryBudgets: 2, members: 1, auditEntries: 9,
+    };
+    let result: BookDeletionPreviewDto | undefined;
+    api.deletionPreview('b1').subscribe((v) => (result = v));
+    httpTesting.expectOne({ method: 'GET', url: '/api/books/b1/deletion-preview' }).flush(preview);
+    expect(result).toEqual(preview);
+  });
+
+  it('delete_sends_confirm_name_in_body', async () => {
+    const done = firstValueFrom(api.delete('b1', '帳本'));
+    const request = httpTesting.expectOne({ method: 'DELETE', url: '/api/books/b1' });
+    expect(request.request.body).toEqual({ confirmName: '帳本' });
+    request.flush(null, { status: 204, statusText: 'No Content' });
+    await done;
   });
 
   it('update_account_puts_name_and_cash_flag', async () => {

@@ -25,6 +25,21 @@ describe('SessionService', () => {
   });
   afterEach(() => httpTesting.verify());
 
+  it('reload_fetches_me_again_and_updates_signal', async () => {
+    const loaded = service.load();
+    httpTesting.expectOne('/api/me').flush(me);
+    await vi.waitFor(() => httpTesting.expectOne('/api/antiforgery/token').flush(null));
+    await loaded;
+
+    const updated: MeDto = { ...me, books: [{ id: 'b2', name: '另一本' }] };
+    const reloaded = service.reload();
+    httpTesting.expectOne('/api/me').flush(updated);
+    await vi.waitFor(() => httpTesting.expectOne('/api/antiforgery/token').flush(null));
+
+    expect(await reloaded).toEqual(updated);
+    expect(service.me()).toEqual(updated);
+  });
+
   it('loads_me_then_fetches_antiforgery_token_once', async () => {
     const first = service.load();
     const second = service.load();

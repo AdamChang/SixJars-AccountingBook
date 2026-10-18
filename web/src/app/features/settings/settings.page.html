@@ -29,6 +29,11 @@
       <a matButton="outlined" [href]="exportUrl('transactions.xlsx')" download>交易明細 Excel</a>
       <a matButton="outlined" [href]="exportUrl('backup.json')" download>完整備份</a>
     </section>
+    <section class="delete-book">
+      <h3>刪除帳本</h3>
+      <p class="hint">刪除後，這本帳本的所有交易、預定支出、預算與設定都會永久移除，無法復原。</p>
+      <button matButton="outlined" type="button" (click)="onDeleteBook()">刪除帳本…</button>
+    </section>
   </mat-tab>
 </mat-tab-group>
 

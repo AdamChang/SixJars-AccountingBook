@@ -9,3 +9,4 @@ h3 { margin: 16px 0 4px; font-family: var(--font-serif); font-weight: 700; font-
 .actions { display: flex; gap: 8px; }
 .downloads { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .downloads h3 { flex-basis: 100%; }
+.delete-book h3 { color: var(--mat-sys-error); }
