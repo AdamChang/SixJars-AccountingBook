@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest # 內建 Docker，Testcontainers 可直接起 postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - run: dotnet build SixJars.slnx -c Release
+      # Acceptance 測試讀的舊帳本是個資、不在 repo，CI 上一律 skip
+      - run: dotnet test --solution SixJars.slnx -c Release --no-build
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24 # 與 Dockerfile 的 node:24-alpine 一致
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npx ng build
+      - run: npx ng test --watch=false
+      - run: npx playwright install --with-deps chromium
+      # webServer 會自己啟動 ng serve，API 全部 mock，不需要後端或 secret
+      - run: npx playwright test
+        env:
+          NG_CLI_ANALYTICS: 'false'
