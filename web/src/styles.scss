@@ -121,3 +121,14 @@ table.ledger {
   outline: 2px solid var(--ink);
   outline-offset: 2px;
 }
+
+// 編輯交易對話框：窄螢幕改為全螢幕（panel 在 overlay 內，不受元件樣式封裝）
+@media (max-width: 599px) {
+  .edit-transaction-dialog {
+    width: 100vw !important;
+    height: 100dvh;
+
+    .mat-mdc-dialog-surface { border-radius: 0; }
+    .mat-mdc-dialog-content { max-height: none; }
+  }
+}

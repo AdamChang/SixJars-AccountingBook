@@ -18,6 +18,7 @@ import { apiErrorInterceptor } from '../../core/errors/error-interceptor';
 import { CONFLICT_MESSAGE } from '../../core/errors/messages';
 import { Notifier } from '../../core/errors/notifier';
 import { ConfirmDialog } from '../../shared/confirm-dialog';
+import { EditTransactionDialog } from './edit-transaction-dialog';
 import { BOOK, transactionDtoFrom } from './testing/book-fixture';
 import { TransactionForm } from './transaction-form';
 import { TransactionsPage } from './transactions.page';
@@ -32,9 +33,13 @@ const TX: TransactionDto = transactionDtoFrom(
 const listUrl = (month: number) => `/api/books/${BOOK.id}/transactions?budgetMonth=${month}`;
 const DELETE_URL = `/api/books/${BOOK.id}/transactions/${TX.id}?version=${TX.version}`;
 
-async function setup(url: string, confirmed = true) {
+// 對話框關閉時的結果：確認對話框為 boolean，編輯對話框為 'saved' | 'stale' | undefined（取消）
+// 用函式而非預設參數，否則傳 undefined 會變成預設值
+const CANCELLED = () => undefined;
+
+async function setup(url: string, closedWith: () => unknown = () => true) {
   const notifier = { show: vi.fn() };
-  const dialog = { open: vi.fn(() => ({ afterClosed: () => of(confirmed) })) };
+  const dialog = { open: vi.fn(() => ({ afterClosed: () => of(closedWith()) })) };
   TestBed.configureTestingModule({
     providers: [
       provideRouter([{ path: 'books/:bookId', children: [{ path: 'transactions', component: TransactionsPage }] }]),
@@ -61,7 +66,6 @@ async function setup(url: string, confirmed = true) {
       await fixture.whenStable();
     },
     form: () => fixture.debugElement.query(By.directive(TransactionForm)).componentInstance as TransactionForm,
-    editingRows: () => el.querySelectorAll('tr.mat-mdc-row.editing').length,
     async clickRow() {
       el.querySelector<HTMLElement>('tr.mat-mdc-row')!.click();
       await fixture.whenStable();
@@ -160,15 +164,45 @@ describe('TransactionsPage', () => {
     });
   });
 
-  it('reloads_after_save', async () => {
+  it('reloads_after_create', async () => {
     const page = await setup('/books/book-1/transactions?month=202603');
-    await page.flushList(202603, [TX]);
-    await page.clickRow();
-    expect(page.editingRows()).toBe(1);
+    await page.flushList(202603, []);
     page.form().saved.emit(TX);
     await page.stable();
     await page.flushList(202603, [TX]);
-    expect(page.editingRows()).toBe(0);
+  });
+
+  it('create_form_never_enters_edit_mode', async () => {
+    const page = await setup('/books/book-1/transactions?month=202603', CANCELLED);
+    await page.flushList(202603, [TX]);
+    await page.clickRow();
+    expect(page.form().editing()).toBeNull();
+  });
+
+  describe('edit dialog', () => {
+    it('opens_with_clicked_transaction', async () => {
+      const page = await setup('/books/book-1/transactions?month=202603', CANCELLED);
+      await page.flushList(202603, [TX]);
+      await page.clickRow();
+      expect(page.dialog.open).toHaveBeenCalledWith(EditTransactionDialog, expect.objectContaining({
+        data: { book: BOOK, transaction: TX }, disableClose: true,
+      }));
+    });
+
+    it.each(['saved', 'stale'])('reloads_when_closed_as_%s', async result => {
+      const page = await setup('/books/book-1/transactions?month=202603', () => result);
+      await page.flushList(202603, [TX]);
+      await page.clickRow();
+      await page.flushList(202603, [TX]);
+    });
+
+    it('does_not_reload_when_cancelled', async () => {
+      const page = await setup('/books/book-1/transactions?month=202603', CANCELLED);
+      await page.flushList(202603, [TX]);
+      await page.clickRow();
+      // afterEach 的 verify 確認沒有多出的清單請求
+      expect(page.dialog.open).toHaveBeenCalledOnce();
+    });
   });
 
   it('deletes_with_version_after_confirm', async () => {
@@ -183,7 +217,7 @@ describe('TransactionsPage', () => {
   });
 
   it('does_not_delete_when_cancelled', async () => {
-    const page = await setup('/books/book-1/transactions?month=202603', false);
+    const page = await setup('/books/book-1/transactions?month=202603', () => false);
     await page.flushList(202603, [TX]);
     await page.clickDelete();
     expect(page.dialog.open).toHaveBeenCalledOnce();
@@ -197,31 +231,6 @@ describe('TransactionsPage', () => {
     page.httpTesting.expectOne({ method: 'DELETE', url: DELETE_URL }).flush(null, { status: 409, statusText: 'Conflict' });
     await page.stable();
     expect(page.notifier.show).toHaveBeenCalledWith(CONFLICT_MESSAGE);
-    await page.flushList(202603, [TX]);
-  });
-
-  it('stops_editing_when_edited_row_is_deleted', async () => {
-    const page = await setup('/books/book-1/transactions?month=202603');
-    await page.flushList(202603, [TX]);
-    await page.clickRow();
-    expect(page.form().editing()).toBe(TX);
-    await page.clickDelete();
-    page.httpTesting.expectOne({ method: 'DELETE', url: DELETE_URL }).flush(null);
-    await page.stable();
-    expect(page.form().editing()).toBeNull();
-    await page.flushList(202603, []);
-  });
-
-  it('stops_editing_on_delete_conflict_for_edited_row', async () => {
-    const page = await setup('/books/book-1/transactions?month=202603');
-    await page.flushList(202603, [TX]);
-    await page.clickRow();
-    expect(page.form().editing()).toBe(TX);
-    await page.clickDelete();
-    page.httpTesting.expectOne({ method: 'DELETE', url: DELETE_URL }).flush(null, { status: 409, statusText: 'Conflict' });
-    await page.stable();
-    expect(page.notifier.show).toHaveBeenCalledWith(CONFLICT_MESSAGE);
-    expect(page.form().editing()).toBeNull();
     await page.flushList(202603, [TX]);
   });
 });

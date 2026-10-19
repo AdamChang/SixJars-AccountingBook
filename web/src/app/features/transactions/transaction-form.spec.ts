@@ -414,25 +414,6 @@ describe('TransactionForm', () => {
       expect(form.saved).toHaveLength(1);
     });
 
-    it('returns_to_create_mode_keeping_date_kind_account_when_editing_ends', async () => {
-      const form = await setup();
-      await form.edit({ ...EDITING, kind: 'Income', amount: 250, categoryId: 'cat-bonus' });
-      await form.edit(null);
-      expect(form.el.querySelector('.editing-badge')).toBeNull();
-      expect(form.el.querySelector('button.cancel')).toBeNull();
-      const group = await form.loader.getHarness(MatButtonToggleGroupHarness);
-      const checked = await group.getToggles({ checked: true });
-      expect(await checked[0].getText()).toBe('收入');
-      expect(await form.selectedText('accountId')).toBe('銀行');
-      expect(await (await form.input('amount')).getValue()).toBe('');
-      expect(await (await form.input('note')).getValue()).toBe('');
-      expect(await (await form.input('categoryId')).getValue()).toBe('');
-      await form.type('amount', '10');
-      await form.chooseCategory('獎', '薪資 / 獎金');
-      const body = await form.submitAndExpectBody();
-      expect(body).toMatchObject({ kind: 'Income', date: '2026-03-15', accountId: 'acc-bank', amount: 10 });
-    });
-
     it('keeps_budget_month_override_of_editing_transaction', async () => {
       const form = await setup();
       await form.edit({ ...EDITING, budgetMonth: 202602 });

@@ -31,7 +31,6 @@ interface TransactionRow {
 export class TransactionList {
   readonly transactions = input.required<TransactionDto[]>();
   readonly book = input.required<BookDto>();
-  readonly editingId = input<string | null>(null);
   // 交易頁正在依標籤篩選時，空清單的說明要點出是哪個標籤（F8）
   readonly filterTag = input<TagDto | null>(null);
   readonly edit = output<TransactionDto>();

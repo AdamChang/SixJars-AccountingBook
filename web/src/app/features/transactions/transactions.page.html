@@ -11,19 +11,13 @@
   </mat-form-field>
 </div>
 @for (book of currentBookAsList(); track book.id) {
-  <section #formTop class="form-section ledger-sheet">
-    <app-transaction-form
-      [book]="book"
-      [editing]="editing()"
-      (saved)="onSaved()"
-      (cancelled)="onCancelled()"
-      (stale)="onStale()" />
+  <section class="form-section ledger-sheet">
+    <app-transaction-form [book]="book" (saved)="onSaved()" />
   </section>
   <app-transaction-list class="ledger-sheet"
     [transactions]="transactions()"
     [book]="book"
-    [editingId]="editingId()"
     [filterTag]="filterTag()"
-    (edit)="edit($event)"
+    (edit)="edit(book, $event)"
     (remove)="remove($event)" />
 }

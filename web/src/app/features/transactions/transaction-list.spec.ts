@@ -19,13 +19,12 @@ function tx(overrides: Partial<TransactionInput> & { id?: string }): Transaction
 
 describe('TransactionList', () => {
   async function setup(
-    transactions: TransactionDto[], book: BookDto = BOOK, editingId: string | null = null, filterTag: TagDto | null = null,
+    transactions: TransactionDto[], book: BookDto = BOOK, filterTag: TagDto | null = null,
   ) {
     const fixture: ComponentFixture<TransactionList> = TestBed.createComponent(TransactionList);
     fixture.componentRef.setInput('filterTag', filterTag);
     fixture.componentRef.setInput('transactions', transactions);
     fixture.componentRef.setInput('book', book);
-    fixture.componentRef.setInput('editingId', editingId);
     const edit = vi.fn();
     const remove = vi.fn();
     fixture.componentInstance.edit.subscribe(edit);
@@ -46,7 +45,7 @@ describe('TransactionList', () => {
 
   it('empty_message_names_filtered_tag', async () => {
     expect((await setup([])).element.textContent).toContain('這個月還沒有交易');
-    const filtered = await setup([], BOOK, null, BOOK.tags[0]);
+    const filtered = await setup([], BOOK, BOOK.tags[0]);
     expect(filtered.element.textContent).toContain('這個月沒有掛著「旅遊」的交易');
   });
 
@@ -119,13 +118,6 @@ describe('TransactionList', () => {
     await (await loader.getHarness(MatButtonHarness.with({ selector: '.delete' }))).click();
     expect(remove).toHaveBeenCalledExactlyOnceWith(dto);
     expect(edit).not.toHaveBeenCalled();
-  });
-
-  it('marks_editing_row', async () => {
-    const { element } = await setup([tx({ id: 'a' }), tx({ id: 'b' })], BOOK, 'b');
-    const rows = element.querySelectorAll('tr.mat-mdc-row');
-    expect(rows[0].classList).not.toContain('editing');
-    expect(rows[1].classList).toContain('editing');
   });
 
   it('keeps_backend_order', async () => {

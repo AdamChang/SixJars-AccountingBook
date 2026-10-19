@@ -45,7 +45,7 @@
 
     <tr mat-header-row *matHeaderRowDef="columns"></tr>
     <tr mat-row *matRowDef="let row; columns: columns"
-        [class.editing]="row.dto.id === editingId()" [class.locked]="row.locked"
+        [class.locked]="row.locked"
         (click)="onRowClick(row)"></tr>
   </table>
 }

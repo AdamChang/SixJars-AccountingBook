@@ -1,12 +1,10 @@
-import {
-  ChangeDetectionStrategy, Component, DestroyRef, ElementRef, computed, inject, linkedSignal, signal, viewChild,
-} from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSelectModule } from '@angular/material/select';
 import { ActivatedRoute, Router } from '@angular/router';
 import { EMPTY, catchError, filter, map, switchMap } from 'rxjs';
-import { TransactionDto } from '../../core/api/dto';
+import { BookDto, TransactionDto } from '../../core/api/dto';
 import { TransactionApi } from '../../core/api/transaction-api';
 import { CurrentBook } from '../../core/book/current-book';
 import { ApiError } from '../../core/errors/api-error';
@@ -16,6 +14,7 @@ import { confirm } from '../../shared/confirm-dialog';
 import { budgetMonthOf, parseBudgetMonth } from '../../shared/dates';
 import { formatAmount } from '../../shared/money';
 import { MonthNav } from '../../shared/month-nav';
+import { editTransaction } from './edit-transaction-dialog';
 import { TransactionForm } from './transaction-form';
 import { TransactionList } from './transaction-list';
 import { KIND_RULES } from './transaction-rules';
@@ -35,7 +34,6 @@ export class TransactionsPage {
   private readonly notifier = inject(Notifier);
   private readonly dialog = inject(MatDialog);
   private readonly destroyRef = inject(DestroyRef);
-  private readonly formTop = viewChild<ElementRef<HTMLElement>>('formTop');
 
   private readonly bookId = toSignal(this.route.paramMap.pipe(map(params => params.get('bookId')!)), {
     requireSync: true,
@@ -59,14 +57,6 @@ export class TransactionsPage {
     return book ? [book] : [];
   });
 
-  // 保存被點的那筆物件本身（不從重新載入的清單查），表單以物件身分判斷是否重新載入，否則每次 reload 都會蓋掉使用者的修改
-  // 換帳本時自動結束編輯
-  protected readonly editing = linkedSignal<string, TransactionDto | null>({
-    source: this.bookId,
-    computation: () => null,
-  });
-  protected readonly editingId = computed(() => this.editing()?.id ?? null);
-
   // 載入失敗時 interceptor 已通知，保留上一次的清單
   protected readonly transactions = toSignal(
     toObservable(computed(() => ({ bookId: this.bookId(), month: this.month(), tagId: this.tagId(), reload: this.reload() }))).pipe(
@@ -84,24 +74,16 @@ export class TransactionsPage {
     void this.router.navigate([], { relativeTo: this.route, queryParams: { tag }, queryParamsHandling: 'merge' });
   }
 
+  // 頂端表單只負責新增
   protected onSaved(): void {
-    this.editing.set(null);
     this.reloadList();
   }
 
-  protected onCancelled(): void {
-    this.editing.set(null);
-  }
-
-  protected onStale(): void {
-    this.editing.set(null);
-    this.reloadList();
-  }
-
-  protected edit(transaction: TransactionDto): void {
-    this.editing.set(transaction);
-    // jsdom 沒有實作 scrollIntoView
-    this.formTop()?.nativeElement.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+  // 換帳本或月份時 MatDialog 預設隨導覽關閉
+  protected edit(book: BookDto, transaction: TransactionDto): void {
+    editTransaction(this.dialog, { book, transaction })
+      .pipe(filter(result => result !== undefined), takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => this.reloadList());
   }
 
   protected remove(transaction: TransactionDto): void {
@@ -117,7 +99,6 @@ export class TransactionsPage {
       .subscribe({
         next: () => {
           this.notifier.show('已刪除');
-          this.endEditingOf(transaction);
           this.reloadList();
         },
         error: (error: ApiError) => this.onDeleteFailed(transaction, error),
@@ -129,24 +110,15 @@ export class TransactionsPage {
     switch (error.kind) {
       case 'conflict':
         this.notifier.show(CONFLICT_MESSAGE);
-        this.endEditingOf(transaction);
         this.reloadList();
         break;
       case 'notFound':
         this.notifier.show(NOT_FOUND_MESSAGE);
-        this.endEditingOf(transaction);
         this.reloadList();
         break;
       case 'domain':
         this.notifier.show(error.code === 'locked' ? LOCKED_MESSAGE : error.message);
         break;
-    }
-  }
-
-  // 刪除成功、已不存在或已被其他裝置修改：編輯中的版本都已過期，結束編輯
-  private endEditingOf(transaction: TransactionDto): void {
-    if (this.editing()?.id === transaction.id) {
-      this.editing.set(null);
     }
   }
 

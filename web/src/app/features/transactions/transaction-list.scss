@@ -33,7 +33,6 @@ td.amount { font-family: var(--font-serif); font-size: 1rem; }
 .empty { text-align: center; padding: 24px 0; color: var(--mat-sys-on-surface-variant); }
 tr.mat-mdc-row { cursor: pointer; }
 tr.mat-mdc-row.locked { cursor: default; }
-tr.mat-mdc-row.editing, tr.mat-mdc-row.editing:hover { background: var(--mat-sys-secondary-container); }
 .amount { text-align: right; font-variant-numeric: tabular-nums; }
 .negative { color: var(--red-ink); }
 .actions { white-space: nowrap; text-align: right; }
