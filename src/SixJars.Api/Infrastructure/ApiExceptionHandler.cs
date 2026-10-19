@@ -28,6 +28,7 @@ internal sealed class ApiExceptionHandler(IProblemDetailsService problemDetails)
                 Extensions = { ["code"] = domain.Code },
             },
             NotFoundException notFound => new ProblemDetails { Status = StatusCodes.Status404NotFound, Detail = notFound.Message },
+            ForbiddenException forbidden => new ProblemDetails { Status = StatusCodes.Status403Forbidden, Detail = forbidden.Message },
             DbUpdateConcurrencyException => new ProblemDetails
             {
                 Status = StatusCodes.Status409Conflict,

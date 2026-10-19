@@ -11,6 +11,12 @@ internal static class BooksEndpoints
     public static RouteGroupBuilder MapBooksEndpoints(this RouteGroupBuilder api)
     {
         api.MapGet("/books", (ISender sender, CancellationToken ct) => sender.Send(new ListBooks(), ct));
+        // 建立者建立空白帳本（issue #7）；不在 /books/{bookId} 群組底下，因為還沒有帳本。
+        api.MapPost("/books", async (CreateBook command, ISender sender, CancellationToken ct) =>
+        {
+            var id = await sender.Send(command, ct);
+            return Results.Created($"/api/books/{id}", new { id });
+        });
         var book = api.MapGroup("/books/{bookId:guid}");
         book.MapGet("/", (Guid bookId, ISender sender, CancellationToken ct) => sender.Send(new GetBook(bookId), ct));
         book.MapGet("/deletion-preview", (Guid bookId, ISender sender, CancellationToken ct) =>

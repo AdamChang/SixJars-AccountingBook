@@ -42,4 +42,10 @@ public interface ISixJarsDbContext
     /// 沒有 Commit 就 Dispose 時自動回滾。單次 SaveChanges 本身已是 transaction，一般的 command 不需要。
     /// </summary>
     Task<IDbContextTransaction> BeginTransactionAsync(CancellationToken cancellationToken);
+
+    /// <summary>
+    /// 取得以 <paramref name="key"/> 識別、到 transaction 結束才釋放的鎖（PostgreSQL advisory lock）。
+    /// 必須在 <see cref="BeginTransactionAsync"/> 之內呼叫；同一個 key 的其他 transaction 會等到這個 commit 或 rollback。
+    /// </summary>
+    Task AcquireTransactionLockAsync(string key, CancellationToken cancellationToken);
 }

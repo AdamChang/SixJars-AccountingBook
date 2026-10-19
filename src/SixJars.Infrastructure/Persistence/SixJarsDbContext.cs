@@ -41,6 +41,10 @@ public sealed class SixJarsDbContext(DbContextOptions<SixJarsDbContext> options)
     public Task<IDbContextTransaction> BeginTransactionAsync(CancellationToken cancellationToken) =>
         Database.BeginTransactionAsync(cancellationToken);
 
+    public Task AcquireTransactionLockAsync(string key, CancellationToken cancellationToken) =>
+        // hashtextextended 把任意字串轉成 bigint；比 hashtext 的 32 bit 不容易碰撞。
+        Database.ExecuteSqlAsync($"SELECT pg_advisory_xact_lock(hashtextextended({key}, 0))", cancellationToken);
+
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
         configurationBuilder.Properties<BookId>().HaveConversion<BookIdConverter>();

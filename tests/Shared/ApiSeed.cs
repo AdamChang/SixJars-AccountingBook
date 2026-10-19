@@ -53,6 +53,17 @@ internal static class ApiSeed
         await db.SaveChangesAsync(cancellationToken);
     }
 
+    /// <summary>把 <paramref name="subject"/> 加進建立者名單（已綁定 sub，email 與 <see cref="TestAuthHandler"/> 一致；ADR 0011）。</summary>
+    public static async Task AddCreatorAsync(this ApiFactory factory, string subject, CancellationToken cancellationToken)
+    {
+        var creator = BookCreator.Create(TestAuthHandler.EmailOf(subject), MemberAddedAt);
+        creator.BindSubject(subject);
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SixJarsDbContext>();
+        db.BookCreators.Add(creator);
+        await db.SaveChangesAsync(cancellationToken);
+    }
+
     private static BookMember Owner(BookId bookId, string subject)
     {
         var member = BookMember.Create(bookId, TestAuthHandler.EmailOf(subject), BookRole.Owner, MemberAddedAt);
