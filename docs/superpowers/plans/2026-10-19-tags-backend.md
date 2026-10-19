@@ -349,3 +349,16 @@ private static bool SameInput(TransactionInput a, TransactionInput b) =>
 - [ ] `dotnet test --solution SixJars.slnx`：全綠，總數 ≥ 基準線＋本計畫新增的測試；回報時說明 Acceptance 是否有實際執行。
 - [ ] 本機跑 API（`docs/deploy.md`），用 `.http` 或 Swagger 手動走一次：建立標籤 → 記一筆掛兩個標籤的交易 → 篩選 → 下載 CSV 看到標籤欄 → 封存標籤後修改那筆交易（保留可、新加不可）。
 - [ ] 確認 `git status` 沒有誤加的檔案，再交給前端計畫。
+
+### 實作紀錄（2026-10-19，本地端）
+
+- Task 1–8 各一個 commit（`39e3a40`…`98563c7`），每個 Task 都做了 plan 指定的變異檢查並確認變紅。
+- 與 plan 不同之處：
+  - **D6 的 `SameInput` 提前到 Task 5**：`TransactionDto.ToInput()` 帶回 `TagIds` 的那一刻，既有的 v1–v4 還原測試就全部失敗（8 個），不能等到 Task 8。Task 8 只做 v5 格式本身。
+  - `TransactionTag` 用 `sealed record`（比照 `Posting`），不是 class＋private 建構子；EF 可以直接綁定。
+  - `Tags.Color` 沿用既有 enum 欄位的寫法（`HasConversion<string>()`，不設長度），沒有加 `HasMaxLength(16)`。
+  - `Transaction.TagIds` 是計算屬性，在 `TransactionConfiguration` 以 `Ignore` 排除。
+  - `EnsureNoNewArchivedTags` 放在 `TransactionBuilder`（internal static），沒有另開類別。
+  - Task 7 改了既有的 `TransactionExportTests`（「標籤」欄插在「備註」前，備註從 L 欄移到 M 欄）；Task 8 把 `Backup_format_version_is_4` 改成 `_is_5`。
+- Checkpoint：`dotnet build` 0 錯誤，編譯器警告只有基準線就有的 `EF1002`。`dotnet test --solution SixJars.slnx`：總計 614（基準線 549，+65），成功 592，略過 22，失敗 0；略過的仍是找不到 `reference/2026帳本v1.xlsm` 的 Acceptance／舊 Excel 測試。
+- **手動驗證（本機跑 API 走一次流程）尚未執行**：需要 Google OIDC 登入，由使用者執行。
