@@ -174,3 +174,16 @@ export type SettingPath = 'accounts' | 'planning-funds' | 'categories' | 'tags';
 - [ ] `npx ng test --watch=false`、`npx playwright test`、`npx ng build` 全綠，數字 ≥ 基準線。
 - [ ] 接真實後端手動驗證：建立 3 個標籤並排序 → 記一筆掛 2 個標籤的轉帳 → 篩選 → 封存其中一個標籤後打開那筆交易，封存標籤仍在、選單裡沒有它 → 刪除一個被用過的標籤，看到改用封存的提示 → 下載 CSV 看到標籤欄。
 - [ ] 手機寬度（375px）走一次設定頁與記帳頁。
+
+### 實作紀錄（2026-10-19，本地端）
+
+- Task 1–6 各一個 commit（`eb46172`…`a2008e7`）；Task 2–5 都做了變異檢查並確認變紅（`textLength` 改用 `string.length`、`onEdit` 的標籤分支改呼叫 `updatePlanningFund`、表單選項拿掉 keep、清單載入不帶 `tagId`）。
+- 與 plan 不同之處：
+  - Task 1 為了讓型別過關，`toTransactionInput` 先暫時一律送 `tagIds: []`，Task 4 才接上表單值。
+  - 共用的 `BOOK` fixture（`features/transactions/testing/book-fixture.ts`）在 Task 3 加了三個標籤（排序與陣列順序不同、一個封存），Task 3–5 共用。
+  - 顏色色塊用原生 `<input type="radio">`，方向鍵切換由瀏覽器提供；jsdom 不模擬方向鍵，**沒有**單元測試這一點，只測了 12 個選項、`aria-label`、預設值與點選。
+  - 篩選下拉裡的封存標籤顯示為「名稱（已封存）」，與未封存的區分。
+  - 375px 的檢查寫成 e2e（`tags.spec.ts` 的 narrow viewport），取代 DevTools 手動檢查。
+  - 色盤每色的對比值以 WCAG 公式計算，寫在 `styles.scss` 註解（fg 對 bg 皆 ≥ 6.3:1）。
+- Checkpoint：`ng test` 347 個全過（基準線 313，+34）；Playwright 13 passed（基準線 10，+3）；`ng build` 成功、無警告。
+- **接真實後端的手動驗證尚未執行。**
