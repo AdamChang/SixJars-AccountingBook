@@ -148,6 +148,25 @@
     <mat-error>{{ form.controls.note.getError('server') }}</mat-error>
   </mat-form-field>
 
+  <mat-form-field>
+    <mat-label>標籤</mat-label>
+    <mat-select formControlName="tagIds" multiple>
+      <mat-select-trigger>
+        <span class="tag-trigger">
+          @for (tag of selectedTags(); track tag.id) {
+            <app-tag-chip [tag]="tag" />
+          }
+        </span>
+      </mat-select-trigger>
+      @for (tag of tagChoices(); track tag.id) {
+        <mat-option [value]="tag.id" [disabled]="tagLimitReached() && !form.controls.tagIds.value.includes(tag.id)">
+          {{ tag.name }}
+        </mat-option>
+      }
+    </mat-select>
+    <mat-hint>最多 {{ maxTags }} 個</mat-hint>
+  </mat-form-field>
+
   <mat-expansion-panel class="advanced">
     <mat-expansion-panel-header>
       <mat-panel-title>進階</mat-panel-title>

@@ -20,9 +20,11 @@ import { CONFLICT_MESSAGE, LOCKED_MESSAGE, NOT_FOUND_MESSAGE } from '../../core/
 import { Notifier } from '../../core/errors/notifier';
 import { budgetMonthOf, parseBudgetMonth } from '../../shared/dates';
 import { formatAmount } from '../../shared/money';
+import { TagChip } from '../../shared/tag-chip';
+import { MAX_TAGS_PER_TRANSACTION, sortTags } from '../../shared/tags';
 import {
   KIND_RULES, KindRule, MORE_KINDS, PRIMARY_KINDS, TransactionFormValue,
-  accountsFor, categoryKindOf, categoryOptions, fromTransaction, keepIdsOf, selectable, toTransactionInput,
+  accountsFor, categoryKindOf, categoryOptions, fromTransaction, keepIdsOf, keepTagIdsOf, selectable, toTransactionInput,
 } from './transaction-rules';
 
 // 金額欄位保留原始字串，避免 type="number" 吃掉小數位數與非法輸入，驗證後才轉 number
@@ -79,7 +81,7 @@ const SERVER_FIELDS: Record<string, (rule: KindRule) => boolean> = {
 interface ResetValue {
   date: Date | null; kind: TransactionKind; accountId: string; counterAccountId?: string | null;
   amount?: string; refund?: boolean; loanPrincipal?: string; categoryId?: string; planningFundId?: string | null;
-  note?: string; budgetMonthOverride?: number | null;
+  note?: string; budgetMonthOverride?: number | null; tagIds?: string[];
 }
 
 function startOfToday(): Date {
@@ -92,7 +94,7 @@ function startOfToday(): Date {
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     ReactiveFormsModule, MatAutocompleteModule, MatButtonModule, MatButtonToggleModule, MatCheckboxModule,
-    MatDatepickerModule, MatExpansionModule, MatInputModule, MatMenuModule, MatSelectModule,
+    MatDatepickerModule, MatExpansionModule, MatInputModule, MatMenuModule, MatSelectModule, TagChip,
   ],
   templateUrl: './transaction-form.html',
   styleUrl: './transaction-form.scss',
@@ -127,6 +129,7 @@ export class TransactionForm implements OnInit {
     categoryId: this.formBuilder.control(''),
     planningFundId: this.formBuilder.control<string | null>(null),
     note: this.formBuilder.control(''),
+    tagIds: this.formBuilder.control<string[]>([]),
     // 文字 YYYYMM；未手動修改（pristine）時跟著日期走
     budgetMonth: this.formBuilder.control(String(budgetMonthOf(this.today)), budgetMonthValidator),
   });
@@ -140,6 +143,7 @@ export class TransactionForm implements OnInit {
   private readonly amountText = toSignal(this.controls.amount.valueChanges, { initialValue: '' });
   private readonly principalText = toSignal(this.controls.loanPrincipal.valueChanges, { initialValue: '' });
   private readonly categoryText = toSignal(this.controls.categoryId.valueChanges, { initialValue: '' });
+  private readonly selectedTagIds = toSignal(this.controls.tagIds.valueChanges, { initialValue: this.controls.tagIds.value });
 
   protected readonly rule = computed(() => KIND_RULES[this.kind()]);
   protected readonly moreLabel = computed(() => (MORE_KINDS.includes(this.kind()) ? this.rule().label : '更多'));
@@ -153,6 +157,12 @@ export class TransactionForm implements OnInit {
   private readonly categoryChoices = computed(() =>
     categoryOptions(this.book().categories, categoryKindOf(this.kind()), this.keep()));
   protected readonly fundChoices = computed(() => selectable(this.book().planningFunds, this.keep()));
+  // 未封存的標籤加上編輯中交易原本掛著的，依設定排序（F7）
+  protected readonly tagChoices = computed(() =>
+    [...selectable(this.book().tags, keepTagIdsOf(this.editing()))].sort((a, b) => a.sortOrder - b.sortOrder));
+  protected readonly selectedTags = computed(() => sortTags(this.book().tags, this.selectedTagIds()));
+  protected readonly maxTags = MAX_TAGS_PER_TRANSACTION;
+  protected readonly tagLimitReached = computed(() => this.selectedTagIds().length >= MAX_TAGS_PER_TRANSACTION);
   protected readonly filteredCategories = computed(() => {
     const choices = this.categoryChoices();
     const text = this.categoryText().trim();
@@ -303,6 +313,7 @@ export class TransactionForm implements OnInit {
       categoryId: '',
       planningFundId: null,
       note: '',
+      tagIds: [],
       ...value,
       budgetMonth: String(budgetMonthOverride ?? budgetMonthOf(value.date ?? this.today)),
     });
@@ -362,6 +373,7 @@ export class TransactionForm implements OnInit {
       loanPrincipal: parseAmountText(raw.loanPrincipal),
       note: raw.note,
       budgetMonthOverride: budgetMonth === budgetMonthOf(date) ? null : budgetMonth,
+      tagIds: raw.tagIds,
     };
   }
 }
