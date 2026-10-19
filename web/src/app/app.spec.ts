@@ -89,6 +89,9 @@ describe('App', () => {
 
     const [create] = await menu.getItems({ text: '新增帳本…' });
     expect(await create.isDisabled()).toBe(true);
-    expect(document.querySelector('.quota-hint')!.textContent!.trim()).toBe('已達 5 本上限');
+    const hint = document.querySelector('.quota-hint')!;
+    expect(hint.textContent!.trim()).toBe('已達 5 本上限');
+    expect(hint.id).not.toBe('');
+    expect(document.querySelector('.create-book')!.getAttribute('aria-describedby')).toBe(hint.id);
   });
 });

@@ -23,18 +23,19 @@ const NAME_MAX_LENGTH = 100;
       <mat-form-field class="name">
         <mat-label>帳本名稱</mat-label>
         <input matInput autocomplete="off" [attr.maxlength]="nameMaxLength" [value]="name()"
-               (input)="name.set($any($event.target).value)" />
+               (input)="name.set($any($event.target).value)" (keydown.enter)="canSubmit() && submit()" />
       </mat-form-field>
       @if (nameError(); as message) {
-        <p class="error name-error">{{ message }}</p>
+        <p class="error name-error" role="alert">{{ message }}</p>
       }
       <mat-form-field class="opening-date">
         <mat-label>開帳日</mat-label>
-        <input matInput type="date" [value]="openingDate()" (input)="openingDate.set($any($event.target).value)" />
+        <input matInput type="date" [value]="openingDate()" (input)="openingDate.set($any($event.target).value)"
+               (keydown.enter)="canSubmit() && submit()" />
       </mat-form-field>
       <p class="hint">所有帳戶的期初餘額都以開帳日結束時為準；建立後可以在設定頁新增帳戶。</p>
       @if (serverError(); as message) {
-        <p class="error server-error">{{ message }}</p>
+        <p class="error server-error" role="alert">{{ message }}</p>
       }
     </mat-dialog-content>
     <mat-dialog-actions align="end">
