@@ -478,6 +478,26 @@ dotnet run --project src/SixJars.Cli -- add-member --book <BookId> --email <對�
 對方第一次登入時綁定 Google 帳號；稽核記錄中的操作者為 `cli`。
 若使用 OAuth consent screen 的 Testing 模式，也要把對方加進 Test users（第 5 節）。
 
+### 新增建立者
+
+建立者名單讓某個 Google 帳號「沒有任何帳本也能登入」，並在 Web 自行建立空白帳本（ADR 0011）。名單與成員表各自獨立：同一個 email 可以同時是成員與建立者。
+
+**部署順序**：名單存放在 `BookCreators` 資料表（migration `AddBookCreators`），所以必須先套用 migration bundle（第 4 節），再執行 `add-creator`；順序顛倒會因資料表不存在而失敗。
+
+```powershell
+$env:ConnectionStrings__SixJars = "<app 連線字串>"
+
+dotnet run --project src/SixJars.Cli -- add-creator --email <對方的 Gmail>
+dotnet run --project src/SixJars.Cli -- remove-creator --email <對方的 Gmail>
+
+Remove-Item Env:ConnectionStrings__SixJars
+```
+
+- 對方第一次登入時才綁定 Google 帳號；名單不屬於任何帳本，綁定不留稽核記錄。
+- 建立者在 Web 建立帳本後自動成為該帳本擁有者；每人最多擁有 5 本（刪除帳本後名額空出），CLI 匯入不受此限。
+- `remove-creator` 只移除建立資格：已建立的帳本、擁有者身分都不變，已發出的登入 cookie 也不會被撤銷（仍可登入既有帳本，只是不能再建立新帳本）。
+- 若使用 OAuth consent screen 的 Testing 模式，同樣要把對方加進 Test users（第 5 節）。
+
 ---
 
 ## 11. 備份與還原
