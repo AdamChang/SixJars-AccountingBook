@@ -41,6 +41,9 @@ internal sealed class ReorderSettingsHandler(ISixJarsDbContext db, IAuditTrail a
             case SettingKind.PlanningFund:
                 book.ReorderPlanningFunds([.. request.Ids.Select(id => new PlanningFundId(id))]);
                 break;
+            case SettingKind.Tag:
+                book.ReorderTags([.. request.Ids.Select(id => new TagId(id))]);
+                break;
             default:
                 // 排序子分類時不使用種類，body 可以不帶；排序主分類時 validator 已確保有值。
                 book.ReorderCategories(request.CategoryKind.GetValueOrDefault(),
@@ -54,6 +57,7 @@ internal sealed class ReorderSettingsHandler(ISixJarsDbContext db, IAuditTrail a
         RecordMoved(request.BookId, AuditEntityTypes.Account, before.Accounts, after.Accounts, a => a.Id);
         RecordMoved(request.BookId, AuditEntityTypes.PlanningFund, before.PlanningFunds, after.PlanningFunds, f => f.Id);
         RecordMoved(request.BookId, AuditEntityTypes.Category, before.Categories, after.Categories, c => c.Id);
+        RecordMoved(request.BookId, AuditEntityTypes.Tag, before.Tags!, after.Tags!, t => t.Id);
         await db.SaveChangesAsync(cancellationToken);
     }
 

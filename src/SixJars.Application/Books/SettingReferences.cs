@@ -41,6 +41,10 @@ internal static class SettingReferences
         || await db.PlannedExpenses.IgnoreQueryFilters().AnyAsync(p => p.BookId == bookId && p.CategoryId == id, cancellationToken)
         || await db.RecurringPlannedExpenses.AnyAsync(r => r.BookId == bookId && r.CategoryId == id, cancellationToken);
 
+    /// <summary>是否有交易（含已刪除）掛著這個標籤（spec D14）。</summary>
+    public static Task<bool> IsTagReferencedAsync(this ISixJarsDbContext db, BookId bookId, TagId id, CancellationToken cancellationToken) =>
+        db.Transactions.IgnoreQueryFilters().AnyAsync(t => t.BookId == bookId && t.Tags.Any(x => x.TagId == id), cancellationToken);
+
     public static Task<bool> IsPlanningFundReferencedAsync(this ISixJarsDbContext db, BookId bookId, PlanningFundId id, CancellationToken cancellationToken) =>
         db.Transactions.IgnoreQueryFilters().AnyAsync(t => t.BookId == bookId && t.PlanningFundId == id, cancellationToken);
 }

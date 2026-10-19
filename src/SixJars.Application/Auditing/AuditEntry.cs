@@ -35,6 +35,7 @@ public static class AuditEntityTypes
     public const string Account = "Account";
     public const string PlanningFund = "PlanningFund";
     public const string Category = "Category";
+    public const string Tag = "Tag";
     public const string Transaction = "Transaction";
     public const string PlannedExpense = "PlannedExpense";
     public const string RecurringPlannedExpense = "RecurringPlannedExpense";

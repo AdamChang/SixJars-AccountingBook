@@ -27,6 +27,8 @@ internal static class BooksEndpoints
             Created(bookId, await sender.Send(command with { BookId = bookId }, ct)));
         book.MapPost("/categories", async (Guid bookId, AddCategory command, ISender sender, CancellationToken ct) =>
             Created(bookId, await sender.Send(command with { BookId = bookId }, ct)));
+        book.MapPost("/tags", async (Guid bookId, AddTag command, ISender sender, CancellationToken ct) =>
+            Created(bookId, await sender.Send(command with { BookId = bookId }, ct)));
         // 被修改的項目 Id 一律以路由為準。
         book.MapPut("/accounts/{id:guid}", (Guid bookId, Guid id, UpdateAccount command, ISender sender, CancellationToken ct) =>
             NoContent(sender.Send(command with { BookId = bookId, AccountId = id }, ct)));
@@ -34,9 +36,12 @@ internal static class BooksEndpoints
             NoContent(sender.Send(command with { BookId = bookId, PlanningFundId = id }, ct)));
         book.MapPut("/categories/{id:guid}", (Guid bookId, Guid id, UpdateCategory command, ISender sender, CancellationToken ct) =>
             NoContent(sender.Send(command with { BookId = bookId, CategoryId = id }, ct)));
+        book.MapPut("/tags/{id:guid}", (Guid bookId, Guid id, UpdateTag command, ISender sender, CancellationToken ct) =>
+            NoContent(sender.Send(command with { BookId = bookId, TagId = id }, ct)));
         MapSettingActions(book, "accounts", SettingKind.Account);
         MapSettingActions(book, "planning-funds", SettingKind.PlanningFund);
         MapSettingActions(book, "categories", SettingKind.Category);
+        MapSettingActions(book, "tags", SettingKind.Tag);
         // lockDate 為 null 時清除鎖帳日。
         book.MapPut("/lock-date", async (Guid bookId, SetLockDateBody body, ISender sender, CancellationToken ct) =>
         {
@@ -46,7 +51,7 @@ internal static class BooksEndpoints
         return book;
     }
 
-    /// <summary>三種設定共用的動作：封存、解除封存、刪除、重新排序。</summary>
+    /// <summary>四種設定共用的動作：封存、解除封存、刪除、重新排序。</summary>
     private static void MapSettingActions(RouteGroupBuilder book, string path, SettingKind kind)
     {
         book.MapPost($"/{path}/{{id:guid}}/archive", (Guid bookId, Guid id, ISender sender, CancellationToken ct) =>

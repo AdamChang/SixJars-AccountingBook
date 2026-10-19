@@ -3,12 +3,14 @@ using SixJars.Domain.Books;
 namespace SixJars.Application.Books;
 
 /// <summary>
-/// 帳本設定：帳戶、財務規劃帳戶與分類，各依 SortOrder 輸出。
+/// 帳本設定：帳戶、財務規劃帳戶、分類與標籤，各依 SortOrder 輸出。
 /// 分類為扁平清單（子分類以 <see cref="CategoryDto.ParentId"/> 指向主分類），順序是樹的前序。
 /// </summary>
 public sealed record BookDto(Guid Id, string Name, DateOnly OpeningDate, DateOnly? LockDate,
-    IReadOnlyList<AccountDto> Accounts, IReadOnlyList<PlanningFundDto> PlanningFunds, IReadOnlyList<CategoryDto> Categories)
+    IReadOnlyList<AccountDto> Accounts, IReadOnlyList<PlanningFundDto> PlanningFunds, IReadOnlyList<CategoryDto> Categories,
+    IReadOnlyList<TagDto>? Tags = null)
 {
+    // Tags 的預設值只為了讀取 v4 以前的備份（沒有這個欄位）；From 一律帶出。
     public static BookDto From(Book book) => new(
         book.Id.Value,
         book.Name,
@@ -16,7 +18,8 @@ public sealed record BookDto(Guid Id, string Name, DateOnly OpeningDate, DateOnl
         book.LockDate,
         [.. book.Accounts.OrderBy(a => a.SortOrder).Select(AccountDto.From)],
         [.. book.PlanningFunds.OrderBy(f => f.SortOrder).Select(PlanningFundDto.From)],
-        [.. InTreeOrder(book.Categories).Select(CategoryDto.From)]);
+        [.. InTreeOrder(book.Categories).Select(CategoryDto.From)],
+        [.. book.Tags.OrderBy(t => t.SortOrder).Select(TagDto.From)]);
 
     /// <summary>收入主分類、支出主分類各依 SortOrder；每個主分類後面接它的子分類（記帳頁的下拉選單直接用這個順序）。</summary>
     private static IEnumerable<Category> InTreeOrder(IReadOnlyList<Category> categories) =>
@@ -42,6 +45,11 @@ public sealed record CategoryDto(Guid Id, string Name, CategoryKind Kind, Expens
 {
     public static CategoryDto From(Category c) =>
         new(c.Id.Value, c.Name, c.Kind, c.Nature, c.ParentId?.Value, c.SortOrder, c.ArchivedAt);
+}
+
+public sealed record TagDto(Guid Id, string Name, TagColor Color, int SortOrder = 0, DateTimeOffset? ArchivedAt = null)
+{
+    public static TagDto From(Tag t) => new(t.Id.Value, t.Name, t.Color, t.SortOrder, t.ArchivedAt);
 }
 
 public sealed record BookSummaryDto(Guid Id, string Name);
