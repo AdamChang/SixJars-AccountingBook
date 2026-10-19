@@ -2,8 +2,10 @@ import { ChangeDetectionStrategy, Component, computed, input, output } from '@an
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTableModule } from '@angular/material/table';
-import { BookDto, TransactionDto } from '../../core/api/dto';
+import { BookDto, TagDto, TransactionDto } from '../../core/api/dto';
 import { formatAmount } from '../../shared/money';
+import { TagChip } from '../../shared/tag-chip';
+import { sortTags } from '../../shared/tags';
 import { KIND_RULES, categoryLabel, isLocked } from './transaction-rules';
 
 interface TransactionRow {
@@ -14,6 +16,7 @@ interface TransactionRow {
   categoryText: string;
   amountText: string;
   note: string;
+  tags: TagDto[];
   negative: boolean;
   locked: boolean;
 }
@@ -21,7 +24,7 @@ interface TransactionRow {
 @Component({
   selector: 'app-transaction-list',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatButtonModule, MatIconModule, MatTableModule],
+  imports: [MatButtonModule, MatIconModule, MatTableModule, TagChip],
   templateUrl: './transaction-list.html',
   styleUrl: './transaction-list.scss',
 })
@@ -29,10 +32,16 @@ export class TransactionList {
   readonly transactions = input.required<TransactionDto[]>();
   readonly book = input.required<BookDto>();
   readonly editingId = input<string | null>(null);
+  // 交易頁正在依標籤篩選時，空清單的說明要點出是哪個標籤（F8）
+  readonly filterTag = input<TagDto | null>(null);
   readonly edit = output<TransactionDto>();
   readonly remove = output<TransactionDto>();
 
   protected readonly columns = ['date', 'kind', 'account', 'category', 'amount', 'note', 'actions'];
+  protected readonly emptyMessage = computed(() => {
+    const tag = this.filterTag();
+    return tag ? `這個月沒有掛著「${tag.name}」的交易` : '這個月還沒有交易';
+  });
 
   protected readonly rows = computed<TransactionRow[]>(() => {
     const book = this.book();
@@ -57,6 +66,8 @@ export class TransactionList {
         categoryText: categoryLabel(book.categories, dto.categoryId),
         amountText: formatAmount(dto.amount),
         note: dto.note ?? '',
+        // 標籤放在備註欄、備註文字之前，依標籤的設定排序（F9）；封存的也顯示
+        tags: sortTags(book.tags, dto.tagIds),
         negative: dto.amount < 0,
         locked: isLocked(dto.date, book.lockDate),
       };

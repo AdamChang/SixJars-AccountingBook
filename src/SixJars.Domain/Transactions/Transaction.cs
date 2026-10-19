@@ -19,7 +19,11 @@ namespace SixJars.Domain.Transactions;
 /// </remarks>
 public sealed class Transaction
 {
+    /// <summary>一筆交易最多掛幾個標籤（spec G2）。</summary>
+    public const int MaxTags = 4;
+
     private readonly List<Posting> _postings;
+    private readonly List<TransactionTag> _tags = [];
 
     // EF Core 專用：internal 建構子含分錄集合，EF 無法綁定。
     private Transaction() => _postings = [];
@@ -69,6 +73,8 @@ public sealed class Transaction
     public decimal? LoanPrincipal { get; private set; }
     public string? Note { get; private set; }
     public IReadOnlyList<Posting> Postings => _postings;
+    public IReadOnlyList<TransactionTag> Tags => _tags;
+    public IReadOnlyCollection<TagId> TagIds => [.. _tags.Select(t => t.TagId)];
 
     /// <summary>軟刪除的時間（ADR 0006）；null 表示未刪除。已刪除的交易不參與任何餘額與報表計算，但仍保留在備份中。</summary>
     public DateTimeOffset? DeletedAt { get; private set; }
@@ -85,7 +91,7 @@ public sealed class Transaction
     public decimal? LoanInterest => Kind == TransactionKind.LoanPayment ? Amount - LoanPrincipal : null;
 
     /// <summary>
-    /// 以 <paramref name="draft"/> 的內容修改本交易：Id 不變，欄位與分錄整組換成 draft 的（可改交易類型）。
+    /// 以 <paramref name="draft"/> 的內容修改本交易：Id 不變，欄位、分錄與標籤整組換成 draft 的（可改交易類型）。
     /// </summary>
     /// <param name="draft">
     /// 必須由 <see cref="TransactionFactory"/> 依新內容產生，展開規則因此只存在 factory 一處（spec §3.2）；
@@ -112,6 +118,28 @@ public sealed class Transaction
         Note = draft.Note;
         _postings.Clear();
         _postings.AddRange(draft.Postings);
+        _tags.Clear();
+        _tags.AddRange(draft.Tags);
+    }
+
+    /// <summary>
+    /// 由 <see cref="TransactionFactory.WithTags"/> 呼叫（標籤是否屬於本帳本由 factory 檢查）。
+    /// 個數與重複在 validator 已擋成 400，這裡再檢查一次，因為 CLI 還原不經過 validator（spec D3）。
+    /// </summary>
+    internal void SetTags(IReadOnlyCollection<TagId> tagIds)
+    {
+        if (tagIds.Count > MaxTags)
+        {
+            throw new DomainException($"一筆交易最多 {MaxTags} 個標籤。");
+        }
+
+        if (tagIds.Distinct().Count() != tagIds.Count)
+        {
+            throw new DomainException("標籤不可重複。");
+        }
+
+        _tags.Clear();
+        _tags.AddRange(tagIds.Select(id => new TransactionTag(id)));
     }
 
     /// <summary>軟刪除（spec §3.3）：分錄保留不動，由 query filter 排除在計算之外。已刪除的交易不能再刪除、修改或還原。</summary>

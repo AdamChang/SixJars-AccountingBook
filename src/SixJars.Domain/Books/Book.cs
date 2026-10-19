@@ -1,13 +1,15 @@
+using System.Globalization;
 using SixJars.Domain.Common;
 
 namespace SixJars.Domain.Books;
 
-/// <summary>帳本：連續不分年度的記帳邊界（ADR 0002），也是帳戶、財務規劃帳戶與分類的聚合根。</summary>
+/// <summary>帳本：連續不分年度的記帳邊界（ADR 0002），也是帳戶、財務規劃帳戶、分類與標籤的聚合根。</summary>
 public sealed class Book
 {
     private readonly List<Account> _accounts = [];
     private readonly List<PlanningFund> _planningFunds = [];
     private readonly List<Category> _categories = [];
+    private readonly List<Tag> _tags = [];
 
     /// <param name="id">只有還原備份（T42）時指定，保留原本的 Id；一般新增時省略，自動產生。</param>
     public Book(string name, DateOnly openingDate, BookId? id = null)
@@ -31,6 +33,7 @@ public sealed class Book
     public IReadOnlyList<Account> Accounts => _accounts;
     public IReadOnlyList<PlanningFund> PlanningFunds => _planningFunds;
     public IReadOnlyList<Category> Categories => _categories;
+    public IReadOnlyList<Tag> Tags => _tags;
 
     // 以下各 Add 方法的 id 參數：只有還原備份（T42）時指定，保留原本的 Id；一般新增時省略，自動產生。
     // 指定 Id 不會略過任何檢查（名稱、類型、兩層分類）；同一個 Id 重複出現時由資料庫的主鍵擋下。
@@ -85,6 +88,16 @@ public sealed class Book
             NextSortOrder(SubCategoriesOf(parentId), c => c.SortOrder));
         _categories.Add(category);
         return category;
+    }
+
+    public Tag AddTag(string name, TagColor color, TagId? id = null)
+    {
+        name = RequireTagName(name);
+        EnsureTagColor(color);
+        EnsureTagNameUnique(name, except: null);
+        var tag = new Tag(id ?? TagId.New(), name, color, NextSortOrder(_tags, t => t.SortOrder));
+        _tags.Add(tag);
+        return tag;
     }
 
     public void SetLockDate(DateOnly? lockDate) => LockDate = lockDate;
@@ -145,6 +158,17 @@ public sealed class Book
         category.Rename(name);
     }
 
+    /// <summary>改名、改色回溯套用到所有交易（ADR 0011）。</summary>
+    public void UpdateTag(TagId id, string name, TagColor color)
+    {
+        var tag = GetTag(id);
+        name = RequireTagName(name);
+        EnsureTagColor(color);
+        EnsureTagNameUnique(name, except: id);
+        tag.Rename(name);
+        tag.Recolor(color);
+    }
+
     /// <summary>與新增時相同：只有現金帳戶可以計入可用現金。</summary>
     public void SetCountsAsAvailableCash(AccountId id, bool countsAsAvailableCash)
     {
@@ -182,6 +206,11 @@ public sealed class Book
 
     public void UnarchiveCategory(CategoryId id) => GetCategory(id).Unarchive();
 
+    /// <summary>標籤不影響餘額，封存不檢查餘額（spec D11）。</summary>
+    public void ArchiveTag(TagId id, DateTimeOffset at) => GetTag(id).Archive(at);
+
+    public void UnarchiveTag(TagId id) => GetTag(id).Unarchive();
+
     // 排序清單必須恰好等於組內目前的成員（含已封存）：不能多、不能少、不能重複，擋下過時畫面造成的漏項。
 
     public void ReorderAccounts(IReadOnlyList<AccountId> ids) =>
@@ -189,6 +218,9 @@ public sealed class Book
 
     public void ReorderPlanningFunds(IReadOnlyList<PlanningFundId> ids) =>
         Reorder(_planningFunds, ids, f => f.Id, (f, order) => f.MoveTo(order), "財務規劃帳戶");
+
+    public void ReorderTags(IReadOnlyList<TagId> ids) =>
+        Reorder(_tags, ids, t => t.Id, (t, order) => t.MoveTo(order), "標籤");
 
     /// <summary><paramref name="parentId"/> 有值時排序該主分類的子分類；否則排序 <paramref name="kind"/> 的主分類。</summary>
     public void ReorderCategories(CategoryKind kind, CategoryId? parentId, IReadOnlyList<CategoryId> ids)
@@ -215,6 +247,15 @@ public sealed class Book
         EnsureUnreferenced(fund.Name, isReferenced);
         _planningFunds.Remove(fund);
         Compact(_planningFunds, f => f.SortOrder, (f, order) => f.MoveTo(order));
+    }
+
+    /// <param name="isReferenced">由呼叫端查詢：是否有交易（含已軟刪除）掛著這個標籤。</param>
+    public void RemoveTag(TagId id, bool isReferenced)
+    {
+        var tag = GetTag(id);
+        EnsureUnreferenced(tag.Name, isReferenced);
+        _tags.Remove(tag);
+        Compact(_tags, t => t.SortOrder, (t, order) => t.MoveTo(order));
     }
 
     /// <param name="isReferenced">由呼叫端查詢：是否有交易或預定支出（含已軟刪除）使用這個分類。</param>
@@ -288,6 +329,9 @@ public sealed class Book
 
     public Category GetCategory(CategoryId id) =>
         _categories.Find(c => c.Id == id) ?? throw new DomainException($"找不到分類 {id.Value}。");
+
+    public Tag GetTag(TagId id) =>
+        _tags.Find(t => t.Id == id) ?? throw new DomainException($"找不到標籤 {id.Value}。");
 
     /// <summary>分類自己或它的主分類已封存（spec §3.1：子分類是否可選 = 自己與主分類都未封存）。</summary>
     public bool IsCategoryArchived(CategoryId id)
@@ -370,6 +414,32 @@ public sealed class Book
         if (balance != 0m)
         {
             throw new DomainException($"「{name}」的餘額為 {balance:#,0.####}，餘額為 0 才能封存。", DomainException.NonZeroBalanceCode);
+        }
+    }
+
+    // 標籤名稱不分大小寫（spec G4、D7）；其他設定項目維持 ordinal。
+    private void EnsureTagNameUnique(string name, TagId? except)
+    {
+        if (_tags.Exists(t => t.Id != except && string.Equals(t.Name, name, StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new DomainException($"標籤名稱「{name}」已存在。");
+        }
+    }
+
+    private static string RequireTagName(string name)
+    {
+        name = RequireName(name);
+        return new StringInfo(name).LengthInTextElements <= Tag.MaxNameLength
+            ? name
+            : throw new DomainException($"標籤名稱最多 {Tag.MaxNameLength} 個字。");
+    }
+
+    // Application 的 validator 會先擋成 400；這裡防 CLI 還原時的壞資料。
+    private static void EnsureTagColor(TagColor color)
+    {
+        if (!Enum.IsDefined(color))
+        {
+            throw new DomainException($"標籤顏色 {color} 不在色盤內。");
         }
     }
 

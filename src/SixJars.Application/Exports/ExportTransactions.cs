@@ -61,6 +61,7 @@ internal sealed class ExportTransactionsHandler(ISixJarsDbContext db, IEnumerabl
     {
         var category = t.CategoryId is { } categoryId ? book.GetCategory(categoryId) : null;
         var parent = category?.ParentId is { } parentId ? book.GetCategory(parentId) : null;
+        var tags = t.TagIds.Select(book.GetTag).OrderBy(tag => tag.SortOrder).Select(tag => tag.Name).ToList();
         return new TransactionExportRow(
             t.Date,
             t.BudgetMonth.Key,
@@ -73,6 +74,7 @@ internal sealed class ExportTransactionsHandler(ISixJarsDbContext db, IEnumerabl
             t.Amount,
             t.LoanPrincipal,
             t.LoanInterest,
+            tags.Count == 0 ? null : string.Join("、", tags),
             t.Note);
     }
 }

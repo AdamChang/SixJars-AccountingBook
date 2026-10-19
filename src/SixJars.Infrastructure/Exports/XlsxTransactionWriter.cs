@@ -44,7 +44,8 @@ internal sealed class XlsxTransactionWriter : ITransactionSheetWriter
             sheet.Cell(row, 9).SetValue(r.Amount);
             Number(sheet.Cell(row, 10), r.LoanPrincipal);
             Number(sheet.Cell(row, 11), r.LoanInterest);
-            Text(sheet.Cell(row, 12), r.Note);
+            Text(sheet.Cell(row, 12), r.Tags);
+            Text(sheet.Cell(row, 13), r.Note);
         }
 
         sheet.SheetView.FreezeRows(1);

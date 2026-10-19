@@ -38,6 +38,7 @@ tr.mat-mdc-row.editing, tr.mat-mdc-row.editing:hover { background: var(--mat-sys
 .negative { color: var(--red-ink); }
 .actions { white-space: nowrap; text-align: right; }
 .lock { vertical-align: middle; color: var(--mat-sys-on-surface-variant); }
+app-tag-chip { margin-right: 4px; vertical-align: middle; }
 
 // 窄螢幕：同一個 table 改排成兩行清單（不另寫一份 DOM，點擊、刪除、鎖帳行為共用）
 //   第一行：類型 分類            │ 金額 操作

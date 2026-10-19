@@ -3,6 +3,7 @@ import {
 } from '@angular/core';
 import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { MatDialog } from '@angular/material/dialog';
+import { MatSelectModule } from '@angular/material/select';
 import { ActivatedRoute, Router } from '@angular/router';
 import { EMPTY, catchError, filter, map, switchMap } from 'rxjs';
 import { TransactionDto } from '../../core/api/dto';
@@ -22,7 +23,7 @@ import { KIND_RULES } from './transaction-rules';
 @Component({
   selector: 'app-transactions-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MonthNav, TransactionForm, TransactionList],
+  imports: [MatSelectModule, MonthNav, TransactionForm, TransactionList],
   templateUrl: './transactions.page.html',
   styleUrl: './transactions.page.scss',
 })
@@ -44,6 +45,12 @@ export class TransactionsPage {
     this.route.queryParamMap.pipe(map(params => parseBudgetMonth(params.get('month')) ?? budgetMonthOf(new Date()))),
     { requireSync: true },
   );
+  // 標籤篩選只篩當月，換月份時保留（F8）；query param 不存在時不篩選
+  protected readonly tagId = toSignal(this.route.queryParamMap.pipe(map(params => params.get('tag'))), { requireSync: true });
+  // 含已封存的標籤，才篩得到舊交易
+  protected readonly tagOptions = computed(() =>
+    [...(this.currentBook.book()?.tags ?? [])].sort((a, b) => a.sortOrder - b.sortOrder));
+  protected readonly filterTag = computed(() => this.tagOptions().find(tag => tag.id === this.tagId()) ?? null);
   private readonly reload = signal(0);
 
   // 表單只在初始化／切換類型時套用規則，換帳本必須重建；用 @for 以 book.id 為 key 達成
@@ -62,14 +69,19 @@ export class TransactionsPage {
 
   // 載入失敗時 interceptor 已通知，保留上一次的清單
   protected readonly transactions = toSignal(
-    toObservable(computed(() => ({ bookId: this.bookId(), month: this.month(), reload: this.reload() }))).pipe(
-      switchMap(({ bookId, month }) => this.transactionApi.list(bookId, month).pipe(catchError(() => EMPTY))),
+    toObservable(computed(() => ({ bookId: this.bookId(), month: this.month(), tagId: this.tagId(), reload: this.reload() }))).pipe(
+      switchMap(({ bookId, month, tagId }) => this.transactionApi.list(bookId, month, tagId).pipe(catchError(() => EMPTY))),
     ),
     { initialValue: [] as TransactionDto[] },
   );
 
   protected changeMonth(month: number): void {
     void this.router.navigate([], { relativeTo: this.route, queryParams: { month }, queryParamsHandling: 'merge' });
+  }
+
+  // null 時移除 tag query param
+  protected changeTag(tag: string | null): void {
+    void this.router.navigate([], { relativeTo: this.route, queryParams: { tag }, queryParamsHandling: 'merge' });
   }
 
   protected onSaved(): void {

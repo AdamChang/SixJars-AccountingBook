@@ -17,7 +17,7 @@ async function open(data: SettingDialogData) {
     fixture.nativeElement.querySelector('button[type=submit]').click();
     await fixture.whenStable();
   };
-  return { close, submit, loader: TestbedHarnessEnvironment.loader(fixture) };
+  return { close, submit, fixture, el: fixture.nativeElement as HTMLElement, loader: TestbedHarnessEnvironment.loader(fixture) };
 }
 
 describe('SettingDialog', () => {
@@ -67,6 +67,43 @@ describe('SettingDialog', () => {
     await (await loader.getHarness(MatInputHarness)).setValue('午餐');
     await submit();
     expect(close).toHaveBeenCalledWith({ name: '午餐', nature: null });
+  });
+
+  it('tag_dialog_has_name_and_twelve_color_swatches_defaulting_to_given_color', async () => {
+    const { loader, submit, close, el } = await open({ mode: 'add', path: 'tags', defaultColor: 'Amber' });
+    expect(await loader.getAllHarnesses(MatSelectHarness)).toHaveLength(0);
+    expect(await loader.getAllHarnesses(MatInputHarness)).toHaveLength(1);
+    const group = el.querySelector('[role=radiogroup]')!;
+    const radios = [...group.querySelectorAll<HTMLInputElement>('input[type=radio]')];
+    expect(radios.map(r => r.getAttribute('aria-label'))).toEqual(
+      ['紅', '橙', '琥珀', '黃', '萊姆', '綠', '藍綠', '青', '藍', '靛', '紫', '粉紅']);
+    expect(radios.find(r => r.checked)?.getAttribute('aria-label')).toBe('琥珀');
+    await (await loader.getHarness(MatInputHarness)).setValue(' 旅遊 ');
+    radios[6].click();
+    await submit();
+    expect(close).toHaveBeenCalledWith({ name: '旅遊', color: 'Teal', nature: null });
+  });
+
+  it('edit_tag_starts_with_current_name_and_color', async () => {
+    const { loader, submit, close } = await open({ mode: 'edit', path: 'tags', name: '旅遊', color: 'Pink' });
+    expect(await (await loader.getHarness(MatInputHarness)).getValue()).toBe('旅遊');
+    await submit();
+    expect(close).toHaveBeenCalledWith({ name: '旅遊', color: 'Pink', nature: null });
+  });
+
+  it('tag_name_is_limited_to_8_grapheme_clusters_not_utf16_length', async () => {
+    const { loader, submit, close, el, fixture } = await open({ mode: 'add', path: 'tags', defaultColor: 'Red' });
+    const name = await loader.getHarness(MatInputHarness);
+    expect(await (await name.host()).getAttribute('maxlength')).toBeNull();
+    await name.setValue('一二三四五六七八九');
+    await submit();
+    expect(close).not.toHaveBeenCalled();
+    fixture.detectChanges();
+    expect(el.textContent).toContain('最多 8 個字');
+    // 8 個 emoji 超過 8 個 UTF-16 字元，但只算 8 個字
+    await name.setValue('👨‍👩‍👧✈️✈️✈️✈️✈️✈️✈️');
+    await submit();
+    expect(close).toHaveBeenCalledWith({ name: '👨‍👩‍👧✈️✈️✈️✈️✈️✈️✈️', color: 'Red', nature: null });
   });
 
   it('blank_name_does_not_close', async () => {

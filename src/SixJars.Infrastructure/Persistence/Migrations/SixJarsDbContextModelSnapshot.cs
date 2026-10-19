@@ -431,11 +431,46 @@ namespace SixJars.Infrastructure.Persistence.Migrations
                                 .HasForeignKey("BookId");
                         });
 
+                    b.OwnsMany("SixJars.Domain.Books.Tag", "Tags", b1 =>
+                        {
+                            b1.Property<Guid>("Id")
+                                .HasColumnType("uuid");
+
+                            b1.Property<DateTimeOffset?>("ArchivedAt")
+                                .HasColumnType("timestamp with time zone");
+
+                            b1.Property<Guid>("BookId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<string>("Color")
+                                .IsRequired()
+                                .HasColumnType("text");
+
+                            b1.Property<string>("Name")
+                                .IsRequired()
+                                .HasMaxLength(100)
+                                .HasColumnType("character varying(100)");
+
+                            b1.Property<int>("SortOrder")
+                                .HasColumnType("integer");
+
+                            b1.HasKey("Id");
+
+                            b1.HasIndex("BookId");
+
+                            b1.ToTable("Tags", (string)null);
+
+                            b1.WithOwner()
+                                .HasForeignKey("BookId");
+                        });
+
                     b.Navigation("Accounts");
 
                     b.Navigation("Categories");
 
                     b.Navigation("PlanningFunds");
+
+                    b.Navigation("Tags");
                 });
 
             modelBuilder.Entity("SixJars.Domain.Planning.CategoryBudget", b =>
@@ -504,7 +539,27 @@ namespace SixJars.Infrastructure.Persistence.Migrations
                                 .HasForeignKey("TransactionId");
                         });
 
+                    b.OwnsMany("SixJars.Domain.Transactions.TransactionTag", "Tags", b1 =>
+                        {
+                            b1.Property<Guid>("TransactionId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<Guid>("TagId")
+                                .HasColumnType("uuid");
+
+                            b1.HasKey("TransactionId", "TagId");
+
+                            b1.HasIndex("TagId");
+
+                            b1.ToTable("TransactionTags", (string)null);
+
+                            b1.WithOwner()
+                                .HasForeignKey("TransactionId");
+                        });
+
                     b.Navigation("Postings");
+
+                    b.Navigation("Tags");
                 });
 #pragma warning restore 612, 618
         }

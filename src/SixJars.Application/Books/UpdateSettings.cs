@@ -11,6 +11,9 @@ public sealed record UpdateAccount(Guid BookId, Guid AccountId, string Name, boo
 
 public sealed record UpdatePlanningFund(Guid BookId, Guid PlanningFundId, string Name) : IRequest, IBookScoped;
 
+/// <summary>改名、改色回溯套用到所有交易（ADR 0011）。</summary>
+public sealed record UpdateTag(Guid BookId, Guid TagId, string Name, TagColor Color) : IRequest, IBookScoped;
+
 /// <summary><see cref="Nature"/> 為 null 時不修改性質；只有支出主分類可以修改（回溯生效，spec Q4）。</summary>
 public sealed record UpdateCategory(Guid BookId, Guid CategoryId, string Name, ExpenseNature? Nature) : IRequest, IBookScoped;
 
@@ -22,6 +25,15 @@ internal sealed class UpdateAccountValidator : AbstractValidator<UpdateAccount>
 internal sealed class UpdatePlanningFundValidator : AbstractValidator<UpdatePlanningFund>
 {
     public UpdatePlanningFundValidator() => RuleFor(c => c.Name).NotEmpty().MaximumLength(100);
+}
+
+internal sealed class UpdateTagValidator : AbstractValidator<UpdateTag>
+{
+    public UpdateTagValidator()
+    {
+        RuleFor(c => c.Name).TagName();
+        RuleFor(c => c.Color).IsInEnum();
+    }
 }
 
 internal sealed class UpdateCategoryValidator : AbstractValidator<UpdateCategory>
@@ -56,6 +68,19 @@ internal sealed class UpdatePlanningFundHandler(ISixJarsDbContext db, IAuditTrai
         var before = PlanningFundDto.From(book.GetPlanningFund(id));
         book.RenamePlanningFund(id, request.Name);
         audit.Record(request.BookId, AuditAction.Update, AuditEntityTypes.PlanningFund, id.Value, before, PlanningFundDto.From(book.GetPlanningFund(id)));
+        await db.SaveChangesAsync(cancellationToken);
+    }
+}
+
+internal sealed class UpdateTagHandler(ISixJarsDbContext db, IAuditTrail audit) : IRequestHandler<UpdateTag>
+{
+    public async Task Handle(UpdateTag request, CancellationToken cancellationToken)
+    {
+        var book = await db.GetBookForUpdateAsync(request.BookId, cancellationToken);
+        var id = new TagId(request.TagId);
+        var before = TagDto.From(book.GetTag(id));
+        book.UpdateTag(id, request.Name, request.Color);
+        audit.Record(request.BookId, AuditAction.Update, AuditEntityTypes.Tag, id.Value, before, TagDto.From(book.GetTag(id)));
         await db.SaveChangesAsync(cancellationToken);
     }
 }

@@ -173,6 +173,21 @@ public sealed class TransactionFactory(Book book, TransactionId? fixedId = null)
         return Create(TransactionKind.FundReturn, date, budgetMonth, amount, accountId, null, null, note, [new(accountId, amount)], planningFundId: fundId);
     }
 
+    /// <summary>
+    /// 掛上標籤：每個標籤都必須屬於本帳本（找不到時 422）。不檢查封存：還原備份要能重建掛著封存標籤的交易，
+    /// 「不可新加封存標籤」由寫入 command 檢查（spec D2）。
+    /// </summary>
+    public Transaction WithTags(Transaction transaction, IReadOnlyCollection<TagId> tagIds)
+    {
+        foreach (var id in tagIds)
+        {
+            book.GetTag(id);
+        }
+
+        transaction.SetTags(tagIds);
+        return transaction;
+    }
+
     private Transaction Create(
         TransactionKind kind,
         DateOnly date,

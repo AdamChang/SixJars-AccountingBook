@@ -135,6 +135,76 @@ describe('SettingsPage', () => {
     await expectReload();
   });
 
+  it('tags_tab_sits_between_funds_and_lock_date_and_lists_tags_in_sort_order', async () => {
+    const { loader, openTab, rowLabels, el } = await setup();
+    const tabs = await (await loader.getHarness(MatTabGroupHarness)).getTabs();
+    expect(await Promise.all(tabs.map(t => t.getLabel()))).toEqual(['分類', '帳戶', '財務規劃帳戶', '標籤', '鎖帳日與資料']);
+    await openTab('標籤', '[data-group="tags"]');
+    expect(rowLabels('[data-group="tags"]')).toEqual(['工作', '旅遊']);
+    expect(el.querySelector('[data-group="tags"] .archived, [data-group="tags"] .toggle-archived')).not.toBeNull();
+  });
+
+  it('add_tag_defaults_to_first_unused_color_and_posts', async () => {
+    const { fixture, el, openTab, rootLoader, httpTesting, notifier, expectReload } = await setup();
+    await openTab('標籤', '[data-group="tags"]');
+    el.querySelector<HTMLButtonElement>('[data-group="tags"] button.add')!.click();
+    await fixture.whenStable();
+    // BOOK 的標籤用了 Blue、Teal、Purple，第一個沒用過的是 Red
+    await vi.waitFor(() => expect(document.querySelector<HTMLInputElement>('[role=radiogroup] input[aria-label="紅"]')?.checked).toBe(true));
+    await (await rootLoader.getHarness(MatInputHarness.with({ selector: '[formControlName=name]' }))).setValue('可報帳');
+    await (await rootLoader.getHarness(MatButtonHarness.with({ text: '儲存' }))).click();
+    await fixture.whenStable();
+
+    await vi.waitFor(() => {
+      const request = httpTesting.expectOne({ method: 'POST', url: `/api/books/${BOOK.id}/tags` });
+      expect(request.request.body).toEqual({ name: '可報帳', color: 'Red' });
+      request.flush({ id: 'tag-new' }, { status: 201, statusText: '' });
+    });
+    await expectReload();
+    expect(notifier.show).toHaveBeenCalledWith('已新增「可報帳」');
+  });
+
+  it('edit_tag_puts_name_and_color', async () => {
+    const { fixture, loader, rootLoader, openTab, httpTesting, expectReload } = await setup();
+    await openTab('標籤', '[data-group="tags"]');
+    await (await loader.getHarness(MatMenuHarness.with({ selector: '[data-menu="tag-trip"]' }))).clickItem({ text: '修改' });
+    await (await rootLoader.getHarness(MatInputHarness.with({ selector: '[formControlName=name]' }))).setValue('日本旅遊');
+    document.querySelector<HTMLInputElement>('[role=radiogroup] input[aria-label="粉紅"]')!.click();
+    await (await rootLoader.getHarness(MatButtonHarness.with({ text: '儲存' }))).click();
+    await fixture.whenStable();
+
+    await vi.waitFor(() => {
+      const request = httpTesting.expectOne({ method: 'PUT', url: `/api/books/${BOOK.id}/tags/tag-trip` });
+      expect(request.request.body).toEqual({ name: '日本旅遊', color: 'Pink' });
+      request.flush(null, { status: 204, statusText: '' });
+    });
+    await expectReload();
+  });
+
+  it('tag_archive_reorder_and_in_use_removal_use_tags_path', async () => {
+    const { el, fixture, loader, rootLoader, openTab, httpTesting, notifier, expectReload } = await setup();
+    await openTab('標籤', '[data-group="tags"]');
+    await (await loader.getHarness(MatMenuHarness.with({ selector: '[data-menu="tag-trip"]' }))).clickItem({ text: '封存' });
+    httpTesting.expectOne({ method: 'POST', url: `/api/books/${BOOK.id}/tags/tag-trip/archive` }).flush(null, { status: 204, statusText: '' });
+    await expectReload();
+
+    el.querySelectorAll<HTMLButtonElement>('[data-group="tags"] .active button.up')[1].click();
+    await fixture.whenStable();
+    const order = httpTesting.expectOne({ method: 'PUT', url: `/api/books/${BOOK.id}/tags/order` });
+    expect(order.request.body).toEqual({ ids: ['tag-trip', 'tag-work', 'tag-old'] });
+    order.flush(null, { status: 204, statusText: '' });
+    await expectReload();
+
+    await (await loader.getHarness(MatMenuHarness.with({ selector: '[data-menu="tag-work"]' }))).clickItem({ text: '刪除' });
+    await (await rootLoader.getHarness(MatButtonHarness.with({ text: '刪除' }))).click();
+    await fixture.whenStable();
+    await vi.waitFor(() => httpTesting.expectOne({ method: 'DELETE', url: `/api/books/${BOOK.id}/tags/tag-work` }).flush(
+      { detail: '「工作」已有交易或預定支出使用，不能刪除；可以改用封存。', code: 'in-use' },
+      { status: 422, statusText: 'Unprocessable Entity' }));
+    await fixture.whenStable();
+    expect(notifier.show).toHaveBeenCalledWith('「工作」已有交易或預定支出使用，不能刪除；可以改用封存。');
+  });
+
   it('saves_lock_date_and_offers_downloads', async () => {
     const { el, fixture, httpTesting, openTab, expectReload } = await setup();
     await openTab('鎖帳日與資料', 'input[type=date]');

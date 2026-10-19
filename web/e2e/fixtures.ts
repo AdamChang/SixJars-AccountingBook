@@ -15,6 +15,7 @@ export const BOOK = {
     { id: 'cat-breakfast', name: '早餐', kind: 'Expense', nature: 'Floating', parentId: 'cat-food', sortOrder: 0, archivedAt: null },
     { id: 'cat-salary', name: '薪資', kind: 'Income', nature: null, parentId: null, sortOrder: 0, archivedAt: null },
   ],
+  tags: [] as { id: string; name: string; color: string; sortOrder: number; archivedAt: string | null }[],
 };
 
 export interface MockApiOptions {

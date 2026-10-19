@@ -1,9 +1,11 @@
 import { moveItemInArray } from '@angular/cdk/drag-drop';
 import {
-  AccountDto, AccountType, CategoryDto, CategoryKind, ExpenseNature, PlanningFundDto, ReorderBody, SettingPath,
+  AccountDto, AccountType, CategoryDto, CategoryKind, ExpenseNature, PlanningFundDto, ReorderBody, SettingPath, TagColor, TagDto,
 } from '../../core/api/dto';
+import { TAG_COLOR_LABELS } from '../../shared/tags';
 
-export interface SettingRow { id: string; label: string; detail: string; archived: boolean }
+// color 只有標籤有：清單在名稱前顯示色點（F2）
+export interface SettingRow { id: string; label: string; detail: string; archived: boolean; color?: TagColor }
 
 // 一組 = 一次排序的範圍（與後端 Book 的分組相同）：帳戶、財務規劃帳戶、某種類的主分類、某主分類的子分類
 export interface SettingGroup {
@@ -28,6 +30,15 @@ export function fundGroup(funds: PlanningFundDto[]): SettingGroup {
   return {
     key: 'planning-funds', title: '財務規劃帳戶', path: 'planning-funds', categoryKind: null, parentId: null,
     rows: bySortOrder(funds).map(f => ({ id: f.id, label: f.name, detail: '', archived: f.archivedAt !== null })),
+  };
+}
+
+export function tagGroup(tags: TagDto[]): SettingGroup {
+  return {
+    key: 'tags', title: '標籤', path: 'tags', categoryKind: null, parentId: null,
+    rows: bySortOrder(tags).map(t => ({
+      id: t.id, label: t.name, detail: TAG_COLOR_LABELS[t.color], archived: t.archivedAt !== null, color: t.color,
+    })),
   };
 }
 

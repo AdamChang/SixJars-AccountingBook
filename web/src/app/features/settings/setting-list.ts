@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, input, linkedSignal, outp
 import { CdkDrag, CdkDragDrop, CdkDragHandle, CdkDropList } from '@angular/cdk/drag-drop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatMenuModule } from '@angular/material/menu';
+import { tagColorVar } from '../../shared/tags';
 import { SettingRow, moveRow } from './settings-rules';
 
 // 父層在 API 失敗時呼叫 revert() 還原畫面；一頁有多個清單，所以不讓父層直接操作子元件
@@ -17,6 +18,9 @@ export interface ReorderRequest { ids: string[]; revert(): void }
       @for (row of order(); track row.id; let i = $index, last = $last) {
         <li class="row" cdkDrag>
           <span class="handle" cdkDragHandle aria-hidden="true">⠿</span>
+          @if (row.color) {
+            <span class="color-dot" aria-hidden="true" [style.background-color]="dotColor(row)"></span>
+          }
           <span class="label">{{ row.label }}</span>
           <span class="detail">{{ row.detail }}</span>
           <button mat-button class="up" type="button" [disabled]="i === 0" (click)="move(i, i - 1)"
@@ -41,6 +45,9 @@ export interface ReorderRequest { ids: string[]; revert(): void }
         <ul class="archived">
           @for (row of archivedRows(); track row.id) {
             <li class="row">
+              @if (row.color) {
+                <span class="color-dot" aria-hidden="true" [style.background-color]="dotColor(row)"></span>
+              }
               <span class="label">{{ row.label }}</span>
               <span class="detail">{{ row.detail }}</span>
               <button mat-button type="button" class="unarchive" (click)="unarchive.emit(row.id)">解除封存</button>
@@ -61,6 +68,7 @@ export interface ReorderRequest { ids: string[]; revert(): void }
     .detail { color: var(--mat-sys-on-surface-variant); font-size: 0.875rem; }
     .handle { cursor: grab; padding: 0 8px; color: var(--ledger-rule-strong); }
     .archived .row { opacity: 0.6; }
+    .color-dot { width: 12px; height: 12px; border-radius: 50%; flex: none; box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.2); }
   `,
 })
 export class SettingList {
@@ -75,6 +83,10 @@ export class SettingList {
   protected readonly order = linkedSignal(() => this.rows().filter(row => !row.archived));
   protected readonly archivedRows = computed(() => this.rows().filter(row => row.archived));
   protected readonly showArchived = signal(false);
+
+  protected dotColor(row: SettingRow): string {
+    return tagColorVar(row.color!, 'bg');
+  }
 
   drop(event: CdkDragDrop<SettingRow[]>): void {
     this.move(event.previousIndex, event.currentIndex);

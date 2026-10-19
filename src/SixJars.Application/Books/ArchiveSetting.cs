@@ -6,7 +6,7 @@ using SixJars.Domain.Common;
 
 namespace SixJars.Application.Books;
 
-/// <summary>封存設定項目；帳戶與財務規劃帳戶的餘額必須為 0（spec §3.1）。</summary>
+/// <summary>封存設定項目；帳戶與財務規劃帳戶的餘額必須為 0（spec §3.1），分類與標籤不檢查餘額。</summary>
 public sealed record ArchiveSetting(Guid BookId, SettingKind Kind, Guid Id) : IRequest, IBookScoped;
 
 public sealed record UnarchiveSetting(Guid BookId, SettingKind Kind, Guid Id) : IRequest, IBookScoped;
@@ -36,6 +36,12 @@ internal sealed class ArchiveSettingHandler(ISixJarsDbContext db, ILedgerSummary
                 var deltas = await ledger.FundDeltaTotalsAsync(book.Id, Everything, cancellationToken);
                 book.ArchivePlanningFund(fund.Id, LedgerBalances.Fund(fund, deltas), at);
                 audit.Record(request.BookId, AuditAction.Update, AuditEntityTypes.PlanningFund, request.Id, fundBefore, PlanningFundDto.From(fund));
+                break;
+            case SettingKind.Tag:
+                var tag = book.GetTag(new TagId(request.Id));
+                var tagBefore = TagDto.From(tag);
+                book.ArchiveTag(tag.Id, at);
+                audit.Record(request.BookId, AuditAction.Update, AuditEntityTypes.Tag, request.Id, tagBefore, TagDto.From(tag));
                 break;
             default:
                 var category = book.GetCategory(new CategoryId(request.Id));
@@ -67,6 +73,12 @@ internal sealed class UnarchiveSettingHandler(ISixJarsDbContext db, IAuditTrail 
                 var fundBefore = PlanningFundDto.From(fund);
                 book.UnarchivePlanningFund(fund.Id);
                 audit.Record(request.BookId, AuditAction.Update, AuditEntityTypes.PlanningFund, request.Id, fundBefore, PlanningFundDto.From(fund));
+                break;
+            case SettingKind.Tag:
+                var tag = book.GetTag(new TagId(request.Id));
+                var tagBefore = TagDto.From(tag);
+                book.UnarchiveTag(tag.Id);
+                audit.Record(request.BookId, AuditAction.Update, AuditEntityTypes.Tag, request.Id, tagBefore, TagDto.From(tag));
                 break;
             default:
                 var category = book.GetCategory(new CategoryId(request.Id));

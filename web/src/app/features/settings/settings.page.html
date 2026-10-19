@@ -10,6 +10,9 @@
   <mat-tab label="財務規劃帳戶">
     <ng-container [ngTemplateOutlet]="groupTemplate" [ngTemplateOutletContext]="{ $implicit: funds() }" />
   </mat-tab>
+  <mat-tab label="標籤">
+    <ng-container [ngTemplateOutlet]="groupTemplate" [ngTemplateOutletContext]="{ $implicit: tags() }" />
+  </mat-tab>
   <mat-tab label="鎖帳日與資料">
     <section class="lock-date">
       <h3>鎖帳日</h3>

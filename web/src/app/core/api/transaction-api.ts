@@ -8,8 +8,12 @@ import { TransactionDto, TransactionInput } from './dto';
 export class TransactionApi {
   private readonly http = inject(HttpClient);
 
-  list(bookId: string, budgetMonth: number): Observable<TransactionDto[]> {
-    const params = new HttpParams().set('budgetMonth', budgetMonth);
+  // tagId 只篩選當月（tags frontend spec F8）；沒有時不帶這個參數
+  list(bookId: string, budgetMonth: number, tagId?: string | null): Observable<TransactionDto[]> {
+    let params = new HttpParams().set('budgetMonth', budgetMonth);
+    if (tagId) {
+      params = params.set('tagId', tagId);
+    }
     return this.http.get<TransactionDto[]>(`/api/books/${bookId}/transactions`, { params });
   }
 

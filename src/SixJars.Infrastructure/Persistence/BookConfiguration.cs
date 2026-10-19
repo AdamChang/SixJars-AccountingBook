@@ -44,8 +44,20 @@ internal sealed class BookConfiguration : IEntityTypeConfiguration<Book>
             category.Property(c => c.Nature).HasConversion<string>();
         });
 
+        builder.OwnsMany(b => b.Tags, tag =>
+        {
+            tag.ToTable("Tags");
+            tag.WithOwner().HasForeignKey("BookId");
+            tag.HasKey(t => t.Id);
+            tag.Property(t => t.Id).ValueGeneratedNever();
+            // 8 個 text element 可能超過 8 個 UTF-16 字元（spec D8），欄位長度沿用 NameMaxLength。
+            tag.Property(t => t.Name).HasMaxLength(NameMaxLength);
+            tag.Property(t => t.Color).HasConversion<string>();
+        });
+
         builder.Navigation(b => b.Accounts).UsePropertyAccessMode(PropertyAccessMode.Field);
         builder.Navigation(b => b.PlanningFunds).UsePropertyAccessMode(PropertyAccessMode.Field);
         builder.Navigation(b => b.Categories).UsePropertyAccessMode(PropertyAccessMode.Field);
+        builder.Navigation(b => b.Tags).UsePropertyAccessMode(PropertyAccessMode.Field);
     }
 }

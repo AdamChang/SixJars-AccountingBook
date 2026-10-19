@@ -21,7 +21,7 @@ public static class TransactionBuilder
         var budgetMonth = input.BudgetMonth is { } key ? BudgetMonth.FromKey(key) : (BudgetMonth?)null;
         var note = input.Note;
 
-        return input.Kind switch
+        var transaction = input.Kind switch
         {
             TransactionKind.Income => factory.Income(date, account, Category(), amount, note, budgetMonth),
             TransactionKind.Expense => factory.Expense(date, account, Category(), amount, note, budgetMonth),
@@ -40,6 +40,7 @@ public static class TransactionBuilder
             TransactionKind.FundReturn => factory.FundReturn(date, Fund(), account, amount, note, budgetMonth),
             _ => throw new DomainException($"不支援的交易類型 {input.Kind}。"),
         };
+        return factory.WithTags(transaction, [.. (input.TagIds ?? []).Select(id => new TagId(id))]);
 
         AccountId Counter() => new(Required(input.CounterAccountId, nameof(input.CounterAccountId)));
         CategoryId Category() => new(Required(input.CategoryId, nameof(input.CategoryId)));
@@ -48,5 +49,19 @@ public static class TransactionBuilder
 
         T Required<T>(T? value, string field) where T : struct =>
             value ?? throw new DomainException($"{input.Kind} 交易必須填寫 {field}。");
+    }
+
+    /// <summary>
+    /// 封存的標籤不可新加；修改交易時原本就掛著的可以保留（tags spec G7、D2）。
+    /// 不放在 factory：還原備份要能重建掛著封存標籤的交易。
+    /// </summary>
+    /// <param name="existing">新增交易時為空集合；修改時是 ReplaceWith 之前的標籤。</param>
+    internal static void EnsureNoNewArchivedTags(Book book, IReadOnlyCollection<TagId> existing, IReadOnlyCollection<TagId> requested)
+    {
+        var archived = requested.Except(existing).Select(book.GetTag).FirstOrDefault(t => t.IsArchived);
+        if (archived is not null)
+        {
+            throw new DomainException($"標籤「{archived.Name}」已封存，不能再加到交易上。");
+        }
     }
 }

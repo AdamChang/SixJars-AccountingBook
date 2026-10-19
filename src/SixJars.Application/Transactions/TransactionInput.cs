@@ -8,6 +8,9 @@ namespace SixJars.Application.Transactions;
 /// </summary>
 /// <param name="BudgetMonth">歸屬月份（yyyymm）；null 表示取交易日期的月份。</param>
 /// <param name="Amount">收入、支出帶正負號（支出為負）；其餘類型為正，貸款繳款為總額。</param>
+/// <param name="TagIds">
+/// 最多 4 個、不重複，任何類型都可以掛（ADR 0011）。null 視為沒有標籤：修改交易時沒帶就是**清空**，不是保留（tags spec D4）。
+/// </param>
 public sealed record TransactionInput(
     TransactionKind Kind,
     DateOnly Date,
@@ -18,4 +21,5 @@ public sealed record TransactionInput(
     Guid? CategoryId,
     Guid? PlanningFundId,
     decimal? LoanPrincipal,
-    string? Note);
+    string? Note,
+    IReadOnlyList<Guid>? TagIds = null);

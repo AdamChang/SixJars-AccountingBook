@@ -6,7 +6,7 @@ import { CurrentBook } from './current-book';
 
 const book = (id: string): BookDto => ({
   id, name: `帳本${id}`, openingDate: '2026-01-01', lockDate: null,
-  accounts: [], planningFunds: [], categories: [],
+  accounts: [], planningFunds: [], categories: [], tags: [],
 });
 
 describe('CurrentBook', () => {

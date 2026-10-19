@@ -6,14 +6,14 @@ import { TransactionDto, TransactionInput } from './dto';
 
 const input: TransactionInput = {
   kind: 'Expense', date: '2026-01-15', budgetMonth: null, amount: -100, accountId: 'a1',
-  counterAccountId: null, categoryId: 'c1', planningFundId: null, loanPrincipal: null, note: null,
+  counterAccountId: null, categoryId: 'c1', planningFundId: null, loanPrincipal: null, note: null, tagIds: [],
 };
 
 const saved: TransactionDto = {
   id: 't1', kind: 'Expense', date: '2026-01-15', budgetMonth: 202601, amount: -100,
   accountId: 'a1', counterAccountId: null, categoryId: 'c1', planningFundId: null,
   loanPrincipal: null, loanInterest: null, note: null,
-  postings: [{ accountId: 'a1', amount: -100 }], version: 1,
+  postings: [{ accountId: 'a1', amount: -100 }], version: 1, tagIds: [],
 };
 
 describe('TransactionApi', () => {
@@ -38,6 +38,13 @@ describe('TransactionApi', () => {
       .expectOne({ method: 'GET', url: '/api/books/b1/transactions?budgetMonth=202601' })
       .flush([saved]);
     expect(result).toEqual([saved]);
+  });
+
+  it('list_adds_tag_id_only_when_given', () => {
+    api.list('b1', 202610, 't1').subscribe();
+    httpTesting.expectOne({ method: 'GET', url: '/api/books/b1/transactions?budgetMonth=202610&tagId=t1' }).flush([]);
+    api.list('b1', 202610, null).subscribe();
+    httpTesting.expectOne({ method: 'GET', url: '/api/books/b1/transactions?budgetMonth=202610' }).flush([]);
   });
 
   it('create_posts_input', () => {

@@ -49,6 +49,7 @@ public sealed class SixJarsDbContext(DbContextOptions<SixJarsDbContext> options)
         configurationBuilder.Properties<TransactionId>().HaveConversion<TransactionIdConverter>();
         configurationBuilder.Properties<PlannedExpenseId>().HaveConversion<PlannedExpenseIdConverter>();
         configurationBuilder.Properties<RecurringPlannedExpenseId>().HaveConversion<RecurringPlannedExpenseIdConverter>();
+        configurationBuilder.Properties<TagId>().HaveConversion<TagIdConverter>();
         configurationBuilder.Properties<BudgetMonth>().HaveConversion<BudgetMonthConverter>();
         configurationBuilder.Properties<decimal>().HavePrecision(18, 4);
     }

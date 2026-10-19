@@ -31,12 +31,13 @@ internal sealed class UpdateTransactionHandler(ISixJarsDbContext db, IAuditTrail
             .SingleOrDefaultAsync(t => t.BookId == bookId && t.Id == transactionId, cancellationToken)
             ?? throw new NotFoundException($"找不到交易 {request.TransactionId}。");
 
-        // 帳本只用來驗證帳戶、分類與鎖帳日，不會被修改。
+        // 帳本只用來驗證帳戶、分類、標籤與鎖帳日，不會被修改。
         var book = await db.GetBookAsNoTrackingAsync(request.BookId, cancellationToken);
         // 原日期與新日期都要檢查：不能把交易搬進或搬出鎖定區間（spec §3.1）。
         book.EnsureUnlocked(transaction.Date);
         book.EnsureUnlocked(request.Input.Date);
         var draft = TransactionBuilder.Build(book, request.Input);
+        TransactionBuilder.EnsureNoNewArchivedTags(book, transaction.TagIds, draft.TagIds);
 
         // 修改前的快照必須在 ReplaceWith 之前取得，否則會拿到修改後的內容。
         var before = TransactionDto.From(transaction, db.GetVersion(transaction));

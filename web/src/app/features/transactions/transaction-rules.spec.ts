@@ -1,7 +1,7 @@
 import { AccountDto, AccountType, CategoryDto, TransactionDto, TransactionKind } from '../../core/api/dto';
 import {
   KIND_RULES, MORE_KINDS, PRIMARY_KINDS, TransactionFormValue, accountsFor, categoryLabel, categoryOptions,
-  categoryKindOf, fromTransaction, isLocked, keepIdsOf, selectable, signedAmount, toTransactionInput,
+  categoryKindOf, fromTransaction, isLocked, keepIdsOf, keepTagIdsOf, selectable, signedAmount, toTransactionInput,
 } from './transaction-rules';
 
 const TYPES: AccountType[] = ['Cash', 'Bank', 'CreditCard', 'EWallet', 'Loan'];
@@ -33,6 +33,7 @@ const ALL_KINDS = Object.keys(EXPECTED) as TransactionKind[];
 const filledValue = (kind: TransactionKind): TransactionFormValue => ({
   kind, date: new Date(2026, 0, 5), accountId: 'acc', counterAccountId: 'counter', categoryId: 'cat',
   planningFundId: 'fund', amount: 100, refund: false, loanPrincipal: 60, note: ' 備註 ', budgetMonthOverride: 202603,
+  tagIds: [],
 });
 
 describe('KIND_RULES', () => {
@@ -144,7 +145,7 @@ describe('fromTransaction', () => {
   const dto = (over: Partial<TransactionDto>): TransactionDto => ({
     id: 't1', kind: 'Expense', date: '2026-01-05', budgetMonth: 202601, amount: -100, accountId: 'acc',
     counterAccountId: null, categoryId: 'cat', planningFundId: null, loanPrincipal: null, loanInterest: null,
-    note: null, postings: [], version: 1, ...over,
+    note: null, postings: [], version: 1, tagIds: [], ...over,
   });
 
   it('支出 -100 → 金額 100、非退款、月份未覆寫，且可來回', () => {
@@ -174,6 +175,19 @@ describe('fromTransaction', () => {
     const form = fromTransaction(dto({ budgetMonth: 202602 }));
     expect(form.budgetMonthOverride).toBe(202602);
     expect(toTransactionInput(form).budgetMonth).toBe(202602);
+  });
+
+  it('標籤原樣帶出，送出時一律有 tagIds（空陣列也送，後端 D4）', () => {
+    const form = fromTransaction(dto({ tagIds: ['t2', 't1'] }));
+    expect(form.tagIds).toEqual(['t2', 't1']);
+    expect(toTransactionInput(form).tagIds).toEqual(['t2', 't1']);
+    expect(toTransactionInput(fromTransaction(dto({}))).tagIds).toEqual([]);
+    expect(Object.keys(toTransactionInput(filledValue('Transfer')))).toContain('tagIds');
+  });
+
+  it('keep_tag_ids_of_editing_transaction_only', () => {
+    expect(keepTagIdsOf(null).size).toBe(0);
+    expect([...keepTagIdsOf(dto({ tagIds: ['t1', 't2'] }))]).toEqual(['t1', 't2']);
   });
 
   it('貸款繳款保留本金與備註', () => {

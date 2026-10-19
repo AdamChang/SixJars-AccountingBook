@@ -29,7 +29,7 @@ const POST = { method: 'POST', url: `/api/books/${BOOK.id}/transactions` };
 const EDITING: TransactionDto = transactionDtoFrom(
   {
     kind: 'Expense', date: '2026-03-15', budgetMonth: null, amount: -100, accountId: 'acc-bank',
-    counterAccountId: null, categoryId: 'cat-lunch', planningFundId: null, loanPrincipal: null, note: '午餐',
+    counterAccountId: null, categoryId: 'cat-lunch', planningFundId: null, loanPrincipal: null, note: '午餐', tagIds: [],
   },
   { id: 'tx-7', version: 7 },
 );
@@ -406,7 +406,7 @@ describe('TransactionForm', () => {
         version: 7,
         input: {
           kind: 'Expense', date: '2026-03-15', budgetMonth: null, amount: -120, accountId: 'acc-bank',
-          counterAccountId: null, categoryId: 'cat-lunch', planningFundId: null, loanPrincipal: null, note: '午餐',
+          counterAccountId: null, categoryId: 'cat-lunch', planningFundId: null, loanPrincipal: null, note: '午餐', tagIds: [],
         },
       });
       request.flush({ ...EDITING, amount: -120, version: 8 });
@@ -550,6 +550,87 @@ describe('TransactionForm', () => {
       expect(await (await form.input('note')).getValue()).toBe('便當');
       // pending 結束，送出鈕恢復可用
       expect(form.el.querySelector<HTMLButtonElement>('button.submit')!.disabled).toBe(false);
+    });
+  });
+
+  describe('tags', () => {
+    const tagsOf = (form: FormDriver) => form.loader.getHarness(MatSelectHarness.with({ selector: '[formControlName=tagIds]' }));
+    const optionTexts = async (form: FormDriver) => {
+      const select = await tagsOf(form);
+      await select.open();
+      const options = await select.getOptions();
+      const texts = await Promise.all(options.map(option => option.getText()));
+      await select.close();
+      return texts;
+    };
+    const FIVE_TAGS: BookDto = {
+      ...BOOK,
+      tags: ['甲', '乙', '丙', '丁', '戊'].map((name, i) => ({ id: `t${i}`, name, color: 'Red' as const, sortOrder: i, archivedAt: null })),
+    };
+
+    it('tag_field_shows_for_every_kind_and_keeps_selection_when_switching_kind', async () => {
+      const form = await setup();
+      for (const kind of ['支出', '收入', '轉帳', '加值', '貸款繳款', '資金回流']) {
+        await form.selectKind(kind);
+        expect(form.field('tagIds'), kind).not.toBeNull();
+      }
+      await form.selectKind('支出');
+      await form.select('tagIds', '旅遊');
+      await form.selectKind('轉帳');
+      await form.select('accountId', '銀行');
+      await form.select('counterAccountId', '現金');
+      await form.type('amount', '500');
+      expect((await form.submitAndExpectBody()).tagIds).toEqual(['tag-trip']);
+    });
+
+    it('options_are_unarchived_tags_in_sort_order', async () => {
+      const form = await setup();
+      expect(await optionTexts(form)).toEqual(['工作', '旅遊']);
+    });
+
+    it('sends_selected_tags_and_empty_list_when_none', async () => {
+      const form = await setup();
+      await form.fillValidExpense();
+      expect((await form.submitAndExpectBody()).tagIds).toEqual([]);
+      await form.fillValidExpense();
+      await form.select('tagIds', '旅遊');
+      await form.select('tagIds', '工作');
+      expect([...(await form.submitAndExpectBody()).tagIds].sort()).toEqual(['tag-trip', 'tag-work']);
+    });
+
+    it('keeps_archived_tag_of_editing_transaction_and_shows_chips_in_sort_order', async () => {
+      const form = await setup();
+      await form.edit({ ...EDITING, tagIds: ['tag-trip', 'tag-old'] });
+      expect(await optionTexts(form)).toEqual(['工作', '旅遊', '舊專案']);
+      const chips = [...form.el.querySelectorAll('[formControlName=tagIds] .tag-chip')].map(chip => chip.textContent!.trim());
+      expect(chips).toEqual(['旅遊', '舊專案']);
+      await form.submit();
+      const request = form.httpTesting.expectOne(PUT);
+      expect((request.request.body as { input: TransactionInput }).input.tagIds).toEqual(['tag-trip', 'tag-old']);
+      request.flush(EDITING);
+      await form.fixture.whenStable();
+    });
+
+    it('disables_other_options_after_four_and_shows_hint', async () => {
+      const form = await setup(FIVE_TAGS);
+      expect(form.el.textContent).toContain('最多 4 個');
+      for (const name of ['甲', '乙', '丙', '丁']) {
+        await form.select('tagIds', name);
+      }
+      const select = await tagsOf(form);
+      await select.open();
+      const options = await select.getOptions();
+      const disabled = await Promise.all(options.map(option => option.isDisabled()));
+      expect(disabled).toEqual([false, false, false, false, true]);
+      await select.close();
+    });
+
+    it('shows_backend_message_when_tag_is_rejected', async () => {
+      const form = await setup();
+      await form.fillValidExpense();
+      await form.select('tagIds', '旅遊');
+      await form.submitAndFail(POST, 422, { code: 'rule', detail: '標籤「旅遊」已封存，不能再加到交易上。' });
+      expect(form.topErrors()).toEqual(['標籤「旅遊」已封存，不能再加到交易上。']);
     });
   });
 

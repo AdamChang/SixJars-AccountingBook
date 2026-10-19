@@ -27,6 +27,12 @@ internal sealed class RemoveSettingHandler(ISixJarsDbContext db, IAuditTrail aud
                 book.RemovePlanningFund(fundId, await db.IsPlanningFundReferencedAsync(book.Id, fundId, cancellationToken));
                 audit.Record<PlanningFundDto>(request.BookId, AuditAction.Delete, AuditEntityTypes.PlanningFund, request.Id, fund, null);
                 break;
+            case SettingKind.Tag:
+                var tagId = new TagId(request.Id);
+                var tag = TagDto.From(book.GetTag(tagId));
+                book.RemoveTag(tagId, await db.IsTagReferencedAsync(book.Id, tagId, cancellationToken));
+                audit.Record<TagDto>(request.BookId, AuditAction.Delete, AuditEntityTypes.Tag, request.Id, tag, null);
+                break;
             default:
                 var categoryId = new CategoryId(request.Id);
                 var target = book.GetCategory(categoryId);

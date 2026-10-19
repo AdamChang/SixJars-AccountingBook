@@ -137,6 +137,11 @@ internal sealed class RestoreBackupHandler(ISixJarsDbContext db, IAuditTrail aud
             book.AddSubCategory(new CategoryId(category.ParentId!.Value), category.Name, new CategoryId(category.Id));
         }
 
+        foreach (var tag in dto.Tags ?? [])
+        {
+            book.AddTag(tag.Name, tag.Color, new TagId(tag.Id));
+        }
+
         // 封存的帳戶在備份當下已通過餘額檢查，交易也會原樣還原，所以這裡以 0 傳入。
         foreach (var account in dto.Accounts.Where(a => a.ArchivedAt is not null))
         {
@@ -153,6 +158,11 @@ internal sealed class RestoreBackupHandler(ISixJarsDbContext db, IAuditTrail aud
             book.ArchiveCategory(new CategoryId(category.Id), category.ArchivedAt!.Value);
         }
 
+        foreach (var tag in (dto.Tags ?? []).Where(t => t.ArchivedAt is not null))
+        {
+            book.ArchiveTag(new TagId(tag.Id), tag.ArchivedAt!.Value);
+        }
+
         // 例如名稱被去掉空白、非現金帳戶的「計入可用現金」被改成 false、子分類的種類與主分類不同。
         // v1 沒有 SortOrder（全部是 0），重建出來的是依清單順序的編號，比對時忽略。
         var expected = formatVersion == 1 ? WithoutSortOrder(dto) : dto;
@@ -160,6 +170,7 @@ internal sealed class RestoreBackupHandler(ISixJarsDbContext db, IAuditTrail aud
         if (!restored.Accounts.SequenceEqual(expected.Accounts)
             || !restored.PlanningFunds.SequenceEqual(expected.PlanningFunds)
             || !restored.Categories.ToHashSet().SetEquals(expected.Categories)
+            || !restored.Tags!.SequenceEqual(expected.Tags ?? [])
             || restored.Name != dto.Name)
         {
             throw new DomainException($"帳本 {dto.Id} 的設定經 Domain 重建後與備份不一致，備份可能已損毀。");
@@ -180,13 +191,18 @@ internal sealed class RestoreBackupHandler(ISixJarsDbContext db, IAuditTrail aud
     {
         var input = backup.Transaction.ToInput();
         var transaction = TransactionBuilder.Build(book, input, new TransactionId(backup.Transaction.Id));
-        if (TransactionDto.From(transaction, backup.Transaction.Version).ToInput() != input)
+        if (!SameInput(TransactionDto.From(transaction, backup.Transaction.Version).ToInput(), input))
         {
             throw new DomainException($"交易 {backup.Transaction.Id} 經 Domain 重建後與備份不一致，備份可能已損毀。");
         }
 
         return (transaction, backup.DeletedAt);
     }
+
+    // record 相等對清單比的是參考，TagIds 另外以排序後的內容比較；null 與空集合視為相同（tags spec D6）。
+    private static bool SameInput(TransactionInput a, TransactionInput b) =>
+        a with { TagIds = null } == b with { TagIds = null }
+        && (a.TagIds ?? []).Order().SequenceEqual((b.TagIds ?? []).Order());
 
     private static List<PlannedExpense> RestorePlannedExpenses(
         Book book,

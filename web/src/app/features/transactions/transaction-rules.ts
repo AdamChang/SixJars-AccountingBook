@@ -87,7 +87,7 @@ export const MORE_KINDS: TransactionKind[] = [
 export interface TransactionFormValue {
   kind: TransactionKind; date: Date; accountId: string; counterAccountId: string | null;
   categoryId: string | null; planningFundId: string | null; amount: number; refund: boolean;
-  loanPrincipal: number | null; note: string; budgetMonthOverride: number | null;
+  loanPrincipal: number | null; note: string; budgetMonthOverride: number | null; tagIds: string[];
 }
 
 export function categoryKindOf(kind: TransactionKind): CategoryKind {
@@ -118,6 +118,8 @@ export function toTransactionInput(value: TransactionFormValue): TransactionInpu
     planningFundId: rule.planningFund ? value.planningFundId : null,
     loanPrincipal: rule.loanPrincipal ? value.loanPrincipal : null,
     note: value.note.trim() === '' ? null : value.note,
+    // 所有類型都可以掛標籤；一律送出，空陣列代表沒有標籤（後端把沒帶視為清空，D4）
+    tagIds: value.tagIds,
   };
 }
 
@@ -134,6 +136,7 @@ export function fromTransaction(dto: TransactionDto): TransactionFormValue {
     loanPrincipal: dto.loanPrincipal,
     note: dto.note ?? '',
     budgetMonthOverride: dto.budgetMonth === budgetMonthOf(dto.date) ? null : dto.budgetMonth,
+    tagIds: dto.tagIds,
   };
 }
 
@@ -153,6 +156,11 @@ export function keepIdsOf(editing: TransactionDto | null): ReadonlySet<string> {
   }
   return new Set([editing.accountId, editing.counterAccountId, editing.categoryId, editing.planningFundId]
     .filter((id): id is string => id !== null));
+}
+
+// 編輯中交易原本掛著的標籤：已封存的仍可保留（後端 G7）；新增時為空集合
+export function keepTagIdsOf(editing: TransactionDto | null): ReadonlySet<string> {
+  return editing === null ? NO_KEEP : new Set(editing.tagIds);
 }
 
 export function accountsFor(accounts: AccountDto[], slot: AccountSlot, keep: ReadonlySet<string> = NO_KEEP): AccountDto[] {

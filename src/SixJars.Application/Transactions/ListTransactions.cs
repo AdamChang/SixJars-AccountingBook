@@ -13,7 +13,8 @@ namespace SixJars.Application.Transactions;
 /// <param name="To">交易日期上限（含）。</param>
 /// <param name="BudgetMonth">歸屬月份（yyyymm），不是交易日期的月份。</param>
 /// <param name="AccountId">只列出動到該帳戶的交易，包含該帳戶是對方帳戶的情形。</param>
-public sealed record ListTransactions(Guid BookId, DateOnly? From, DateOnly? To, int? BudgetMonth, Guid? AccountId)
+/// <param name="TagId">只列出掛著該標籤的交易（一次一個，tags spec G16）。</param>
+public sealed record ListTransactions(Guid BookId, DateOnly? From, DateOnly? To, int? BudgetMonth, Guid? AccountId, Guid? TagId = null)
     : IRequest<IReadOnlyList<TransactionDto>>, IBookScoped;
 
 /// <summary>歸屬月份必須是合法的 yyyymm；否則 <see cref="BudgetMonth.FromKey"/> 會擲例外，變成 500。</summary>
@@ -57,6 +58,12 @@ internal sealed class ListTransactionsHandler(ISixJarsDbContext db) : IRequestHa
             query = query.Where(t => t.Postings.Any(p => p.AccountId == accountId)
                 || t.AccountId == accountId
                 || t.CounterAccountId == accountId);
+        }
+
+        if (request.TagId is { } tagGuid)
+        {
+            var tagId = new TagId(tagGuid);
+            query = query.Where(t => t.Tags.Any(x => x.TagId == tagId));
         }
 
         // 同一天的交易依 Id 排：Guid.CreateVersion7 依建立時間遞增，PostgreSQL 的 uuid 以位元組比較，結果與建立順序一致。
