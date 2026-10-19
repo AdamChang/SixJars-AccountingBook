@@ -56,7 +56,7 @@ public static class CliApp
     private static Command ImportLegacyCommand(Host host)
     {
         var file = new Option<FileInfo>("--file") { Description = "舊 Excel 記帳本（.xlsm）", Required = true };
-        var bookName = new Option<string>("--book-name") { Description = "新帳本的名稱；已有同名帳本時拒絕匯入", Required = true };
+        var bookName = new Option<string>("--book-name") { Description = "新帳本的名稱；同一位擁有者已有同名帳本時拒絕匯入", Required = true };
         var ownerEmail = new Option<string>("--owner-email") { Description = "擁有者的 Google email", Required = true };
         var dryRun = new Option<bool>("--dry-run") { Description = "只轉換與檢查，印出報告與筆數，不寫入" };
         var command = new Command("import-legacy", "把舊 Excel 記帳本匯入成一本新帳本（單一 DB transaction）。")

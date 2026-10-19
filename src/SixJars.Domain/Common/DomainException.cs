@@ -18,5 +18,11 @@ public sealed class DomainException(string message, string code = DomainExceptio
     /// <summary>確認用的名稱與實際名稱不同（刪除帳本，issue #6）。</summary>
     public const string NameMismatchCode = "name-mismatch";
 
+    /// <summary>同一位擁有者底下已有同名帳本（issue #7 Q9）。</summary>
+    public const string DuplicateNameCode = "duplicate-name";
+
+    /// <summary>已擁有的帳本數達到上限（issue #7 Q8）。</summary>
+    public const string BookQuotaExceededCode = "book-quota-exceeded";
+
     public string Code { get; } = code;
 }
