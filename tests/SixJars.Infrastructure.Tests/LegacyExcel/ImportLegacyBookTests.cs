@@ -48,24 +48,49 @@ public class ImportLegacyBookTests(PostgresFixture postgres)
     }
 
     [Fact]
-    public async Task Duplicate_book_name_is_rejected()
+    public async Task Duplicate_book_name_of_the_same_owner_is_rejected()
     {
         await using var host = await Host.CreateAsync(postgres);
         await using (var db = host.Open())
         {
-            db.Books.Add(new Book(BookName, new DateOnly(2025, 12, 31)));
+            var existing = new Book(BookName, new DateOnly(2025, 12, 31));
+            db.Books.Add(existing);
+            // 大小寫與空白不同仍是同一位擁有者（Import() 的 email 是 " Owner@Example.com "）。
+            db.BookMembers.Add(BookMember.Create(existing.Id, "owner@example.com", BookRole.Owner, Now));
             await db.SaveChangesAsync(Ct);
         }
 
         var act = () => host.SendAsync(Import(ValidWorkbook()));
 
-        (await act.Should().ThrowAsync<DomainException>()).Which.Message.Should().Contain(BookName);
+        var error = (await act.Should().ThrowAsync<DomainException>()).Which;
+        error.Message.Should().Contain(BookName);
+        error.Code.Should().Be(DomainException.DuplicateNameCode);
         await using var check = host.Open();
         (await check.Books.CountAsync(Ct)).Should().Be(1);
         (await check.Transactions.IgnoreQueryFilters().CountAsync(Ct)).Should().Be(0);
         (await check.PlannedExpenses.IgnoreQueryFilters().CountAsync(Ct)).Should().Be(0);
-        (await check.BookMembers.CountAsync(Ct)).Should().Be(0);
+        (await check.BookMembers.CountAsync(Ct)).Should().Be(1);
         (await check.AuditEntries.CountAsync(Ct)).Should().Be(0);
+    }
+
+    [Fact]
+    public async Task Same_name_owned_by_someone_else_is_imported()
+    {
+        await using var host = await Host.CreateAsync(postgres);
+        await using (var db = host.Open())
+        {
+            var existing = new Book(BookName, new DateOnly(2025, 12, 31));
+            db.Books.Add(existing);
+            db.BookMembers.Add(BookMember.Create(existing.Id, "someone-else@example.com", BookRole.Owner, Now));
+            await db.SaveChangesAsync(Ct);
+        }
+
+        var result = await host.SendAsync(Import(ValidWorkbook()));
+
+        // issue #7 Q9：同名檢查只比對同一位擁有者的帳本。
+        result.BookId.Should().NotBeNull();
+        await using var check = host.Open();
+        (await check.Books.CountAsync(b => b.Name == BookName, Ct)).Should().Be(2);
     }
 
     [Fact]

@@ -46,14 +46,14 @@ internal sealed class ImportLegacyBookHandler(ISixJarsDbContext db, IAuditTrail 
             return new ImportLegacyBookResult(null, mapped.Report, counts.Transactions, counts.PlannedExpenses);
         }
 
-        // 2. 同名帳本：拒絕，避免重複匯入。
-        if (await db.Books.AnyAsync(b => b.Name == book.Name, cancellationToken))
-        {
-            throw new DomainException($"已有名稱為「{book.Name}」的帳本，不重複匯入。");
-        }
-
-        // 擁有者尚未綁定 Google sub：第一次以這個 email 登入時才綁定（T36）。dry run 也先建立，email 不合法時一併擋下。
+        // 擁有者尚未綁定 Google sub：第一次以這個 email 登入時才綁定（T36）。dry run 也先建立，email 不合法時一併擋下；同名檢查要用它正規化後的 email。
         var owner = BookMember.Create(book.Id, request.OwnerEmail, BookRole.Owner, clock.GetUtcNow());
+
+        // 2. 同一位擁有者已有同名帳本：拒絕，避免重複匯入（issue #7 Q9：不同擁有者可以同名）。
+        if (await db.OwnerHasBookNamedAsync(db.OwnedBookIdsByEmail(owner.Email), book.Name, cancellationToken))
+        {
+            throw new DomainException($"{owner.Email} 已有名稱為「{book.Name}」的帳本，不重複匯入。", DomainException.DuplicateNameCode);
+        }
 
         // 3. dry run：到此為止，不寫入。
         if (request.DryRun)
