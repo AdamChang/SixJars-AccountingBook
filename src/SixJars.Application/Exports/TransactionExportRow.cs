@@ -7,6 +7,7 @@ namespace SixJars.Application.Exports;
 /// <param name="Kind">交易類型的中文名稱（<see cref="TransactionKindNames"/>）。</param>
 /// <param name="LoanPrincipal">本金；只有貸款繳款有值。</param>
 /// <param name="LoanInterest">利息 = 繳款總額 − 本金；只有貸款繳款有值。</param>
+/// <param name="Tags">標籤名稱依設定排序、以「、」串接；沒有標籤時為 null（tags spec D16）。</param>
 public sealed record TransactionExportRow(
     DateOnly Date,
     int BudgetMonth,
@@ -19,9 +20,10 @@ public sealed record TransactionExportRow(
     decimal Amount,
     decimal? LoanPrincipal,
     decimal? LoanInterest,
+    string? Tags,
     string? Note)
 {
     /// <summary>欄位標題，順序即檔案中的欄位順序；CSV 與 xlsx 共用。</summary>
     public static IReadOnlyList<string> Headers { get; } =
-        ["日期", "歸屬月份", "交易類型", "帳戶", "對方帳戶", "主分類", "子分類", "財務規劃帳戶", "金額", "本金", "利息", "備註"];
+        ["日期", "歸屬月份", "交易類型", "帳戶", "對方帳戶", "主分類", "子分類", "財務規劃帳戶", "金額", "本金", "利息", "標籤", "備註"];
 }

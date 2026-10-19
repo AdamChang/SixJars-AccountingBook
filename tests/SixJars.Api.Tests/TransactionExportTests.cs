@@ -20,7 +20,7 @@ public class TransactionExportTests(PostgresFixture postgres)
     /// <summary>UTC 10/4 17:30 是台北 10/5 01:30：檔名的日期必須是台北的日期。</summary>
     private static readonly DateTimeOffset Now = new(2026, 10, 4, 17, 30, 0, TimeSpan.Zero);
 
-    private static readonly string[] Header = ["日期", "歸屬月份", "交易類型", "帳戶", "對方帳戶", "主分類", "子分類", "財務規劃帳戶", "金額", "本金", "利息", "備註"];
+    private static readonly string[] Header = ["日期", "歸屬月份", "交易類型", "帳戶", "對方帳戶", "主分類", "子分類", "財務規劃帳戶", "金額", "本金", "利息", "標籤", "備註"];
 
     /// <summary>備註含逗號、雙引號與換行：RFC 4180 要整欄以雙引號包住，雙引號寫兩次。</summary>
     private const string TrickyNote = "午餐, \"大碗\"\n加蛋";
@@ -47,10 +47,11 @@ public class TransactionExportTests(PostgresFixture postgres)
         ParseCsv(text).Should().BeEquivalentTo(
             [
                 Header,
-                ["2026-01-05", "202601", "收入", "國泰世華銀行", "", "工作薪資", "", "", "50000", "", "", ""],
-                ["2026-01-10", "202601", "入新資金", "國泰世華銀行", "", "", "", "財務自由帳戶", "1000", "", "", ""],
-                ["2026-01-20", "202601", "支出", "現金", "", "主食", "午餐", "", "-120.5", "", "", TrickyNote],
-                ["2026-02-05", "202602", "貸款繳款", "國泰世華銀行", "房屋貸款", "貸款支出", "房屋貸款", "", "20000", "15000", "5000", ""],
+                ["2026-01-05", "202601", "收入", "國泰世華銀行", "", "工作薪資", "", "", "50000", "", "", "", ""],
+                ["2026-01-10", "202601", "入新資金", "國泰世華銀行", "", "", "", "財務自由帳戶", "1000", "", "", "", ""],
+                // 標籤依設定排序（工作、旅遊），不是交易送出的順序或 Guid 順序。
+                ["2026-01-20", "202601", "支出", "現金", "", "主食", "午餐", "", "-120.5", "", "", "工作、旅遊", TrickyNote],
+                ["2026-02-05", "202602", "貸款繳款", "國泰世華銀行", "房屋貸款", "貸款支出", "房屋貸款", "", "20000", "15000", "5000", "", ""],
             ],
             o => o.WithStrictOrdering());
         text.Should().Contain("\"午餐, \"\"大碗\"\"\n加蛋\"").And.NotContain("刪掉的");
@@ -105,7 +106,9 @@ public class TransactionExportTests(PostgresFixture postgres)
         sheet.Cell("I2").DataType.Should().Be(XLDataType.Number);
         sheet.Cell("I2").GetValue<decimal>().Should().Be(-120.5m);
         sheet.Cell("J2").IsEmpty().Should().BeTrue("不是貸款繳款就沒有本金");
-        sheet.Cell("L2").GetString().Should().Be(TrickyNote);
+        sheet.Cell("L2").GetString().Should().Be("工作、旅遊");
+        sheet.Cell("M2").GetString().Should().Be(TrickyNote);
+        sheet.Cell("L3").IsEmpty().Should().BeTrue("沒有標籤就是空白儲存格");
 
         sheet.Cell("C3").GetString().Should().Be("貸款繳款");
         sheet.Cell("J3").GetValue<decimal>().Should().Be(15000m);
@@ -143,14 +146,14 @@ public class TransactionExportTests(PostgresFixture postgres)
 
         var rows = ParseCsv(csv.TrimStart('﻿')).Skip(1).ToList();
         rows.Select(r => r[3]).Should().OnlyContain(name => name == "'@SUM(1+1)");
-        rows.Select(r => r[11]).Should().Equal(notes.Select(n => "'" + n));
+        rows.Select(r => r[12]).Should().Equal(notes.Select(n => "'" + n));
         rows.Select(r => r[8]).Should().OnlyContain(amount => amount == "-120.5", "金額是數字，不跳脫");
 
         using var workbook = new XLWorkbook(new MemoryStream(xlsx));
         var sheet = workbook.Worksheet("交易");
         for (var row = 2; row <= notes.Length + 1; row++)
         {
-            foreach (var column in new[] { "D", "L" })
+            foreach (var column in new[] { "D", "M" })
             {
                 var cell = sheet.Cell($"{column}{row}");
                 cell.HasFormula.Should().BeFalse();
@@ -159,7 +162,7 @@ public class TransactionExportTests(PostgresFixture postgres)
             }
 
             // XML 讀取時把 CR 正規化成 LF（XML 1.0 §2.11），這是格式本身的行為；除此之外內容原樣保留，不加 '。
-            sheet.Cell($"L{row}").GetString().Should().Be(notes[row - 2].Replace('\r', '\n'), "xlsx 的內容原樣保留，不加 '");
+            sheet.Cell($"M{row}").GetString().Should().Be(notes[row - 2].Replace('\r', '\n'), "xlsx 的內容原樣保留，不加 '");
             sheet.Cell($"I{row}").DataType.Should().Be(XLDataType.Number);
         }
 
@@ -169,13 +172,20 @@ public class TransactionExportTests(PostgresFixture postgres)
     private Task<ApiFactory> CreateFactoryAsync() =>
         ApiFactory.CreateAsync(postgres, Ct, services => services.AddSingleton<TimeProvider>(new FixedTimeProvider(Now)));
 
-    /// <summary>四筆有效交易（收入、入新資金、支出、貸款繳款），加上一筆已刪除的支出；建立順序刻意與日期順序不同。</summary>
+    /// <summary>
+    /// 四筆有效交易（收入、入新資金、支出、貸款繳款），加上一筆已刪除的支出；建立順序刻意與日期順序不同。
+    /// 支出掛「旅遊、工作」兩個標籤：建立順序（＝Guid 順序）是旅遊、工作，設定排序調成工作、旅遊。
+    /// </summary>
     private static async Task<(Book Book, HttpClient Client)> SeedLedgerAsync(ApiFactory factory)
     {
         var book = await factory.SeedBookAsync(Ct);
         var client = await factory.CreateMemberClientAsync();
         var bank = book.FindAccount("國泰世華銀行")!.Id.Value;
         var lunch = book.FindCategory("主食", "午餐")!.Id.Value;
+        var trip = await TagEndpointsTests.AddTagAsync(client, book, "旅遊");
+        var work = await TagEndpointsTests.AddTagAsync(client, book, "工作");
+        (await client.PutAsJsonAsync($"/api/books/{book.Id.Value}/tags/order", new { ids = new[] { work, trip } }, ApiJson.Options, Ct))
+            .StatusCode.Should().Be(HttpStatusCode.NoContent);
 
         await AuditTrailTests.CreateTransactionAsync(client, book, new
         {
@@ -185,7 +195,7 @@ public class TransactionExportTests(PostgresFixture postgres)
         await AuditTrailTests.CreateTransactionAsync(client, book, new
         {
             kind = "Expense", date = "2026-01-20", amount = -120.5m, note = TrickyNote,
-            accountId = book.FindAccount("現金")!.Id.Value, categoryId = lunch,
+            accountId = book.FindAccount("現金")!.Id.Value, categoryId = lunch, tagIds = new[] { trip, work },
         });
         await AuditTrailTests.CreateTransactionAsync(client, book, new
         {

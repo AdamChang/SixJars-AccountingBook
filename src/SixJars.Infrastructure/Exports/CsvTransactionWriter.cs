@@ -36,6 +36,7 @@ internal sealed class CsvTransactionWriter : ITransactionSheetWriter
                 Number(r.Amount),
                 Number(r.LoanPrincipal),
                 Number(r.LoanInterest),
+                Text(r.Tags),
                 Text(r.Note),
             ]);
         }
