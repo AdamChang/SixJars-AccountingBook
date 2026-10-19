@@ -33,6 +33,19 @@
   letter-spacing: 0.04em;
 }
 
+// 帳本選單：目前這本前面打勾。選單在 overlay 裡，但元素宣告在本元件的 template，樣式仍套得到
+.book-item[aria-current='true']::before {
+  content: '✓';
+  margin-right: 8px;
+}
+
+.quota-hint {
+  margin: 0;
+  padding: 0 16px 8px;
+  font-size: 0.75rem;
+  opacity: 0.7;
+}
+
 .nav {
   display: flex;
   gap: 4px;

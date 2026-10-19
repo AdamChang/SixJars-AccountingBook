@@ -4,7 +4,23 @@
 @if (session.me(); as me) {
   <mat-toolbar class="app-bar">
     @if (currentBook.book(); as book) {
-      <span class="book-name">{{ book.name }}</span>
+      <!-- Q23：帳本名稱是選單，切換帳本與「新增帳本…」 -->
+      <button mat-button type="button" class="book-name" [matMenuTriggerFor]="bookMenu">{{ book.name }} ▾</button>
+      <mat-menu #bookMenu="matMenu">
+        @for (item of me.books; track item.id) {
+          <a mat-menu-item class="book-item" [routerLink]="['/books', item.id, 'transactions']"
+             [attr.aria-current]="item.id === book.id ? 'true' : null">{{ item.name }}</a>
+        }
+        @if (me.canCreateBooks) {
+          <mat-divider />
+          <button mat-menu-item type="button" class="create-book" [disabled]="me.remainingBookQuota === 0"
+                  (click)="bookCreation.start()">新增帳本…</button>
+          @if (me.remainingBookQuota === 0) {
+            <!-- 5 與後端 CreateBook.MaxOwnedBooks 相同（spec Q15 的文案）；後端改上限時一起改 -->
+            <p class="quota-hint">已達 5 本上限</p>
+          }
+        }
+      </mat-menu>
       <nav class="nav">
         <a mat-button [routerLink]="['/books', book.id, 'transactions']" queryParamsHandling="preserve"
            routerLinkActive="active" ariaCurrentWhenActive="page" [routerLinkActiveOptions]="activeOptions">記帳</a>

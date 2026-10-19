@@ -6,7 +6,7 @@ import { SessionService } from '../auth/session.service';
 import { ApiError } from '../errors/api-error';
 import { CREATE_FORBIDDEN_MESSAGE } from '../errors/messages';
 import { Notifier } from '../errors/notifier';
-import { CreateBookDialog, NewBookInput } from './create-book-dialog';
+import type { CreateBookDialog, NewBookInput } from './create-book-dialog';
 
 // 建立帳本的流程（spec F1）：首頁的空狀態與工具列選單共用
 @Injectable({ providedIn: 'root' })
@@ -17,8 +17,10 @@ export class BookCreation {
   private readonly router = inject(Router);
   private readonly notifier = inject(Notifier);
 
-  start(): void {
-    const ref = this.dialog.open<CreateBookDialog, void, void>(CreateBookDialog);
+  async start(): Promise<void> {
+    // 對話框與表單模組延遲載入，避免 App／首頁的 initial bundle 超過 angular.json 的 budget（Task 5 的 ng build）
+    const dialogModule = await import('./create-book-dialog');
+    const ref = this.dialog.open<CreateBookDialog, void, void>(dialogModule.CreateBookDialog);
     const dialog = ref.componentInstance;
     // output 在對話框銷毀時自動結束訂閱
     dialog.submitted.subscribe((input: NewBookInput) => {
