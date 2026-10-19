@@ -5,6 +5,7 @@ import { TestBed } from '@angular/core/testing';
 import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { MAT_DATE_LOCALE, provideNativeDateAdapter } from '@angular/material/core';
 import { MatButtonHarness } from '@angular/material/button/testing';
+import { MatSelectHarness } from '@angular/material/select/testing';
 import { MatDialog } from '@angular/material/dialog';
 import { By } from '@angular/platform-browser';
 import { Router, provideRouter } from '@angular/router';
@@ -70,6 +71,7 @@ async function setup(url: string, confirmed = true) {
       await fixture.whenStable();
     },
     button: (label: string) => loader.getHarness(MatButtonHarness.with({ selector: `[aria-label="${label}"]` })),
+    tagFilter: () => loader.getHarness(MatSelectHarness.with({ selector: '.tag-filter' })),
     stable: () => fixture.whenStable(),
   };
 }
@@ -102,6 +104,58 @@ describe('TransactionsPage', () => {
     await page.stable();
     expect(TestBed.inject(Router).url).toBe('/books/book-1/transactions?month=202602');
     await page.flushList(202602, []);
+  });
+
+  describe('tag filter', () => {
+    const tagListUrl = (month: number, tagId: string) => `${listUrl(month)}&tagId=${tagId}`;
+
+    it('loads_with_tag_query_and_shows_it_selected', async () => {
+      const page = await setup('/books/book-1/transactions?month=202603&tag=tag-trip');
+      page.httpTesting.expectOne(tagListUrl(202603, 'tag-trip')).flush([]);
+      await page.stable();
+      expect(await (await page.tagFilter()).getValueText()).toBe('旅遊');
+      expect(page.el.textContent).toContain('這個月沒有掛著「旅遊」的交易');
+    });
+
+    it('options_include_archived_tags_in_sort_order', async () => {
+      const page = await setup('/books/book-1/transactions?month=202603');
+      await page.flushList(202603, []);
+      const select = await page.tagFilter();
+      await select.open();
+      const texts = await Promise.all((await select.getOptions()).map(option => option.getText()));
+      expect(texts).toEqual(['全部標籤', '工作', '旅遊', '舊專案（已封存）']);
+      await select.close();
+    });
+
+    it('selecting_tag_sets_query_and_month_change_keeps_it', async () => {
+      const page = await setup('/books/book-1/transactions?month=202603');
+      await page.flushList(202603, []);
+      const select = await page.tagFilter();
+      await select.open();
+      await select.clickOptions({ text: '工作' });
+      await page.stable();
+      expect(TestBed.inject(Router).url).toBe('/books/book-1/transactions?month=202603&tag=tag-work');
+      page.httpTesting.expectOne(tagListUrl(202603, 'tag-work')).flush([]);
+      await page.stable();
+
+      await (await page.button('上個月')).click();
+      await page.stable();
+      expect(TestBed.inject(Router).url).toBe('/books/book-1/transactions?month=202602&tag=tag-work');
+      page.httpTesting.expectOne(tagListUrl(202602, 'tag-work')).flush([]);
+      await page.stable();
+    });
+
+    it('choosing_all_tags_removes_query', async () => {
+      const page = await setup('/books/book-1/transactions?month=202603&tag=tag-trip');
+      page.httpTesting.expectOne(tagListUrl(202603, 'tag-trip')).flush([]);
+      await page.stable();
+      const select = await page.tagFilter();
+      await select.open();
+      await select.clickOptions({ text: '全部標籤' });
+      await page.stable();
+      expect(TestBed.inject(Router).url).toBe('/books/book-1/transactions?month=202603');
+      await page.flushList(202603, []);
+    });
   });
 
   it('reloads_after_save', async () => {

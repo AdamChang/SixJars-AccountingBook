@@ -1,4 +1,14 @@
-<app-month-nav [month]="month()" (monthChange)="changeMonth($event)" />
+<div class="toolbar">
+  <app-month-nav [month]="month()" (monthChange)="changeMonth($event)" />
+  <mat-form-field class="tag-field" subscriptSizing="dynamic">
+    <mat-select class="tag-filter" aria-label="標籤篩選" [value]="tagId()" (valueChange)="changeTag($event)">
+      <mat-option [value]="null">全部標籤</mat-option>
+      @for (tag of tagOptions(); track tag.id) {
+        <mat-option [value]="tag.id">{{ tag.name }}{{ tag.archivedAt ? '（已封存）' : '' }}</mat-option>
+      }
+    </mat-select>
+  </mat-form-field>
+</div>
 @for (book of currentBookAsList(); track book.id) {
   <section #formTop class="form-section ledger-sheet">
     <app-transaction-form
@@ -12,6 +22,7 @@
     [transactions]="transactions()"
     [book]="book"
     [editingId]="editingId()"
+    [filterTag]="filterTag()"
     (edit)="edit($event)"
     (remove)="remove($event)" />
 }

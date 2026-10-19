@@ -1,5 +1,5 @@
 @if (rows().length === 0) {
-  <p class="empty">這個月還沒有交易</p>
+  <p class="empty">{{ emptyMessage() }}</p>
 } @else {
   <table mat-table [dataSource]="rows()">
     <ng-container matColumnDef="date">
@@ -24,7 +24,12 @@
     </ng-container>
     <ng-container matColumnDef="note">
       <th mat-header-cell *matHeaderCellDef>備註</th>
-      <td mat-cell *matCellDef="let row">{{ row.note }}</td>
+      <td mat-cell *matCellDef="let row">
+        @for (tag of row.tags; track tag.id) {
+          <app-tag-chip [tag]="tag" />
+        }
+        {{ row.note }}
+      </td>
     </ng-container>
     <ng-container matColumnDef="actions">
       <th mat-header-cell *matHeaderCellDef></th>

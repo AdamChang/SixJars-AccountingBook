@@ -2,7 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { MatButtonHarness } from '@angular/material/button/testing';
 import { MatTableHarness } from '@angular/material/table/testing';
-import { BookDto, TransactionDto, TransactionInput } from '../../core/api/dto';
+import { BookDto, TagDto, TransactionDto, TransactionInput } from '../../core/api/dto';
 import { BOOK, transactionDtoFrom } from './testing/book-fixture';
 import { TransactionList } from './transaction-list';
 
@@ -18,8 +18,11 @@ function tx(overrides: Partial<TransactionInput> & { id?: string }): Transaction
 }
 
 describe('TransactionList', () => {
-  async function setup(transactions: TransactionDto[], book: BookDto = BOOK, editingId: string | null = null) {
+  async function setup(
+    transactions: TransactionDto[], book: BookDto = BOOK, editingId: string | null = null, filterTag: TagDto | null = null,
+  ) {
     const fixture: ComponentFixture<TransactionList> = TestBed.createComponent(TransactionList);
+    fixture.componentRef.setInput('filterTag', filterTag);
     fixture.componentRef.setInput('transactions', transactions);
     fixture.componentRef.setInput('book', book);
     fixture.componentRef.setInput('editingId', editingId);
@@ -33,6 +36,19 @@ describe('TransactionList', () => {
     const cellTexts = async () => (await loader.getHarness(MatTableHarness)).getCellTextByIndex();
     return { loader, edit, remove, rows, cellTexts, element: fixture.nativeElement as HTMLElement };
   }
+
+  it('shows_tag_chips_in_sort_order_before_note_including_archived', async () => {
+    const { element } = await setup([tx({ note: '機票', tagIds: ['tag-old', 'tag-trip', 'tag-work'] })]);
+    const cell = element.querySelector('td.mat-column-note')!;
+    expect([...cell.querySelectorAll('.tag-chip')].map(chip => chip.textContent!.trim())).toEqual(['工作', '旅遊', '舊專案']);
+    expect(cell.textContent!.replace(/\s+/g, '')).toBe('工作旅遊舊專案機票');
+  });
+
+  it('empty_message_names_filtered_tag', async () => {
+    expect((await setup([])).element.textContent).toContain('這個月還沒有交易');
+    const filtered = await setup([], BOOK, null, BOOK.tags[0]);
+    expect(filtered.element.textContent).toContain('這個月沒有掛著「旅遊」的交易');
+  });
 
   it('shows_transfer_as_from_to', async () => {
     const { cellTexts } = await setup([
