@@ -2,7 +2,8 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import {
-  AddAccountBody, AddCategoryBody, AddPlanningFundBody, BookDeletionPreviewDto, BookDto, ExpenseNature, ReorderBody, SettingPath,
+  AddAccountBody, AddCategoryBody, AddPlanningFundBody, AddTagBody, BookDeletionPreviewDto, BookDto, ExpenseNature, ReorderBody,
+  SettingPath,
 } from './dto';
 
 @Injectable({ providedIn: 'root' })
@@ -25,6 +26,7 @@ export class BookApi {
   add(bookId: string, path: 'accounts', body: AddAccountBody): Observable<{ id: string }>;
   add(bookId: string, path: 'planning-funds', body: AddPlanningFundBody): Observable<{ id: string }>;
   add(bookId: string, path: 'categories', body: AddCategoryBody): Observable<{ id: string }>;
+  add(bookId: string, path: 'tags', body: AddTagBody): Observable<{ id: string }>;
   add(bookId: string, path: SettingPath, body: object): Observable<{ id: string }> {
     return this.http.post<{ id: string }>(`/api/books/${bookId}/${path}`, body);
   }
@@ -40,6 +42,10 @@ export class BookApi {
   // nature 為 null 時不修改性質；只有支出主分類可以修改
   updateCategory(bookId: string, id: string, body: { name: string; nature: ExpenseNature | null }): Observable<void> {
     return this.http.put<void>(`/api/books/${bookId}/categories/${id}`, body);
+  }
+
+  updateTag(bookId: string, id: string, body: AddTagBody): Observable<void> {
+    return this.http.put<void>(`/api/books/${bookId}/tags/${id}`, body);
   }
 
   archive(bookId: string, path: SettingPath, id: string): Observable<void> {

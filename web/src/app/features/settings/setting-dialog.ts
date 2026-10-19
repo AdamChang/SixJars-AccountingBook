@@ -26,7 +26,7 @@ export interface SettingDialogResult {
   name: string; type?: AccountType; openingBalance?: number; countsAsAvailableCash?: boolean; nature: ExpenseNature | null;
 }
 
-const TITLES: Record<SettingPath, string> = { accounts: '帳戶', 'planning-funds': '財務規劃帳戶', categories: '分類' };
+const TITLES: Record<SettingPath, string> = { accounts: '帳戶', 'planning-funds': '財務規劃帳戶', categories: '分類', tags: '標籤' };
 
 // 三種設定共用的新增／修改對話框；修改時不提供期初餘額（後端沒有對應的 API）
 @Component({

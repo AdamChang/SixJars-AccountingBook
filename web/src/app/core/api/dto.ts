@@ -6,6 +6,9 @@ export type TransactionKind =
 export type AccountType = 'Cash' | 'Bank' | 'CreditCard' | 'EWallet' | 'Loan';
 export type CategoryKind = 'Income' | 'Expense';
 export type ExpenseNature = 'Floating' | 'Fixed' | 'Loan' | 'Special';
+// 標籤的固定色盤，順序與後端 enum TagColor 相同（tags spec G22）
+export type TagColor =
+  | 'Red' | 'Orange' | 'Amber' | 'Yellow' | 'Lime' | 'Green' | 'Teal' | 'Cyan' | 'Blue' | 'Indigo' | 'Purple' | 'Pink';
 
 export interface BookSummaryDto { id: string; name: string }
 export interface MeDto { subject: string; email: string | null; books: BookSummaryDto[] }
@@ -20,17 +23,19 @@ export interface CategoryDto {
   id: string; name: string; kind: CategoryKind; nature: ExpenseNature | null; parentId: string | null;
   sortOrder: number; archivedAt: string | null;
 }
+export interface TagDto { id: string; name: string; color: TagColor; sortOrder: number; archivedAt: string | null }
 
 // 設定的路徑片段，與後端 BooksEndpoints 的 MapSettingActions 一致
-export type SettingPath = 'accounts' | 'planning-funds' | 'categories';
+export type SettingPath = 'accounts' | 'planning-funds' | 'categories' | 'tags';
 // 一次送出整組的新順序（含已封存）；kind、parentId 只用於分類
 export interface ReorderBody { kind?: CategoryKind | null; parentId?: string | null; ids: string[] }
 export interface AddAccountBody { name: string; type: AccountType; openingBalance: number; countsAsAvailableCash: boolean }
 export interface AddPlanningFundBody { name: string; openingBalance: number }
 export interface AddCategoryBody { name: string; kind: CategoryKind; nature: ExpenseNature | null; parentId: string | null }
+export interface AddTagBody { name: string; color: TagColor }
 export interface BookDto {
   id: string; name: string; openingDate: string; lockDate: string | null;
-  accounts: AccountDto[]; planningFunds: PlanningFundDto[]; categories: CategoryDto[];
+  accounts: AccountDto[]; planningFunds: PlanningFundDto[]; categories: CategoryDto[]; tags: TagDto[];
 }
 
 // 刪除帳本前的統計；transactions、plannedExpenses 只算未刪除的（後端 spec D3）
@@ -46,11 +51,13 @@ export interface TransactionDto {
   accountId: string; counterAccountId: string | null; categoryId: string | null;
   planningFundId: string | null; loanPrincipal: number | null; loanInterest: number | null;
   note: string | null; postings: PostingDto[]; version: number;
+  tagIds: string[];   // 依 Guid 排序；顯示時依標籤的 sortOrder（後端 D5）
 }
 export interface TransactionInput {
   kind: TransactionKind; date: string; budgetMonth: number | null; amount: number;
   accountId: string; counterAccountId: string | null; categoryId: string | null;
   planningFundId: string | null; loanPrincipal: number | null; note: string | null;
+  tagIds: string[];   // 一律送出：後端把沒帶視為清空（後端 D4）
 }
 
 export interface BalanceDto { id: string; name: string; balance: number }

@@ -24,7 +24,7 @@ import { TransactionsPage } from './transactions.page';
 const TX: TransactionDto = transactionDtoFrom(
   {
     kind: 'Expense', date: '2026-03-15', budgetMonth: null, amount: -100, accountId: 'acc-cash',
-    counterAccountId: null, categoryId: null, planningFundId: null, loanPrincipal: null, note: null,
+    counterAccountId: null, categoryId: null, planningFundId: null, loanPrincipal: null, note: null, tagIds: [],
   },
   { id: 'tx-1', version: 3 },
 );

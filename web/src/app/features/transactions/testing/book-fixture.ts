@@ -21,6 +21,7 @@ export const BOOK: BookDto = {
     { id: 'cat-salary', name: '薪資', kind: 'Income', nature: null, parentId: null, sortOrder: 0, archivedAt: null },
     { id: 'cat-bonus', name: '獎金', kind: 'Income', nature: null, parentId: 'cat-salary', sortOrder: 0, archivedAt: null },
   ],
+  tags: [],
 };
 
 // 模擬後端 201 回應：把送出的 input 原樣轉成 TransactionDto
@@ -40,6 +41,7 @@ export function transactionDtoFrom(input: TransactionInput, overrides: Partial<T
     note: input.note,
     postings: [],
     version: 1,
+    tagIds: input.tagIds,
     ...overrides,
   };
 }

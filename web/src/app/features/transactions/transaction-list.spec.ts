@@ -11,7 +11,7 @@ function tx(overrides: Partial<TransactionInput> & { id?: string }): Transaction
   return transactionDtoFrom(
     {
       kind: 'Expense', date: '2026-03-15', budgetMonth: null, amount: -100, accountId: 'acc-cash',
-      counterAccountId: null, categoryId: null, planningFundId: null, loanPrincipal: null, note: null, ...input,
+      counterAccountId: null, categoryId: null, planningFundId: null, loanPrincipal: null, note: null, tagIds: [], ...input,
     },
     { id: id ?? 'tx-1' },
   );

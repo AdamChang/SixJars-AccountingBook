@@ -19,7 +19,7 @@ describe('BookApi', () => {
   it('get_gets_book_by_id', () => {
     const book: BookDto = {
       id: 'b1', name: '帳本', openingDate: '2026-01-01', lockDate: null,
-      accounts: [], planningFunds: [], categories: [],
+      accounts: [], planningFunds: [], categories: [], tags: [],
     };
     let result: BookDto | undefined;
     api.get('b1').subscribe((v) => (result = v));
@@ -85,6 +85,30 @@ describe('BookApi', () => {
     expect(request.request.body).toEqual({ kind: 'Expense', parentId: null, ids: ['c2', 'c1'] });
     request.flush(null, { status: 204, statusText: '' });
     await done;
+  });
+
+  it('tags_use_tags_path_and_update_puts_name_and_color', async () => {
+    const add = firstValueFrom(api.add('b1', 'tags', { name: '旅遊', color: 'Teal' }));
+    const addRequest = httpTesting.expectOne({ method: 'POST', url: '/api/books/b1/tags' });
+    expect(addRequest.request.body).toEqual({ name: '旅遊', color: 'Teal' });
+    addRequest.flush({ id: 't9' }, { status: 201, statusText: '' });
+    expect(await add).toEqual({ id: 't9' });
+    const update = firstValueFrom(api.updateTag('b1', 't9', { name: '日本旅遊', color: 'Pink' }));
+    const updateRequest = httpTesting.expectOne({ method: 'PUT', url: '/api/books/b1/tags/t9' });
+    expect(updateRequest.request.body).toEqual({ name: '日本旅遊', color: 'Pink' });
+    updateRequest.flush(null, { status: 204, statusText: '' });
+    await update;
+    const archive = firstValueFrom(api.archive('b1', 'tags', 't9'));
+    httpTesting.expectOne({ method: 'POST', url: '/api/books/b1/tags/t9/archive' }).flush(null, { status: 204, statusText: '' });
+    await archive;
+    const remove = firstValueFrom(api.remove('b1', 'tags', 't9'));
+    httpTesting.expectOne({ method: 'DELETE', url: '/api/books/b1/tags/t9' }).flush(null, { status: 204, statusText: '' });
+    await remove;
+    const reorder = firstValueFrom(api.reorder('b1', 'tags', { ids: ['t2', 't1'] }));
+    const reorderRequest = httpTesting.expectOne({ method: 'PUT', url: '/api/books/b1/tags/order' });
+    expect(reorderRequest.request.body).toEqual({ ids: ['t2', 't1'] });
+    reorderRequest.flush(null, { status: 204, statusText: '' });
+    await reorder;
   });
 
   it('add_and_lock_date', async () => {

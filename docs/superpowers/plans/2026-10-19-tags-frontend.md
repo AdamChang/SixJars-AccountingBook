@@ -24,6 +24,7 @@
 ### 基準線
 
 - 撰寫計畫的環境沒有 `node_modules`，**沒有實測**。開工前跑一次 `ng test` 與 Playwright，把數字記在這裡，之後只增不減。
+- **實測（2026-10-19，本地端，HEAD `3a8b59a`）**：`ng test` 39 個檔案、313 個測試全過；`ng build` 成功、無警告；Playwright 10 passed（需先 `npx playwright install chromium`）。
 
 ### 絕對不要碰的檔案
 

@@ -144,7 +144,7 @@ describe('fromTransaction', () => {
   const dto = (over: Partial<TransactionDto>): TransactionDto => ({
     id: 't1', kind: 'Expense', date: '2026-01-05', budgetMonth: 202601, amount: -100, accountId: 'acc',
     counterAccountId: null, categoryId: 'cat', planningFundId: null, loanPrincipal: null, loanInterest: null,
-    note: null, postings: [], version: 1, ...over,
+    note: null, postings: [], version: 1, tagIds: [], ...over,
   });
 
   it('支出 -100 → 金額 100、非退款、月份未覆寫，且可來回', () => {

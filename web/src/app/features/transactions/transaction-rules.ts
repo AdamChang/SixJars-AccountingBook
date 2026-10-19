@@ -118,6 +118,7 @@ export function toTransactionInput(value: TransactionFormValue): TransactionInpu
     planningFundId: rule.planningFund ? value.planningFundId : null,
     loanPrincipal: rule.loanPrincipal ? value.loanPrincipal : null,
     note: value.note.trim() === '' ? null : value.note,
+    tagIds: [],
   };
 }
 

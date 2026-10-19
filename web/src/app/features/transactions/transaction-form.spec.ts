@@ -29,7 +29,7 @@ const POST = { method: 'POST', url: `/api/books/${BOOK.id}/transactions` };
 const EDITING: TransactionDto = transactionDtoFrom(
   {
     kind: 'Expense', date: '2026-03-15', budgetMonth: null, amount: -100, accountId: 'acc-bank',
-    counterAccountId: null, categoryId: 'cat-lunch', planningFundId: null, loanPrincipal: null, note: '午餐',
+    counterAccountId: null, categoryId: 'cat-lunch', planningFundId: null, loanPrincipal: null, note: '午餐', tagIds: [],
   },
   { id: 'tx-7', version: 7 },
 );
@@ -406,7 +406,7 @@ describe('TransactionForm', () => {
         version: 7,
         input: {
           kind: 'Expense', date: '2026-03-15', budgetMonth: null, amount: -120, accountId: 'acc-bank',
-          counterAccountId: null, categoryId: 'cat-lunch', planningFundId: null, loanPrincipal: null, note: '午餐',
+          counterAccountId: null, categoryId: 'cat-lunch', planningFundId: null, loanPrincipal: null, note: '午餐', tagIds: [],
         },
       });
       request.flush({ ...EDITING, amount: -120, version: 8 });
