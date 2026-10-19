@@ -134,6 +134,22 @@ public class CreateBookEndpointsTests(PostgresFixture postgres)
     }
 
     [Fact]
+    public async Task Name_length_is_checked_after_trimming()
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        await factory.AddCreatorAsync(Creator, Ct);
+        var client = await factory.CreateMemberClientAsync(Creator);
+
+        // Book 存的是 trim 後的名稱，長度上限也要以 trim 後為準：前後的空白不算字數。
+        var fits = await CreateAsync(client, $"  {new string('帳', 100)}  ", "2026-10-19");
+        var tooLong = await CreateAsync(client, $"  {new string('本', 101)}  ", "2026-10-19");
+
+        fits.StatusCode.Should().Be(HttpStatusCode.Created);
+        tooLong.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await tooLong.Content.ReadFromJsonAsync<JsonElement>(Ct)).GetProperty("errors").TryGetProperty("name", out _).Should().BeTrue();
+    }
+
+    [Fact]
     public async Task Missing_opening_date_is_400()
     {
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
