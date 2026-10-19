@@ -2,19 +2,23 @@ import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
 import { MeDto } from '../../core/api/dto';
+import { BookCreation } from '../../core/book/book-creation';
 import { SessionService } from '../../core/auth/session.service';
-import { NO_BOOKS_MESSAGE } from '../../core/errors/messages';
+import { NO_BOOKS_CREATOR_MESSAGE, NO_BOOKS_MESSAGE } from '../../core/errors/messages';
 import { HomePage } from './home.page';
 
-function setup(books: MeDto['books']) {
-  const me = signal<MeDto | undefined>({ subject: 's', email: 'a@b.c', books, canCreateBooks: false, remainingBookQuota: 0 });
+function setup(books: MeDto['books'], canCreateBooks = false) {
+  const me = signal<MeDto | undefined>({
+    subject: 's', email: 'a@b.c', books, canCreateBooks, remainingBookQuota: canCreateBooks ? 5 : 0,
+  });
+  const start = vi.fn();
   TestBed.configureTestingModule({
-    providers: [provideRouter([]), { provide: SessionService, useValue: { me } }],
+    providers: [provideRouter([]), { provide: SessionService, useValue: { me } }, { provide: BookCreation, useValue: { start } }],
   });
   const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
   const fixture = TestBed.createComponent(HomePage);
   fixture.detectChanges();
-  return { fixture, navigate, el: fixture.nativeElement as HTMLElement };
+  return { fixture, navigate, start, me, el: fixture.nativeElement as HTMLElement };
 }
 
 describe('HomePage', () => {
@@ -37,5 +41,20 @@ describe('HomePage', () => {
     expect(navigate).not.toHaveBeenCalled();
     expect(el.textContent).toContain(NO_BOOKS_MESSAGE);
     expect(NO_BOOKS_MESSAGE).toBe('沒有可存取的帳本。請管理者用 CLI 匯入帳本，或把你加為帳本成員。');
+  });
+
+  // 建立者沒有帳本也能登入（ADR 0011）：首頁直接給建立的入口（spec Q15）
+  it('home_offers_book_creation_to_creators_without_books', async () => {
+    const { el, start, me, fixture } = setup([], true);
+    expect(el.textContent).toContain(NO_BOOKS_CREATOR_MESSAGE);
+    expect(el.textContent).not.toContain(NO_BOOKS_MESSAGE);
+    el.querySelector<HTMLButtonElement>('button.create-book')!.click();
+    expect(start).toHaveBeenCalledTimes(1);
+
+    // 建立時收到 403 會重新載入 me：被移出名單後回到請管理者協助的說明
+    me.update(value => ({ ...value!, canCreateBooks: false, remainingBookQuota: 0 }));
+    await fixture.whenStable();
+    expect(el.querySelector('button.create-book')).toBeNull();
+    expect(el.textContent).toContain(NO_BOOKS_MESSAGE);
   });
 });
