@@ -121,6 +121,8 @@ describe('TransactionsPage', () => {
       const page = await setup('/books/book-1/transactions?month=202603');
       await page.flushList(202603, []);
       const select = await page.tagFilter();
+      // 沒有篩選時也要看得出是「全部標籤」（mat-select 把 null 當成未選取，手動驗證時發現是空白）
+      expect(await select.getValueText()).toBe('全部標籤');
       await select.open();
       const texts = await Promise.all((await select.getOptions()).map(option => option.getText()));
       expect(texts).toEqual(['全部標籤', '工作', '旅遊', '舊專案（已封存）']);
