@@ -35,6 +35,7 @@ export function classifyError(error: HttpErrorResponse): ApiError {
       return { kind: 'unauthorized' };
     case 403:
       // 已登入但沒有權限：目前只有建立帳本（不在建立者名單，後端 spec Q18）。帳本範圍的拒絕仍是 404
+      // 注意：interceptor 不會通知 forbidden；新增 403 的來源時，呼叫端必須自己處理（顯示訊息）
       return { kind: 'forbidden' };
     case 404:
       return { kind: 'notFound' };
