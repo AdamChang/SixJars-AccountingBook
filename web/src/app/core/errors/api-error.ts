@@ -8,6 +8,7 @@ export type ApiError =
   | { kind: 'notFound' }
   | { kind: 'antiforgery' }
   | { kind: 'unauthorized' }
+  | { kind: 'forbidden' }
   | { kind: 'unavailable' };
 
 // 對應後端 AntiforgeryFilter.InvalidTokenTitle
@@ -32,6 +33,9 @@ export function classifyError(error: HttpErrorResponse): ApiError {
       return { kind: 'unavailable' };
     case 401:
       return { kind: 'unauthorized' };
+    case 403:
+      // 已登入但沒有權限：目前只有建立帳本（不在建立者名單，後端 spec Q18）。帳本範圍的拒絕仍是 404
+      return { kind: 'forbidden' };
     case 404:
       return { kind: 'notFound' };
     case 409:

@@ -14,6 +14,7 @@ describe('classifyError', () => {
     ],
     ['400 antiforgery title', res(400, { title: '缺少或無效的 XSRF token' }), { kind: 'antiforgery' }],
     ['401', res(401), { kind: 'unauthorized' }],
+    ['403 -> forbidden', res(403), { kind: 'forbidden' }],
     ['404', res(404), { kind: 'notFound' }],
     ['409', res(409), { kind: 'conflict' }],
     [
