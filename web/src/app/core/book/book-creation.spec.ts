@@ -17,7 +17,7 @@ import { NewBookInput } from './create-book-dialog';
 const INPUT: NewBookInput = { name: '家庭帳本', openingDate: '2026-10-19' };
 const ME: MeDto = { subject: 's', email: 'a@b.c', books: [], canCreateBooks: true, remainingBookQuota: 5 };
 
-function setup() {
+async function setup() {
   const dialog = { submitted: new Subject<NewBookInput>(), busy: signal(false), showError: vi.fn() };
   const close = vi.fn();
   const notifier = { show: vi.fn() };
@@ -34,7 +34,7 @@ function setup() {
   });
   const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
   const httpTesting = TestBed.inject(HttpTestingController);
-  TestBed.inject(BookCreation).start();
+  await TestBed.inject(BookCreation).start();
   // 使用者在對話框按「建立」，回傳送出的 POST
   const submit = () => {
     dialog.submitted.next(INPUT);
@@ -47,7 +47,7 @@ describe('BookCreation', () => {
   afterEach(() => TestBed.inject(HttpTestingController).verify());
 
   it('success_reloads_session_then_opens_accounts_tab_of_new_book', async () => {
-    const { submit, dialog, close, notifier, reload, navigate } = setup();
+    const { submit, dialog, close, notifier, reload, navigate } = await setup();
 
     const request = submit();
     expect(request.request.body).toEqual(INPUT);
@@ -61,8 +61,8 @@ describe('BookCreation', () => {
     expect(reload.mock.invocationCallOrder[0]).toBeLessThan(navigate.mock.invocationCallOrder[0]);
   });
 
-  it('domain_error_keeps_dialog_open_with_backend_message', () => {
-    const { submit, dialog, close, navigate } = setup();
+  it('domain_error_keeps_dialog_open_with_backend_message', async () => {
+    const { submit, dialog, close, navigate } = await setup();
 
     submit().flush({ code: 'duplicate-name', detail: '你已經有名稱為「家庭帳本」的帳本。' }, { status: 422, statusText: '' });
 
@@ -72,8 +72,8 @@ describe('BookCreation', () => {
     expect(navigate).not.toHaveBeenCalled();
   });
 
-  it('forbidden_closes_dialog_and_reloads_session', () => {
-    const { submit, close, notifier, reload } = setup();
+  it('forbidden_closes_dialog_and_reloads_session', async () => {
+    const { submit, close, notifier, reload } = await setup();
 
     submit().flush(null, { status: 403, statusText: '' });
 
@@ -84,8 +84,8 @@ describe('BookCreation', () => {
     expect(reload).toHaveBeenCalled();
   });
 
-  it('unavailable_keeps_dialog_open_for_retry', () => {
-    const { submit, dialog, close, notifier } = setup();
+  it('unavailable_keeps_dialog_open_for_retry', async () => {
+    const { submit, dialog, close, notifier } = await setup();
 
     submit().flush(null, { status: 503, statusText: '' });
 
