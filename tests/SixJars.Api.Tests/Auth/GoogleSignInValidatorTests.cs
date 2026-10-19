@@ -192,6 +192,65 @@ public class GoogleSignInValidatorTests(PostgresFixture postgres)
         return await scope.ServiceProvider.GetRequiredService<GoogleSignInValidator>().ValidateAsync(principal, Ct);
     }
 
+    [Fact]
+    public async Task Creator_without_books_signs_in_and_binds_subject()
+    {
+        await using var factory = await CreateFactoryAsync();
+        var creator = await AddCreatorAsync(factory, Email);
+
+        var accepted = await ValidateAsync(factory, Principal(Subject, Email, "true"));
+
+        accepted.Should().BeTrue("ADR 0011：建立者沒有帳本也能登入");
+        (await ReloadCreatorAsync(factory, creator.Id)).GoogleSubject.Should().Be(Subject);
+        (await EntriesAsync(factory)).Should().BeEmpty("名單不屬於任何帳本，綁定不留稽核記錄（Q24）");
+    }
+
+    [Fact]
+    public async Task Bound_creator_signs_in_even_if_email_changed()
+    {
+        await using var factory = await CreateFactoryAsync();
+        await AddCreatorAsync(factory, Email, Subject);
+
+        var accepted = await ValidateAsync(factory, Principal(Subject, "renamed@example.com", "true"));
+
+        accepted.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Creator_bound_to_another_subject_is_not_rebound()
+    {
+        await using var factory = await CreateFactoryAsync();
+        var creator = await AddCreatorAsync(factory, Email, "another-sub");
+
+        var accepted = await ValidateAsync(factory, Principal(Subject, Email, "true"));
+
+        // Q25：與成員相同，換了 Google 帳號不能沿用 email；不擲例外，callback 才不會變成 500。
+        accepted.Should().BeFalse();
+        (await ReloadCreatorAsync(factory, creator.Id)).GoogleSubject.Should().Be("another-sub");
+    }
+
+    private static async Task<BookCreator> AddCreatorAsync(ApiFactory factory, string email, string? subject = null)
+    {
+        var creator = BookCreator.Create(email, Now.AddDays(-1));
+        if (subject is not null)
+        {
+            creator.BindSubject(subject);
+        }
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<SixJarsDbContext>();
+        db.BookCreators.Add(creator);
+        await db.SaveChangesAsync(Ct);
+        return creator;
+    }
+
+    private static async Task<BookCreator> ReloadCreatorAsync(ApiFactory factory, Guid creatorId)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        return await scope.ServiceProvider.GetRequiredService<SixJarsDbContext>().BookCreators.AsNoTracking()
+            .SingleAsync(c => c.Id == creatorId, Ct);
+    }
+
     private static async Task<BookMember> AddMemberAsync(ApiFactory factory, BookId bookId, string email, string? subject = null)
     {
         var member = BookMember.Create(bookId, email, BookRole.Owner, Now.AddDays(-1));
