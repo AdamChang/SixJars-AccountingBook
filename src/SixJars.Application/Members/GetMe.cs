@@ -1,4 +1,5 @@
 using MediatR;
+using Microsoft.EntityFrameworkCore;
 using SixJars.Application.Books;
 using SixJars.Application.Common;
 
@@ -9,6 +10,12 @@ public sealed record GetMe : IRequest<MeDto>;
 
 internal sealed class GetMeHandler(ISixJarsDbContext db, ICurrentUser user) : IRequestHandler<GetMe, MeDto>
 {
-    public async Task<MeDto> Handle(GetMe request, CancellationToken cancellationToken) =>
-        new(user.Subject, user.Email, await db.ListMemberBooksAsync(user.Subject, cancellationToken));
+    public async Task<MeDto> Handle(GetMe request, CancellationToken cancellationToken)
+    {
+        // 所屬的帳本就是身為擁有者的帳本（OwnedBookIds），直接拿來算剩餘名額，不再查一次。
+        var books = await db.ListMemberBooksAsync(user.Subject, cancellationToken);
+        var canCreate = await db.BookCreators.AnyAsync(c => c.GoogleSubject == user.Subject, cancellationToken);
+        var remaining = canCreate ? Math.Max(0, CreateBook.MaxOwnedBooks - books.Count) : 0;
+        return new MeDto(user.Subject, user.Email, books, canCreate, remaining);
+    }
 }

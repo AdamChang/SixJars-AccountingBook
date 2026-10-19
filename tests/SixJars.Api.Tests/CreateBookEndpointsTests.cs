@@ -5,6 +5,7 @@ using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using SixJars.Application.Auditing;
+using SixJars.Application.Members;
 using SixJars.Domain.Books;
 using SixJars.Domain.Common;
 using SixJars.Domain.Members;
@@ -151,6 +152,46 @@ public class CreateBookEndpointsTests(PostgresFixture postgres)
         responses.Select(r => r.StatusCode).Order()
             .Should().Equal(HttpStatusCode.Created, HttpStatusCode.UnprocessableEntity);
         (await BookCountAsync(factory)).Should().Be(5);
+    }
+
+    [Fact]
+    public async Task Me_reports_remaining_quota_for_a_creator()
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        await factory.AddCreatorAsync(Creator, Ct);
+        await factory.SeedBookAsync(Ct, ownerSubject: Creator);
+        await factory.SeedBookAsync(Ct, ownerSubject: Creator);
+
+        var me = await (await factory.CreateMemberClientAsync(Creator)).GetFromJsonAsync<MeDto>("/api/me", ApiJson.Options, Ct);
+
+        (me!.CanCreateBooks, me.RemainingBookQuota).Should().Be((true, 3));
+    }
+
+    [Fact]
+    public async Task Me_reports_no_quota_for_a_member_who_is_not_a_creator()
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        await factory.SeedBookAsync(Ct);
+
+        var me = await (await factory.CreateMemberClientAsync()).GetFromJsonAsync<MeDto>("/api/me", ApiJson.Options, Ct);
+
+        (me!.CanCreateBooks, me.RemainingBookQuota).Should().Be((false, 0));
+    }
+
+    [Fact]
+    public async Task Me_quota_is_never_negative()
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        await factory.AddCreatorAsync(Creator, Ct);
+        // Q8：被 add-member 加成擁有者而超過上限時不擋，只是不能再自己建立。
+        for (var i = 0; i < 6; i++)
+        {
+            await factory.SeedBookAsync(Ct, ownerSubject: Creator);
+        }
+
+        var me = await (await factory.CreateMemberClientAsync(Creator)).GetFromJsonAsync<MeDto>("/api/me", ApiJson.Options, Ct);
+
+        (me!.CanCreateBooks, me.RemainingBookQuota).Should().Be((true, 0));
     }
 
     private static Task<HttpResponseMessage> CreateAsync(HttpClient client, string name, string openingDate) =>
