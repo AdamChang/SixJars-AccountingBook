@@ -14,20 +14,20 @@
   --font-serif: 'Noto Serif TC', 'Songti TC', 'PMingLiU', serif;
   --font-sans: 'Noto Sans TC', 'Microsoft JhengHei', 'PingFang TC', sans-serif;
 
-  // 標籤色盤（tags frontend spec F5）：淺底深字。WCAG 對比（fg 對 bg）皆 ≥ 6.3:1，fg 對白底皆 ≥ 6.8:1（設定頁的色點）。
-  // 只有淺色主題；之後加深色主題時再補一組。
-  --tag-red-bg: #fee2e2; --tag-red-fg: #991b1b;          // 6.80
-  --tag-orange-bg: #ffedd5; --tag-orange-fg: #9a3412;    // 6.38
-  --tag-amber-bg: #fef3c7; --tag-amber-fg: #92400e;      // 6.37
-  --tag-yellow-bg: #fef9c3; --tag-yellow-fg: #854d0e;    // 6.38
-  --tag-lime-bg: #ecfccb; --tag-lime-fg: #3f6212;        // 6.52
-  --tag-green-bg: #dcfce7; --tag-green-fg: #166534;      // 6.49
-  --tag-teal-bg: #ccfbf1; --tag-teal-fg: #115e59;        // 6.73
-  --tag-cyan-bg: #cffafe; --tag-cyan-fg: #155e75;        // 6.49
-  --tag-blue-bg: #dbeafe; --tag-blue-fg: #1e40af;        // 7.15
-  --tag-indigo-bg: #e0e7ff; --tag-indigo-fg: #3730a3;    // 8.06
-  --tag-purple-bg: #f3e8ff; --tag-purple-fg: #6b21a8;    // 7.39
-  --tag-pink-bg: #fce7f3; --tag-pink-fg: #9d174d;        // 6.71
+  // 標籤色盤（tags frontend spec F5，2026-10-19 依使用者提供的色碼表改成飽和色）：bg 是標籤顏色本身，
+  // fg 依 WCAG 對比取黑或白（皆 ≥ 4.7:1）。設定頁的色點直接用 bg。只有淺色主題；之後加深色主題時再補一組。
+  --tag-red-bg: #ff0000; --tag-red-fg: #000000;          // 5.25
+  --tag-orange-bg: #ffa500; --tag-orange-fg: #000000;    // 10.63
+  --tag-amber-bg: #ffbf00; --tag-amber-fg: #000000;      // 12.70
+  --tag-yellow-bg: #ffff00; --tag-yellow-fg: #000000;    // 19.56
+  --tag-lime-bg: #00ff00; --tag-lime-fg: #000000;        // 15.30
+  --tag-green-bg: #008000; --tag-green-fg: #ffffff;      // 5.14
+  --tag-teal-bg: #008080; --tag-teal-fg: #ffffff;        // 4.77
+  --tag-cyan-bg: #00ffff; --tag-cyan-fg: #000000;        // 16.75
+  --tag-blue-bg: #0000ff; --tag-blue-fg: #ffffff;        // 8.59
+  --tag-indigo-bg: #4b0082; --tag-indigo-fg: #ffffff;    // 12.95
+  --tag-purple-bg: #800080; --tag-purple-fg: #ffffff;    // 9.42
+  --tag-pink-bg: #ffc0cb; --tag-pink-fg: #000000;        // 13.65
 }
 
 html {

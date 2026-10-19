@@ -68,7 +68,7 @@ export interface ReorderRequest { ids: string[]; revert(): void }
     .detail { color: var(--mat-sys-on-surface-variant); font-size: 0.875rem; }
     .handle { cursor: grab; padding: 0 8px; color: var(--ledger-rule-strong); }
     .archived .row { opacity: 0.6; }
-    .color-dot { width: 12px; height: 12px; border-radius: 50%; flex: none; }
+    .color-dot { width: 12px; height: 12px; border-radius: 50%; flex: none; box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.2); }
   `,
 })
 export class SettingList {
@@ -85,7 +85,7 @@ export class SettingList {
   protected readonly showArchived = signal(false);
 
   protected dotColor(row: SettingRow): string {
-    return tagColorVar(row.color!, 'fg');
+    return tagColorVar(row.color!, 'bg');
   }
 
   drop(event: CdkDragDrop<SettingRow[]>): void {

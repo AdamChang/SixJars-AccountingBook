@@ -36,7 +36,7 @@ describe('SettingList', () => {
     await fixture.whenStable();
     const rows = el.querySelectorAll<HTMLElement>('.active .row');
     const dot = rows[0].querySelector<HTMLElement>('.color-dot')!;
-    expect(dot.style.getPropertyValue('background-color')).toBe('var(--tag-teal-fg)');
+    expect(dot.style.getPropertyValue('background-color')).toBe('var(--tag-teal-bg)');
     expect(dot.nextElementSibling?.classList.contains('label')).toBe(true);
     expect(rows[1].querySelector('.color-dot')).toBeNull();
   });

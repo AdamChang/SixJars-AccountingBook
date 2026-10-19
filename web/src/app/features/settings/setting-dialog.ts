@@ -113,7 +113,8 @@ const TITLES: Record<SettingPath, string> = { accounts: '帳戶', 'planning-fund
     .colors { border: none; margin: 0; padding: 0; }
     .colors legend { font: var(--mat-sys-body-small); color: var(--mat-sys-on-surface-variant); padding: 0 0 8px; }
     [role=radiogroup] { display: grid; grid-template-columns: repeat(6, 36px); gap: 8px; }
-    .swatch { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; cursor: pointer; }
+    .swatch { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; cursor: pointer;
+      box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.2); }
     /* 原生 radio 保留鍵盤操作（方向鍵切換），外觀換成色塊；選中與聚焦以外框表示 */
     .swatch input { appearance: none; margin: 0; width: 100%; height: 100%; border-radius: 50%; cursor: pointer; }
     .swatch input:checked { box-shadow: 0 0 0 3px var(--ledger-sheet), 0 0 0 5px var(--ink); }
@@ -152,7 +153,7 @@ export class SettingDialog {
   protected readonly showCash = computed(() => this.data.path === 'accounts' && this.type() === 'Cash');
 
   protected swatchColor(color: TagColor): string {
-    return tagColorVar(color, 'fg');
+    return tagColorVar(color, 'bg');
   }
 
   protected submit(): void {
