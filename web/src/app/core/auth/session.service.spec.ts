@@ -9,7 +9,7 @@ describe('SessionService', () => {
   let service: SessionService;
   let httpTesting: HttpTestingController;
   const assign = vi.fn();
-  const me: MeDto = { subject: 's1', email: 'a@b.c', books: [] };
+  const me: MeDto = { subject: 's1', email: 'a@b.c', books: [], canCreateBooks: false, remainingBookQuota: 0 };
 
   beforeEach(() => {
     assign.mockReset();

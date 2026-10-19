@@ -11,7 +11,10 @@ export type TagColor =
   | 'Red' | 'Orange' | 'Amber' | 'Yellow' | 'Lime' | 'Green' | 'Teal' | 'Cyan' | 'Blue' | 'Indigo' | 'Purple' | 'Pink';
 
 export interface BookSummaryDto { id: string; name: string }
-export interface MeDto { subject: string; email: string | null; books: BookSummaryDto[] }
+// canCreateBooks：是否在建立者名單；remainingBookQuota：還能建立幾本，非建立者為 0（後端 spec D8，前端只負責顯示）
+export interface MeDto {
+  subject: string; email: string | null; books: BookSummaryDto[]; canCreateBooks: boolean; remainingBookQuota: number;
+}
 
 // sortOrder：組內順序（0 起算且連續）；archivedAt：封存時間，null 表示未封存
 export interface AccountDto {
@@ -37,6 +40,7 @@ export interface BookDto {
   id: string; name: string; openingDate: string; lockDate: string | null;
   accounts: AccountDto[]; planningFunds: PlanningFundDto[]; categories: CategoryDto[]; tags: TagDto[];
 }
+export interface CreateBookBody { name: string; openingDate: string }
 
 // 刪除帳本前的統計；transactions、plannedExpenses 只算未刪除的（後端 spec D3）
 export interface BookDeletionPreviewDto {

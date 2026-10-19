@@ -31,7 +31,7 @@ describe('App', () => {
 
   it('shell_shows_book_name_email_and_logout', () => {
     const { el, logout, fixture } = setup(
-      { subject: 's', email: 'a@b.c', books: [] },
+      { subject: 's', email: 'a@b.c', books: [], canCreateBooks: false, remainingBookQuota: 0 },
       { id: 'b1', name: '我的帳本' },
     );
     const toolbar = el.querySelector('mat-toolbar')!;

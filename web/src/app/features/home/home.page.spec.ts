@@ -7,7 +7,7 @@ import { NO_BOOKS_MESSAGE } from '../../core/errors/messages';
 import { HomePage } from './home.page';
 
 function setup(books: MeDto['books']) {
-  const me = signal<MeDto | undefined>({ subject: 's', email: 'a@b.c', books });
+  const me = signal<MeDto | undefined>({ subject: 's', email: 'a@b.c', books, canCreateBooks: false, remainingBookQuota: 0 });
   TestBed.configureTestingModule({
     providers: [provideRouter([]), { provide: SessionService, useValue: { me } }],
   });

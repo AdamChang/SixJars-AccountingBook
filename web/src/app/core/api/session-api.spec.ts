@@ -16,7 +16,9 @@ describe('SessionApi', () => {
   afterEach(() => httpTesting.verify());
 
   it('me_gets_api_me', () => {
-    const me: MeDto = { subject: 's', email: null, books: [{ id: 'b1', name: '帳本' }] };
+    const me: MeDto = {
+      subject: 's', email: null, books: [{ id: 'b1', name: '帳本' }], canCreateBooks: false, remainingBookQuota: 0,
+    };
     let result: MeDto | undefined;
     api.me().subscribe((v) => (result = v));
     httpTesting.expectOne({ method: 'GET', url: '/api/me' }).flush(me);
