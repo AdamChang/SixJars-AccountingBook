@@ -189,18 +189,14 @@ export class TransactionForm implements OnInit {
       }
     });
 
-    let wasEditing = false;
+    // 編輯在對話框內進行，editing 只會從 null 設成一筆交易
     effect(() => {
       const editing = this.editing();
       untracked(() => {
         if (editing) {
           this.loadTransaction(editing);
-        } else if (wasEditing) {
-          // 頁面已收到 saved／cancelled 並結束編輯：回到新增狀態，沿用與連續記帳相同的保留規則
-          this.resetKeepingDateKindAccount();
         }
       });
-      wasEditing = editing !== null;
     });
   }
 
@@ -296,7 +292,7 @@ export class TransactionForm implements OnInit {
     });
   }
 
-  // 連續記帳與結束編輯共用：保留日期、類型、帳戶
+  // 連續記帳：保留日期、類型、帳戶
   private resetKeepingDateKindAccount(): void {
     const { date, kind, accountId } = this.form.getRawValue();
     this.resetForm({ date, kind, accountId });
