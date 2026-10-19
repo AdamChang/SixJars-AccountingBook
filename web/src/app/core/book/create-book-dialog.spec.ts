@@ -66,11 +66,31 @@ describe('CreateBookDialog', () => {
     fixture.componentInstance.showError({ kind: 'domain', code: 'duplicate-name', message: '你已經有名稱為「家庭帳本」的帳本。' });
     await fixture.whenStable();
     expect(el.querySelector('.server-error')!.textContent).toContain('你已經有名稱為「家庭帳本」的帳本。');
+    expect(el.querySelector('.server-error')!.getAttribute('role')).toBe('alert');
     expect(await (await nameInput()).getValue()).toBe('家庭帳本');
 
     fixture.componentInstance.showError({ kind: 'validation', fieldErrors: { name: ['名稱不可超過 100 個字。'] } });
     await fixture.whenStable();
     expect(el.querySelector('.name-error')!.textContent).toContain('名稱不可超過 100 個字。');
+    expect(el.querySelector('.name-error')!.getAttribute('role')).toBe('alert');
     expect(el.querySelector('.server-error')).toBeNull();
+  });
+
+  it('enter_in_inputs_submits_only_when_form_is_valid', async () => {
+    const { fixture, el, nameInput, submitted } = await open();
+    const press = async (selector: string) => {
+      el.querySelector(selector)!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      await fixture.whenStable();
+    };
+
+    await press('.name input');
+    expect(submitted).toEqual([]);
+
+    await (await nameInput()).setValue('家庭帳本');
+    await press('.name input');
+    expect(submitted).toHaveLength(1);
+
+    await press('.opening-date input');
+    expect(submitted).toHaveLength(2);
   });
 });
