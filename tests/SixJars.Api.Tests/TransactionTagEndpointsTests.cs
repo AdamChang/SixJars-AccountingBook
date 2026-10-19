@@ -198,6 +198,34 @@ public class TransactionTagEndpointsTests(PostgresFixture postgres)
         TagIdsOf(update.GetProperty("after")).Should().Equal(work);
     }
 
+    [Fact]
+    public async Task List_filters_by_tag()
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var book = await factory.SeedBookAsync(Ct);
+        var other = await factory.SeedBookAsync(Ct);
+        var client = await factory.CreateMemberClientAsync();
+        var a = await AddTagAsync(client, book, "A");
+        var b = await AddTagAsync(client, book, "B");
+        var theirs = await AddTagAsync(client, other, "A");
+        var onlyA = await CreateAsync(client, book, Lunch(book, [a]));
+        var both = await CreateAsync(client, book, Lunch(book, [a, b]));
+        await CreateAsync(client, book, Lunch(book, null));
+
+        (await ListAsync(client, book, $"?budgetMonth=202601&tagId={a}")).Select(t => t.Id).Should().Equal(onlyA.Id, both.Id);
+        (await ListAsync(client, book, $"?budgetMonth=202601&tagId={b}")).Select(t => t.Id).Should().Equal(both.Id);
+        // 與 accountId 篩選相同：別本帳的 Id 只是查不到，不是 404。
+        (await ListAsync(client, book, $"?tagId={theirs}")).Should().BeEmpty();
+        (await ListAsync(client, book, "?budgetMonth=202601")).Should().HaveCount(3);
+    }
+
+    private static async Task<IReadOnlyList<TransactionDto>> ListAsync(HttpClient client, Book book, string query)
+    {
+        var response = await client.GetAsync(Url(book, $"/transactions{query}"), Ct);
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        return (await response.Content.ReadFromJsonAsync<List<TransactionDto>>(ApiJson.Options, Ct))!;
+    }
+
     internal static object Lunch(Book book, Guid[]? tagIds, string note = "午餐") => new
     {
         kind = "Expense", date = "2026-01-05", amount = -120m, note, tagIds,

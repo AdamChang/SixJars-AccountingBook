@@ -15,8 +15,8 @@ internal static class TransactionsEndpoints
             return Results.Created($"/api/books/{bookId}/transactions/{dto.Id}", dto);
         });
         book.MapGet("/transactions",
-            (Guid bookId, DateOnly? from, DateOnly? to, int? budgetMonth, Guid? accountId, ISender sender, CancellationToken ct) =>
-                sender.Send(new ListTransactions(bookId, from, to, budgetMonth, accountId), ct));
+            (Guid bookId, DateOnly? from, DateOnly? to, int? budgetMonth, Guid? accountId, Guid? tagId, ISender sender, CancellationToken ct) =>
+                sender.Send(new ListTransactions(bookId, from, to, budgetMonth, accountId, tagId), ct));
         book.MapGet("/transactions/{transactionId:guid}", (Guid bookId, Guid transactionId, ISender sender, CancellationToken ct) =>
             sender.Send(new GetTransaction(bookId, transactionId), ct));
         book.MapPut("/transactions/{transactionId:guid}",
