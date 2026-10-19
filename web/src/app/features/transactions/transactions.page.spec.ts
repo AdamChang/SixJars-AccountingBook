@@ -11,7 +11,7 @@ import { By } from '@angular/platform-browser';
 import { Router, provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 import { of } from 'rxjs';
-import { TransactionDto } from '../../core/api/dto';
+import { BookDto, TransactionDto } from '../../core/api/dto';
 import { CurrentBook } from '../../core/book/current-book';
 import { BrowserLocation } from '../../core/browser-location';
 import { apiErrorInterceptor } from '../../core/errors/error-interceptor';
@@ -37,7 +37,7 @@ const DELETE_URL = `/api/books/${BOOK.id}/transactions/${TX.id}?version=${TX.ver
 // 用函式而非預設參數，否則傳 undefined 會變成預設值
 const CANCELLED = () => undefined;
 
-async function setup(url: string, closedWith: () => unknown = () => true) {
+async function setup(url: string, closedWith: () => unknown = () => true, book: BookDto = BOOK) {
   const notifier = { show: vi.fn() };
   const dialog = { open: vi.fn(() => ({ afterClosed: () => of(closedWith()) })) };
   TestBed.configureTestingModule({
@@ -47,7 +47,7 @@ async function setup(url: string, closedWith: () => unknown = () => true) {
       provideHttpClientTesting(),
       provideNativeDateAdapter(),
       { provide: MAT_DATE_LOCALE, useValue: 'zh-TW' },
-      { provide: CurrentBook, useValue: { book: signal(BOOK) } },
+      { provide: CurrentBook, useValue: { book: signal(book) } },
       { provide: Notifier, useValue: notifier },
       { provide: BrowserLocation, useValue: { assign: vi.fn(), currentPath: () => '/' } },
       { provide: MatDialog, useValue: dialog },
@@ -91,6 +91,17 @@ describe('TransactionsPage', () => {
     await page.flushList(202603, [TX]);
     expect(page.el.querySelectorAll('tr.mat-mdc-row')).toHaveLength(1);
     expect(page.el.textContent).toContain('2026/03');
+    expect(page.el.querySelector('.no-accounts')).toBeNull();
+  });
+
+  // 新建立的帳本沒有帳戶，封存的也不能用：提示到設定頁的帳戶分頁新增（spec F6）
+  it('hints_settings_accounts_tab_when_no_active_account', async () => {
+    const archived = BOOK.accounts.map(account => ({ ...account, archivedAt: '2026-01-01T00:00:00Z' }));
+    const page = await setup('/books/book-1/transactions?month=202603', undefined, { ...BOOK, accounts: archived });
+    await page.flushList(202603, []);
+
+    const link = page.el.querySelector<HTMLAnchorElement>('.no-accounts a')!;
+    expect(link.getAttribute('href')).toBe('/books/book-1/settings?tab=accounts');
   });
 
   it('falls_back_to_current_month_for_invalid_query', async () => {

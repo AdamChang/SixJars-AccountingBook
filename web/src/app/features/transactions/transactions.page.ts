@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, signa
 import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSelectModule } from '@angular/material/select';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { EMPTY, catchError, filter, map, switchMap } from 'rxjs';
 import { BookDto, TransactionDto } from '../../core/api/dto';
 import { TransactionApi } from '../../core/api/transaction-api';
@@ -22,7 +22,7 @@ import { KIND_RULES } from './transaction-rules';
 @Component({
   selector: 'app-transactions-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatSelectModule, MonthNav, TransactionForm, TransactionList],
+  imports: [MatSelectModule, RouterLink, MonthNav, TransactionForm, TransactionList],
   templateUrl: './transactions.page.html',
   styleUrl: './transactions.page.scss',
 })
@@ -55,6 +55,12 @@ export class TransactionsPage {
   protected readonly currentBookAsList = computed(() => {
     const book = this.currentBook.book();
     return book ? [book] : [];
+  });
+
+  // 新建立的帳本沒有帳戶（或全部封存），表單無從選起：提示先到設定頁新增（spec F6）
+  protected readonly noActiveAccount = computed(() => {
+    const book = this.currentBook.book();
+    return book !== undefined && !book.accounts.some(account => account.archivedAt === null);
   });
 
   // 載入失敗時 interceptor 已通知，保留上一次的清單

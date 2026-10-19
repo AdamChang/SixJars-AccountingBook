@@ -11,6 +11,12 @@
   </mat-form-field>
 </div>
 @for (book of currentBookAsList(); track book.id) {
+  @if (noActiveAccount()) {
+    <p class="no-accounts ledger-sheet">
+      這本帳本還沒有可用的帳戶，記帳前請先新增帳戶。
+      <a [routerLink]="['/books', book.id, 'settings']" [queryParams]="{ tab: 'accounts' }">前往設定</a>
+    </p>
+  }
   <section class="form-section ledger-sheet">
     <app-transaction-form [book]="book" (saved)="onSaved()" />
   </section>
