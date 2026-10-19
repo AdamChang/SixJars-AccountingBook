@@ -8,7 +8,7 @@ using SixJars.Domain.Members;
 namespace SixJars.Api.Infrastructure;
 
 /// <summary>
-/// Google 登入的白名單檢查（ADR 0005、spec §3.4），由 OIDC 的 <c>OnTokenValidated</c> 呼叫；回傳 false 就拒絕登入、不發 cookie。
+/// Google 登入的白名單檢查（ADR 0005、ADR 0011、spec §3.4）；白名單是帳本成員加上建立者名單，由 OIDC 的 <c>OnTokenValidated</c> 呼叫；回傳 false 就拒絕登入、不發 cookie。
 /// 只依賴 claim，不連 Google，測試直接以 <see cref="ClaimsPrincipal"/> 呼叫。
 /// </summary>
 internal sealed class GoogleSignInValidator(ISixJarsDbContext db, IAuditTrail audit)
@@ -18,7 +18,8 @@ internal sealed class GoogleSignInValidator(ISixJarsDbContext db, IAuditTrail au
     /// 2. 以正規化的 email 找出尚未綁定的成員，全部綁定這個 sub，每筆各留一筆稽核記錄（操作者就是這個 sub）。
     ///    已綁定其他 sub 的成員不在比對範圍內：換了 Google 帳號不能沿用同一個 email 取得存取權，也不會因為
     ///    <see cref="BookMember.BindSubject"/> 擲例外而在 callback 變成 500。
-    /// 3. 最後只要有任何成員綁定這個 sub 就通過；之後以 sub 辨識，Google 帳號改 email 也不受影響。
+    ///    建立者名單（<see cref="BookCreator"/>）用同樣的規則綁定，但不留稽核記錄（名單不屬於任何帳本，ADR 0011）。
+    /// 3. 最後只要有任何成員<b>或建立者</b>綁定這個 sub 就通過；之後以 sub 辨識，Google 帳號改 email 也不受影響。
     /// </summary>
     /// <remarks>
     /// 計畫原本是「sub 已綁定就直接通過」，但這樣已經登入過的人之後被 CLI 加進另一本帳，那本帳的成員永遠不會被綁定；
@@ -36,10 +37,14 @@ internal sealed class GoogleSignInValidator(ISixJarsDbContext db, IAuditTrail au
         var email = principal.FindFirst("email")?.Value;
         if (!string.IsNullOrWhiteSpace(email))
         {
-            await BindUnboundMembersAsync(BookMember.NormalizeEmail(email), subject, cancellationToken);
+            var normalizedEmail = BookMember.NormalizeEmail(email);
+            await BindUnboundMembersAsync(normalizedEmail, subject, cancellationToken);
+            await BindUnboundCreatorsAsync(normalizedEmail, subject, cancellationToken);
         }
 
-        return await db.BookMembers.AnyAsync(m => m.GoogleSubject == subject, cancellationToken);
+        // ADR 0011：成員或建立者都能登入。
+        return await db.BookMembers.AnyAsync(m => m.GoogleSubject == subject, cancellationToken)
+            || await db.BookCreators.AnyAsync(c => c.GoogleSubject == subject, cancellationToken);
     }
 
     private async Task BindUnboundMembersAsync(string email, string subject, CancellationToken cancellationToken)
@@ -58,6 +63,28 @@ internal sealed class GoogleSignInValidator(ISixJarsDbContext db, IAuditTrail au
             member.BindSubject(subject);
             audit.RecordAs(subject, member.BookId.Value, AuditAction.Update, AuditEntityTypes.BookMember, member.Id,
                 before, BookMemberDto.From(member));
+        }
+
+        await db.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// 與 <see cref="BindUnboundMembersAsync"/> 相同的綁定規則（已綁定其他 sub 的列不比對），但不留稽核記錄：
+    /// 名單不屬於任何帳本，異動只由 CLI 執行（ADR 0011、issue #7 Q24）。
+    /// </summary>
+    private async Task BindUnboundCreatorsAsync(string email, string subject, CancellationToken cancellationToken)
+    {
+        var unbound = await db.BookCreators
+            .Where(c => c.Email == email && c.GoogleSubject == null)
+            .ToListAsync(cancellationToken);
+        if (unbound.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var creator in unbound)
+        {
+            creator.BindSubject(subject);
         }
 
         await db.SaveChangesAsync(cancellationToken);
