@@ -17,16 +17,23 @@ import { NewBookInput } from './create-book-dialog';
 const INPUT: NewBookInput = { name: '家庭帳本', openingDate: '2026-10-19' };
 const ME: MeDto = { subject: 's', email: 'a@b.c', books: [], canCreateBooks: true, remainingBookQuota: 5 };
 
-async function setup() {
+interface SetupOptions { autoStart?: boolean; reloadRejects?: boolean }
+
+async function setup(options: SetupOptions = {}) {
+  const { autoStart = true, reloadRejects = false } = options;
   const dialog = { submitted: new Subject<NewBookInput>(), busy: signal(false), showError: vi.fn() };
   const close = vi.fn();
+  const open = vi.fn(() => ({ componentInstance: dialog, close }));
   const notifier = { show: vi.fn() };
-  const reload = vi.fn(async () => ME);
+  const reload = vi.fn(async () => {
+    if (reloadRejects) throw new Error('me failed');
+    return ME;
+  });
   TestBed.configureTestingModule({
     providers: [
       provideHttpClient(withInterceptors([apiErrorInterceptor])), provideHttpClientTesting(),
       provideRouter([]),
-      { provide: MatDialog, useValue: { open: vi.fn(() => ({ componentInstance: dialog, close })) } },
+      { provide: MatDialog, useValue: { open } },
       { provide: Notifier, useValue: notifier },
       { provide: SessionService, useValue: { reload } },
       { provide: BrowserLocation, useValue: { assign: vi.fn(), currentPath: () => '/' } },
@@ -34,13 +41,14 @@ async function setup() {
   });
   const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
   const httpTesting = TestBed.inject(HttpTestingController);
-  await TestBed.inject(BookCreation).start();
+  const service = TestBed.inject(BookCreation);
+  if (autoStart) await service.start();
   // 使用者在對話框按「建立」，回傳送出的 POST
   const submit = () => {
     dialog.submitted.next(INPUT);
     return httpTesting.expectOne({ method: 'POST', url: '/api/books' });
   };
-  return { dialog, close, notifier, reload, navigate, httpTesting, submit };
+  return { service, open, dialog, close, notifier, reload, navigate, httpTesting, submit };
 }
 
 describe('BookCreation', () => {
@@ -93,5 +101,44 @@ describe('BookCreation', () => {
     expect(dialog.busy()).toBe(false);
     expect(dialog.showError).not.toHaveBeenCalled();
     expect(close).not.toHaveBeenCalled();
+  });
+
+  it('validation_error_keeps_dialog_open_with_field_errors', async () => {
+    const { submit, dialog, close } = await setup();
+
+    submit().flush({ errors: { openingDate: ['開帳日必填。'] } }, { status: 400, statusText: '' });
+
+    expect(dialog.showError).toHaveBeenCalledWith({ kind: 'validation', fieldErrors: { openingDate: ['開帳日必填。'] } });
+    expect(close).not.toHaveBeenCalled();
+    expect(dialog.busy()).toBe(false);
+  });
+
+  it('second_start_while_dialog_is_loading_does_not_open_a_second_dialog', async () => {
+    const { service, open } = await setup({ autoStart: false });
+
+    await Promise.all([service.start(), service.start()]);
+
+    expect(open).toHaveBeenCalledTimes(1);
+  });
+
+  it('dialog_chunk_load_failure_shows_unavailable_message_without_throwing', async () => {
+    const { service, open, notifier } = await setup({ autoStart: false });
+    vi.spyOn(service as any, 'loadDialog').mockRejectedValue(new Error('chunk'));
+
+    await expect(service.start()).resolves.toBeUndefined();
+
+    expect(notifier.show).toHaveBeenCalledTimes(1);
+    expect(notifier.show).toHaveBeenCalledWith(UNAVAILABLE_MESSAGE);
+    expect(open).not.toHaveBeenCalled();
+  });
+
+  it('success_still_opens_new_book_when_session_reload_fails', async () => {
+    const { submit, notifier, reload, navigate } = await setup({ reloadRejects: true });
+
+    submit().flush({ id: 'b9' }, { status: 201, statusText: 'Created' });
+
+    await vi.waitFor(() => expect(notifier.show).toHaveBeenCalledWith('已建立帳本「家庭帳本」'));
+    expect(reload).toHaveBeenCalled();
+    expect(navigate).toHaveBeenCalledWith(['/books', 'b9', 'settings'], { queryParams: { tab: 'accounts' } });
   });
 });
