@@ -26,6 +26,7 @@
 
 - 撰寫計畫的環境沒有 .NET SDK 與 Docker，**沒有實測**。開工前先跑 `dotnet build` 與 `dotnet test --solution SixJars.slnx`，把錯誤數、警告數（NuGet 弱點警告 NU1902／NU1903 不算）與測試總數記在這裡，之後只增不減。
 - `reference/` 不存在時 Acceptance 會 skip，回報時要說明。
+- **實測（2026-10-19，本地端，HEAD `f045845`）**：`dotnet build` 0 錯誤；編譯器警告只有既有的 `EF1002`（`DeleteBookEndpointsTests.cs:189`）一個。`dotnet test --solution SixJars.slnx`：總計 549，成功 527，略過 22，失敗 0。略過的 22 個都是找不到 `reference/2026帳本v1.xlsm`（本機只有 v3）。
 
 ### 絕對不要碰的檔案
 
