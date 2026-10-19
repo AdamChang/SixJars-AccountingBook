@@ -2,7 +2,7 @@
 
 個人／家庭記帳系統，移植自「富朋友理財記帳本」Excel。以一本連續、不分年度的帳本記錄每筆金錢流動，計算可用現金、月可用餘額與淨值。
 
-> 目前進度：P1 帳務核心、P2 Web API／CLI／部署、P3 Angular PWA（記帳與總覽）、P4 段 J 帳本設定、段 K 預定支出與週期預定支出已完成；P4 段 L 預算、段 M 報表尚未實作（見 [P4 設計](docs/superpowers/specs/2026-10-06-p4-settings-planning-budget-reports-design.md)）。領域用語見 [`CONTEXT.md`](CONTEXT.md)，設計決策見 [`docs/adr/`](docs/adr/)。
+> 目前進度：P1 帳務核心、P2 Web API／CLI／部署、P3 Angular PWA（記帳與總覽）、P4 段 J 帳本設定、段 K 預定支出與週期預定支出、段 L 預算、交易標籤已完成；P4 段 M 報表尚未實作（見 [P4 設計](docs/superpowers/specs/2026-10-06-p4-settings-planning-budget-reports-design.md)）。領域用語見 [`CONTEXT.md`](CONTEXT.md)，設計決策見 [`docs/adr/`](docs/adr/)。
 
 ## Tech Stack
 
@@ -31,21 +31,23 @@ src/
   SixJars.Cli             管理工具（composition root，與 API 共用 Application）
 tests/                    Domain / Application / Infrastructure / Api / Cli / Acceptance
 web/                      Angular PWA（記帳、總覽、預定支出、帳本設定）
+.github/workflows/        GitHub Actions CI
 ```
 
 ## 功能
 
 - **帳本設定**：帳戶（現金、銀行、信用卡、電子錢包、貸款）、財務規劃帳戶（信封）、兩層收支分類，可排序、封存、刪除（使用中者不可刪）；鎖帳日，鎖住日期以前的交易不可異動。
 - **交易**：收入、支出、轉帳、提款、現金存入、加值、繳卡費、新增貸款、貸款繳款、財務規劃（入新資金／出資金／資金回流）；每筆交易展開成分錄，可指定歸屬月份。
+- **標籤**：帳本自訂標籤（名稱最多 8 字、不分大小寫不可重複，12 色固定色盤），可排序、封存、刪除（使用中者不可刪）；每筆交易最多掛 4 個標籤，交易清單可依標籤篩選，匯出與備份都包含標籤。
 - **預定支出**：固定／貸款／特別支出的月度預計項目，付款時連結實際交易。
 - **週期預定支出**：定義週期項目後依月份產生當月預定支出；未付款的項目可用週期項目現值更新。
 - **月摘要**：指定歸屬月份與基準日的帳戶餘額、可用現金、月可用餘額。
 - **稽核與軟刪除**：每次寫入留下前後快照；刪除只標記，不參與計算。
 - **樂觀並行**：更新／刪除需帶版本號，衝突回 409。
-- **匯出與備份**：交易明細 CSV／XLSX；整本帳 JSON 備份（可用 CLI 還原）。
+- **匯出與備份**：交易明細 CSV／XLSX（含標籤欄）；整本帳 JSON 備份（格式 v5，含標籤，可用 CLI 還原）。
 - **舊帳匯入**：CLI 把舊 Excel 記帳本轉成新帳本，附檢查報告與 dry-run。
 - **權限**：Google 登入，只有帳本成員可存取；非成員一律 404。目前只實作「擁有者」角色。
-- **Web 前端**：記帳頁（鍵盤快速連續記帳、手機兩行清單）、總覽頁、預定支出頁（本月清單、產生、付款、週期項目）、設定頁（含匯出與備份下載）；可安裝為 PWA。
+- **Web 前端**：記帳頁（鍵盤快速連續記帳、手機兩行清單）、總覽頁、預定支出頁（本月清單、產生、付款、週期項目）、設定頁（含標籤管理、匯出與備份下載）；記帳時可選標籤，交易清單以色塊顯示標籤並可依標籤篩選當月交易；可安裝為 PWA。
 
 ## 使用方式
 
@@ -79,6 +81,13 @@ npx playwright install chromium # 第一次跑 E2E 前
 npm run e2e                     # Playwright，自動啟動 ng serve，API 以 mock 取代
 ```
 
+### CI
+
+GitHub Actions（[`.github/workflows/ci.yml`](.github/workflows/ci.yml)）在每個 PR 與推到 `master` 時平行執行：
+
+- **backend**：`dotnet build`（Release）與全部測試；Testcontainers 使用 runner 內建的 Docker。舊帳本不在 repo 中，Acceptance 測試在 CI 上一律略過。
+- **frontend**：`npm ci`、`ng build`、`ng test`、Playwright E2E（API 以 mock 取代，不需要 secret）。
+
 ### 本機執行 API
 
 App 啟動時不會自動跑 migration，請先把 schema 套用到本機資料庫（`dotnet-ef` 10.0.12）：
@@ -97,6 +106,13 @@ $env:ASPNETCORE_URLS = "https://localhost:5001"
 $env:Authentication__Google__ClientId = "<client-id>"
 $env:Authentication__Google__ClientSecret = "<client-secret>"
 dotnet run --project src/SixJars.Api
+```
+
+Google client 也可以改用 user-secrets 設定（Api 專案已設定 `UserSecretsId`，只在 Development 環境讀取），就不必每次設環境變數：
+
+```powershell
+dotnet user-secrets set "Authentication:Google:ClientId" "<client-id>" --project src/SixJars.Api
+dotnet user-secrets set "Authentication:Google:ClientSecret" "<client-secret>" --project src/SixJars.Api
 ```
 
 Google OAuth client 需加入 redirect URI `https://localhost:5001/auth/callback`。所有環境變數見 [`.env.example`](.env.example)。
@@ -120,7 +136,7 @@ npx ng serve
 | `GET /auth/login`、`POST /auth/logout` | Google 登入／登出 |
 | `GET /api/antiforgery/token` | 取得 XSRF token（非 GET 請求須帶 `X-XSRF-TOKEN` header） |
 | `GET /api/me`、`GET /api/books` | 登入者資訊、可存取的帳本 |
-| `/api/books/{bookId}/…` | `accounts`、`planning-funds`、`categories`（含 `archive`、`unarchive`、`order`）、`lock-date`、`transactions`、`planned-expenses`（含 `generate`、`refresh`、`pay`）、`recurring-planned-expenses`、`summary`、`audit`、`export/*` |
+| `/api/books/{bookId}/…` | `accounts`、`planning-funds`、`categories`、`tags`（含 `archive`、`unarchive`、`order`）、`lock-date`、`transactions`（清單可帶 `budgetMonth`、`tagId` 篩選）、`planned-expenses`（含 `generate`、`refresh`、`pay`）、`recurring-planned-expenses`、`summary`、`audit`、`export/*` |
 | 其他路徑 | 由 API 提供前端靜態檔，deep link 回 `index.html` |
 
 ### CLI 管理工具
