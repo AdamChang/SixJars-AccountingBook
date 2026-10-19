@@ -7,3 +7,4 @@ export const DENIED_MESSAGE = '登入未完成：可能是此 Google 帳號不�
 export const NO_BOOKS_MESSAGE = '沒有可存取的帳本。請管理者用 CLI 匯入帳本，或把你加為帳本成員。';
 export const DOMAIN_FALLBACK_MESSAGE = '無法完成此操作，請檢查輸入後再試';
 export const PLANNED_CONFLICT_MESSAGE = '這筆預定支出已在其他裝置修改';
+export const CREATE_FORBIDDEN_MESSAGE = '你不在建立者名單，無法建立帳本';
