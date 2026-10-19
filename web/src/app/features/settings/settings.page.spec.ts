@@ -9,6 +9,8 @@ import { MatInputHarness } from '@angular/material/input/testing';
 import { MatMenuHarness } from '@angular/material/menu/testing';
 import { MatSelectHarness } from '@angular/material/select/testing';
 import { MatTabGroupHarness } from '@angular/material/tabs/testing';
+import { MeDto } from '../../core/api/dto';
+import { SessionService } from '../../core/auth/session.service';
 import { BrowserLocation } from '../../core/browser-location';
 import { CurrentBook } from '../../core/book/current-book';
 import { apiErrorInterceptor } from '../../core/errors/error-interceptor';
@@ -254,6 +256,38 @@ describe('SettingsPage', () => {
       return true;
     });
   }
+
+  // authGuard 會先載入 me；這裡用真的 SessionService 載入，讓頁面讀得到使用者有哪些帳本
+  async function signIn(ctx: Awaited<ReturnType<typeof setup>>, books: MeDto['books']) {
+    const loaded = TestBed.inject(SessionService).load();
+    ctx.httpTesting.expectOne('/api/me').flush({ subject: 's', email: null, books });
+    await vi.waitFor(() => ctx.httpTesting.expectOne('/api/antiforgery/token').flush(null));
+    await loaded;
+  }
+
+  // 開啟刪除對話框並等統計載入，回傳對話框裡是否有「最後一本」的警告
+  async function openDeleteDialog(ctx: Awaited<ReturnType<typeof setup>>) {
+    await ctx.openTab('鎖帳日與資料', '.delete-book');
+    ctx.el.querySelector<HTMLButtonElement>('.delete-book button')!.click();
+    await ctx.fixture.whenStable();
+    ctx.httpTesting.expectOne(`/api/books/${BOOK.id}/deletion-preview`).flush(PREVIEW);
+    await ctx.fixture.whenStable();
+    return document.querySelector('mat-dialog-container .last-book');
+  }
+
+  it('delete_dialog_warns_when_this_is_the_only_book', async () => {
+    const ctx = await setup();
+    await signIn(ctx, [{ id: BOOK.id, name: BOOK.name }]);
+
+    expect(await openDeleteDialog(ctx)).not.toBeNull();
+  });
+
+  it('delete_dialog_has_no_login_warning_when_other_books_remain', async () => {
+    const ctx = await setup();
+    await signIn(ctx, [{ id: BOOK.id, name: BOOK.name }, { id: 'other-book', name: '另一本' }]);
+
+    expect(await openDeleteDialog(ctx)).toBeNull();
+  });
 
   async function expectMeReload(httpTesting: HttpTestingController) {
     await vi.waitFor(() => httpTesting.expectOne('/api/me').flush({ subject: 's', email: null, books: [] }));

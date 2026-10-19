@@ -149,7 +149,9 @@ export class SettingsPage {
 
   protected onDeleteBook(): void {
     const book = this.book();
-    this.dialog.open<DeleteBookDialog, DeleteBookDialogData, string>(DeleteBookDialog, { data: { bookId: book.id, name: book.name } })
+    // 只剩這一本時要警告刪除後無法再登入（#8）；能進到這一頁，me.books 一定含這本帳本
+    const isLastBook = this.session.me()?.books.length === 1;
+    this.dialog.open<DeleteBookDialog, DeleteBookDialogData, string>(DeleteBookDialog, { data: { bookId: book.id, name: book.name, isLastBook } })
       .afterClosed()
       .pipe(
         filter((name): name is string => name !== undefined),
