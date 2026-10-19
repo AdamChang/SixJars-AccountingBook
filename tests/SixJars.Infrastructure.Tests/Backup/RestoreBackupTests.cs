@@ -137,6 +137,32 @@ public class RestoreBackupTests(PostgresFixture postgres)
     }
 
     [Fact]
+    public async Task Restores_v4_backup_without_tags()
+    {
+        var source = await Scenario.BuildAsync(postgres);
+        await using var _ = source;
+        var a = await source.ExportAsync();
+        // 模擬標籤功能之前的 v4 備份：帳本沒有 tags，交易沒有 tagIds。
+        var json = JsonNode.Parse(BackupJson.SerializeToUtf8Bytes(a))!;
+        json["formatVersion"] = 4;
+        json["book"]!.AsObject().Remove("tags");
+        foreach (var item in json["transactions"]!.AsArray())
+        {
+            item!["transaction"]!.AsObject().Remove("tagIds");
+        }
+
+        var v4 = json.Deserialize<BackupDocument>(BackupJson.Options)!;
+        var target = await postgres.CreateConnectionStringAsync(Ct);
+
+        (await RestoreAsync(target, v4)).Should().Be(a.Book.Id);
+
+        await using var restored = new ApiFactory(target, Clock(ExportedAgainAt));
+        var b = await ExportAsync(await restored.CreateMemberClientAsync(), a.Book.Id);
+        b.Book.Tags.Should().BeEmpty();
+        b.Transactions.Should().OnlyContain(t => t.Transaction.TagIds!.Count == 0);
+    }
+
+    [Fact]
     public async Task Restore_into_database_with_same_book_is_rejected()
     {
         var source = await Scenario.BuildAsync(postgres);
@@ -188,6 +214,7 @@ public class RestoreBackupTests(PostgresFixture postgres)
     [InlineData("planned-expense-unknown-source")]
     [InlineData("budget-on-non-floating-category")]
     [InlineData("empty-budget")]
+    [InlineData("unknown-tag")]
     public async Task Corrupted_backup_writes_nothing(string corruption)
     {
         var source = await Scenario.BuildAsync(postgres);
@@ -259,6 +286,16 @@ public class RestoreBackupTests(PostgresFixture postgres)
                 // 預定支出的來源週期項目不在備份中：API 不會產生沒有來源的參照（FK），只可能是檔案被改過。
                 plans[0] = plans[0] with { PlannedExpense = plans[0].PlannedExpense with { SourceId = Guid.NewGuid() } };
                 return backup with { PlannedExpenses = plans };
+            case "unknown-tag":
+            {
+                // 交易掛著不在帳本裡的標籤：TagId 沒有 DB FK（tags spec D1），只能靠 Domain 重建時擋下。
+                var index = transactions.FindIndex(t => t.Transaction.TagIds!.Count > 0);
+                transactions[index] = transactions[index] with
+                {
+                    Transaction = transactions[index].Transaction with { TagIds = [.. transactions[index].Transaction.TagIds!, Guid.NewGuid()] },
+                };
+                return backup with { Transactions = transactions };
+            }
             case "unknown-account":
                 transactions[0] = transactions[0] with { Transaction = transactions[0].Transaction with { AccountId = Guid.NewGuid() } };
                 return backup with { Transactions = transactions };
@@ -492,9 +529,19 @@ public class RestoreBackupTests(PostgresFixture postgres)
             // (j) 預算：有預設值＋覆寫值的、只有覆寫值的。
             a.Budgets!.Should().HaveCount(2);
             a.Budgets.Should().Contain(b => b.DefaultAmount == null && b.Overrides.Count == 1);
+            // (k) 標籤：一個封存、排序與建立順序不同；交易掛 0、1、4 個，已刪除的交易掛著封存的標籤。
+            var tags = a.Book.Tags!;
+            tags.Should().HaveCount(4);
+            tags.Select(t => t.Id).Should().NotBeInAscendingOrder();
+            var archivedTag = tags.Single(t => t.ArchivedAt != null).Id;
+            a.Transactions.Select(t => t.Transaction.TagIds!.Count).Should().Contain([0, 1, 4]);
+            a.Transactions.Should().Contain(t => t.DeletedAt != null && t.Transaction.TagIds!.Contains(archivedTag));
         }
 
-        /// <summary>(h) 新增一個餘額為 0 的帳戶並封存、封存一個子分類，再把帳戶順序整個倒過來。</summary>
+        /// <summary>
+        /// (h) 新增一個餘額為 0 的帳戶並封存、封存一個子分類，再把帳戶順序整個倒過來。
+        /// (k) 封存「舊專案」標籤（已刪除的交易掛著它），標籤順序整個倒過來。
+        /// </summary>
         private async Task ArchiveAndReorderAsync()
         {
             var oldPassbook = await PostForId("accounts", new { name = "舊存摺", type = "Bank", openingBalance = 0m });
@@ -504,6 +551,10 @@ public class RestoreBackupTests(PostgresFixture postgres)
             (await Client.PostAsync($"/api/books/{BookId}/categories/{taxi}/archive", null, Ct)).EnsureSuccessStatusCode();
             (await Client.PutAsJsonAsync($"/api/books/{BookId}/accounts/order",
                 new { ids = current.Accounts.Select(a => a.Id).Reverse() }, ApiJson.Options, Ct)).EnsureSuccessStatusCode();
+            var oldProject = current.Tags!.Single(t => t.Name == "舊專案").Id;
+            (await Client.PostAsync($"/api/books/{BookId}/tags/{oldProject}/archive", null, Ct)).EnsureSuccessStatusCode();
+            (await Client.PutAsJsonAsync($"/api/books/{BookId}/tags/order",
+                new { ids = current.Tags!.Select(t => t.Id).Reverse() }, ApiJson.Options, Ct)).EnsureSuccessStatusCode();
         }
 
         public async ValueTask DisposeAsync()
@@ -532,13 +583,20 @@ public class RestoreBackupTests(PostgresFixture postgres)
             var travel = await PostForId("planning-funds", new { name = "旅遊基金", openingBalance = 0m });
             var transport = await PostForId("categories", new { name = "交通", kind = "Expense", nature = "Floating" });
             await PostForId("categories", new { name = "計程車", kind = "Expense", parentId = transport });
+            var trip = await PostForId("tags", new { name = "旅遊", color = "Teal" });
+            var work = await PostForId("tags", new { name = "工作", color = "Blue" });
+            var claimable = await PostForId("tags", new { name = "可報帳", color = "Amber" });
+            var oldProject = await PostForId("tags", new { name = "舊專案", color = "Purple" });
 
             // 12 種交易類型；一筆刷卡的歸屬月份與日期不同月。
             await Tx(Input(TransactionKind.LoanDisbursement, "2026-01-02", 100000m, bank, counter: loan.Id.Value));
             await Tx(Input(TransactionKind.Income, "2026-01-05", 84000m, bank, category: salary));
-            var lunchTx = await Tx(Input(TransactionKind.Expense, "2026-01-06", -120m, cash, category: lunch, note: "午餐"));
+            var lunchTx = await Tx(Input(TransactionKind.Expense, "2026-01-06", -120m, cash, category: lunch, note: "午餐") with { TagIds = [trip] });
             await Tx(Input(TransactionKind.Expense, "2026-01-31", -500m, card, category: food, budgetMonth: 202602));
-            await Tx(Input(TransactionKind.Withdrawal, "2026-01-07", 3000m, bank, counter: cash.Id.Value));
+            await Tx(Input(TransactionKind.Withdrawal, "2026-01-07", 3000m, bank, counter: cash.Id.Value) with
+            {
+                TagIds = [oldProject, claimable, work, trip],
+            });
             await Tx(Input(TransactionKind.CashDeposit, "2026-01-08", 1000m, bank, counter: cash.Id.Value));
             await Tx(Input(TransactionKind.Transfer, "2026-01-08", 5000m, bank, counter: postOffice));
             await Tx(Input(TransactionKind.CardPayment, "2026-01-10", 2000m, bank, counter: card.Id.Value));
@@ -553,12 +611,19 @@ public class RestoreBackupTests(PostgresFixture postgres)
 
             // 修改一筆（稽核記錄有 before 與 after）。
             var updated = await Client.PutAsJsonAsync(TransactionsUrl(lunchTx.Id),
-                new { version = lunchTx.Version, input = Input(TransactionKind.Expense, "2026-01-06", -150m, cash, category: lunch, note: "午餐加飲料") },
+                new
+                {
+                    version = lunchTx.Version,
+                    input = Input(TransactionKind.Expense, "2026-01-06", -150m, cash, category: lunch, note: "午餐加飲料") with { TagIds = [work] },
+                },
                 ApiJson.Options, Ct);
             updated.StatusCode.Should().Be(HttpStatusCode.OK);
 
             // (a) 一般的已刪除交易。
-            var mistake = await Tx(Input(TransactionKind.Expense, "2026-01-09", -999m, cash, category: lunch, note: "記錯"));
+            var mistake = await Tx(Input(TransactionKind.Expense, "2026-01-09", -999m, cash, category: lunch, note: "記錯") with
+            {
+                TagIds = [oldProject],
+            });
             await DeleteAsync(TransactionsUrl(mistake.Id), mistake.Version);
 
             // 預定支出：付款後保留連結、(b)、(c)、(d)、貸款付款、未付、未付後刪除。
