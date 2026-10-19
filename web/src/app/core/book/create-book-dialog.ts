@@ -23,7 +23,7 @@ const NAME_MAX_LENGTH = 100;
       <mat-form-field class="name">
         <mat-label>帳本名稱</mat-label>
         <input matInput autocomplete="off" [attr.maxlength]="nameMaxLength" [value]="name()"
-               (input)="name.set($any($event.target).value)" (keydown.enter)="canSubmit() && submit()" />
+               (input)="name.set($any($event.target).value)" (keydown.enter)="onEnter($any($event))" />
       </mat-form-field>
       @if (nameError(); as message) {
         <p class="error name-error" role="alert">{{ message }}</p>
@@ -31,7 +31,7 @@ const NAME_MAX_LENGTH = 100;
       <mat-form-field class="opening-date">
         <mat-label>開帳日</mat-label>
         <input matInput type="date" [value]="openingDate()" (input)="openingDate.set($any($event.target).value)"
-               (keydown.enter)="canSubmit() && submit()" />
+               (keydown.enter)="onEnter($any($event))" />
       </mat-form-field>
       <p class="hint">所有帳戶的期初餘額都以開帳日結束時為準；建立後可以在設定頁新增帳戶。</p>
       @if (serverError(); as message) {
@@ -83,6 +83,13 @@ export class CreateBookDialog {
         break;
       }
     }
+  }
+
+  // 中文輸入法選字確認的 Enter 也會觸發 keydown，不擋會在名稱沒打完時就送出。
+  // Safari 在 compositionend 之後才送這個 keydown（isComposing 已是 false），只能靠 keyCode 229 辨識
+  protected onEnter(event: KeyboardEvent): void {
+    if (event.isComposing || event.keyCode === 229) return;
+    if (this.canSubmit()) this.submit();
   }
 
   protected submit(): void {

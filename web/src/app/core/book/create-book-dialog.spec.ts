@@ -93,4 +93,20 @@ describe('CreateBookDialog', () => {
     await press('.opening-date input');
     expect(submitted).toHaveLength(2);
   });
+
+  it('enter_while_ime_composing_does_not_submit', async () => {
+    const { fixture, el, nameInput, submitted } = await open();
+    await (await nameInput()).setValue('家庭帳本');
+    const press = async (selector: string, init: KeyboardEventInit) => {
+      el.querySelector(selector)!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, ...init }));
+      await fixture.whenStable();
+    };
+
+    await press('.name input', { isComposing: true });
+    await press('.opening-date input', { isComposing: true });
+    // Safari 在 compositionend 之後才送 keydown，isComposing 已是 false，只剩 keyCode 229 可辨識
+    await press('.name input', { keyCode: 229 });
+
+    expect(submitted).toEqual([]);
+  });
 });
