@@ -56,6 +56,24 @@ public class TransactionInputValidatorTests
             .IsValid.Should().BeTrue();
     }
 
+    [Fact]
+    public void Tag_ids_must_be_at_most_four_distinct_non_empty_ids()
+    {
+        var validator = new TransactionInputValidator();
+        var lunch = new TransactionInput(TransactionKind.Expense, Jan5, null, -120m, Cash, null, Food, null, null, null);
+        Guid[] four = [.. Enumerable.Range(0, 4).Select(_ => Guid.CreateVersion7())];
+
+        validator.Validate(lunch).IsValid.Should().BeTrue();
+        validator.Validate(lunch with { TagIds = [] }).IsValid.Should().BeTrue();
+        validator.Validate(lunch with { TagIds = four }).IsValid.Should().BeTrue();
+        validator.Validate(lunch with { TagIds = [.. four, Guid.CreateVersion7()] }).Errors
+            .Should().Contain(e => e.PropertyName == nameof(TransactionInput.TagIds));
+        validator.Validate(lunch with { TagIds = [four[0], four[0]] }).Errors
+            .Should().Contain(e => e.PropertyName == nameof(TransactionInput.TagIds));
+        validator.Validate(lunch with { TagIds = [four[0], Guid.Empty] }).Errors
+            .Should().Contain(e => e.PropertyName.StartsWith(nameof(TransactionInput.TagIds)));
+    }
+
     private static TransactionInput Input(string caseName) => caseName switch
     {
         "Transfer 缺 CounterAccountId" =>

@@ -180,13 +180,18 @@ internal sealed class RestoreBackupHandler(ISixJarsDbContext db, IAuditTrail aud
     {
         var input = backup.Transaction.ToInput();
         var transaction = TransactionBuilder.Build(book, input, new TransactionId(backup.Transaction.Id));
-        if (TransactionDto.From(transaction, backup.Transaction.Version).ToInput() != input)
+        if (!SameInput(TransactionDto.From(transaction, backup.Transaction.Version).ToInput(), input))
         {
             throw new DomainException($"交易 {backup.Transaction.Id} 經 Domain 重建後與備份不一致，備份可能已損毀。");
         }
 
         return (transaction, backup.DeletedAt);
     }
+
+    // record 相等對清單比的是參考，TagIds 另外以排序後的內容比較；null 與空集合視為相同（tags spec D6）。
+    private static bool SameInput(TransactionInput a, TransactionInput b) =>
+        a with { TagIds = null } == b with { TagIds = null }
+        && (a.TagIds ?? []).Order().SequenceEqual((b.TagIds ?? []).Order());
 
     private static List<PlannedExpense> RestorePlannedExpenses(
         Book book,

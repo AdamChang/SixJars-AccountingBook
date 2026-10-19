@@ -55,6 +55,12 @@ public sealed class TransactionInputValidator : AbstractValidator<TransactionInp
             .Must(key => key!.Value % 100 is >= 1 and <= 12)
             .When(i => i.BudgetMonth is not null)
             .WithMessage("歸屬月份必須是 yyyymm，月份介於 1 到 12。");
+
+        RuleFor(i => i.TagIds)
+            .Must(ids => ids!.Count <= Transaction.MaxTags).WithMessage($"一筆交易最多 {Transaction.MaxTags} 個標籤。")
+            .Must(ids => ids!.Distinct().Count() == ids!.Count).WithMessage("標籤不可重複。")
+            .When(i => i.TagIds is not null);
+        RuleForEach(i => i.TagIds).NotEmpty();
     }
 
     private static string Unused(TransactionInput input) => $"{input.Kind} 交易不使用此欄位，必須留空。";
