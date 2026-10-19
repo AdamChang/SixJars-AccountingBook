@@ -151,6 +151,12 @@ dotnet run --project src/SixJars.Cli -- import-legacy --file <帳本.xlsm> --boo
 # 把 Google 帳號加為帳本擁有者（登入白名單）
 dotnet run --project src/SixJars.Cli -- add-member --book <bookId> --email <gmail>
 
+# 把 Google 帳號加入建立者名單（沒有帳本也能登入，可在 Web 自行建立帳本，ADR 0011）
+dotnet run --project src/SixJars.Cli -- add-creator --email <gmail>
+
+# 從建立者名單移除（已建立的帳本不受影響）
+dotnet run --project src/SixJars.Cli -- remove-creator --email <gmail>
+
 # 從 JSON 備份還原一本帳
 dotnet run --project src/SixJars.Cli -- restore-backup --file <backup.json>
 ```
