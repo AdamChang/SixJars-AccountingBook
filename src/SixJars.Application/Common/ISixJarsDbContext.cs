@@ -26,6 +26,9 @@ public interface ISixJarsDbContext
     /// <summary>帳本成員；白名單即此表（ADR 0005）。</summary>
     DbSet<BookMember> BookMembers { get; }
 
+    /// <summary>建立者名單（ADR 0011）；由 CLI 維護，異動不留稽核記錄。</summary>
+    DbSet<BookCreator> BookCreators { get; }
+
     /// <summary>樂觀並行版本（PostgreSQL xmin）；回應給前端，修改時帶回來。</summary>
     uint GetVersion(object entity);
 

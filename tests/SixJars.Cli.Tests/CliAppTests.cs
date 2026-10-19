@@ -103,6 +103,65 @@ public class CliAppTests(PostgresFixture postgres)
     }
 
     [Fact]
+    public async Task Add_creator_creates_unbound_entry_without_audit()
+    {
+        var connectionString = await postgres.CreateConnectionStringAsync(Ct);
+        var output = new StringWriter();
+
+        var exitCode = await RunAsync(connectionString, output, "add-creator", "--email", " Creator@Example.com ");
+
+        exitCode.Should().Be(0, output.ToString());
+        await using var db = Open(connectionString);
+        var creator = await db.BookCreators.SingleAsync(Ct);
+        creator.Email.Should().Be("creator@example.com");
+        creator.GoogleSubject.Should().BeNull();
+        creator.AddedAt.Should().Be(Now);
+        // ADR 0011：名單不屬於任何帳本，異動不留稽核記錄（Q24）。
+        (await db.AuditEntries.CountAsync(Ct)).Should().Be(0);
+    }
+
+    [Fact]
+    public async Task Add_creator_twice_fails_with_clear_message()
+    {
+        var connectionString = await postgres.CreateConnectionStringAsync(Ct);
+        (await RunAsync(connectionString, new StringWriter(), "add-creator", "--email", "creator@example.com")).Should().Be(0);
+        var output = new StringWriter();
+
+        var exitCode = await RunAsync(connectionString, output, "add-creator", "--email", "CREATOR@example.com");
+
+        exitCode.Should().Be(1);
+        output.ToString().Should().Contain("creator@example.com").And.Contain("已在").And.NotContain("   at ");
+        await using var db = Open(connectionString);
+        (await db.BookCreators.CountAsync(Ct)).Should().Be(1);
+    }
+
+    [Fact]
+    public async Task Remove_creator_deletes_the_entry()
+    {
+        var connectionString = await postgres.CreateConnectionStringAsync(Ct);
+        (await RunAsync(connectionString, new StringWriter(), "add-creator", "--email", "creator@example.com")).Should().Be(0);
+        var output = new StringWriter();
+
+        var exitCode = await RunAsync(connectionString, output, "remove-creator", "--email", " Creator@Example.com ");
+
+        exitCode.Should().Be(0, output.ToString());
+        await using var db = Open(connectionString);
+        (await db.BookCreators.CountAsync(Ct)).Should().Be(0);
+    }
+
+    [Fact]
+    public async Task Remove_unknown_creator_fails_with_clear_message()
+    {
+        var connectionString = await postgres.CreateConnectionStringAsync(Ct);
+        var output = new StringWriter();
+
+        var exitCode = await RunAsync(connectionString, output, "remove-creator", "--email", "nobody@example.com");
+
+        exitCode.Should().Be(1);
+        output.ToString().Should().Contain("nobody@example.com").And.Contain("不在");
+    }
+
+    [Fact]
     public async Task Invalid_email_is_rejected_without_writing()
     {
         var connectionString = await postgres.CreateConnectionStringAsync(Ct);
