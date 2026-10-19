@@ -1,5 +1,7 @@
 # 以 BFF cookie 接 Google OIDC，白名單就是帳本成員表
 
+> 部分被 [ADR 0011](0011-book-creators-may-create-books.md) 取代：白名單不再只是成員表，第一位擁有者也可以由建立者在 Web 建立。
+
 登入採 BFF 模式：ASP.NET Core 自己執行 Google OIDC 的 authorization code flow，登入成功後發出同源的 HttpOnly、Secure、SameSite=Lax cookie。Angular PWA 由同一個 Cloud Run 服務提供，前端完全不經手 token。
 
 白名單不另外維護，直接使用帳本成員（Book Member）表。第一次登入時以已驗證的 email 比對，比對成功後綁定 Google `sub`，之後都以 `sub` 辨識。不是成員的身分會被拒絕登入。所有帳本範圍的 API 都要求登入者是該帳本的成員；不是成員時回 404，不透露帳本是否存在。
