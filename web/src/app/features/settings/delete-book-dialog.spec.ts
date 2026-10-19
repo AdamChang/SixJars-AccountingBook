@@ -13,12 +13,12 @@ const PREVIEW: BookDeletionPreviewDto = {
   recurringPlannedExpenses: 2, categoryBudgets: 4, members: 1, auditEntries: 40,
 };
 
-async function open() {
+async function open(isLastBook = false) {
   const close = vi.fn();
   TestBed.configureTestingModule({
     providers: [
       provideHttpClient(), provideHttpClientTesting(),
-      { provide: MAT_DIALOG_DATA, useValue: { bookId: 'book-1', name: '我的帳本' } },
+      { provide: MAT_DIALOG_DATA, useValue: { bookId: 'book-1', name: '我的帳本', isLastBook } },
       { provide: MatDialogRef, useValue: { close } },
     ],
   });
@@ -62,6 +62,21 @@ describe('DeleteBookDialog', () => {
     await input.setValue('我的帳本');
     await (await deleteButton()).click();
     expect(close).toHaveBeenCalledWith('我的帳本');
+  });
+
+  // 登入只放行帳本成員（ADR 0005）：刪掉最後一本後，下次登入會被拒絕（#8）
+  it('warns_about_login_when_deleting_the_last_book', async () => {
+    const { el, flushPreview } = await open(true);
+    await flushPreview();
+
+    expect(el.querySelector('.last-book')?.textContent).toContain('刪除後你將無法再登入，除非有人把你加為成員。');
+  });
+
+  it('no_login_warning_when_other_books_remain', async () => {
+    const { el, flushPreview } = await open(false);
+    await flushPreview();
+
+    expect(el.querySelector('.last-book')).toBeNull();
   });
 
   it('failed_preview_keeps_delete_disabled', async () => {

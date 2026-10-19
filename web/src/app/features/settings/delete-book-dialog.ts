@@ -7,7 +7,8 @@ import { MatInputModule } from '@angular/material/input';
 import { BookApi } from '../../core/api/book-api';
 import { BookDeletionPreviewDto } from '../../core/api/dto';
 
-export interface DeleteBookDialogData { bookId: string; name: string }
+// isLastBook：使用者只剩這一本帳本。登入只放行帳本成員（ADR 0005），刪掉後下次登入會被拒絕（#8）
+export interface DeleteBookDialogData { bookId: string; name: string; isLastBook: boolean }
 
 // 刪除帳本的確認：先看統計、可以先下載備份，輸入完全相同的名稱才能刪除（spec F2）。
 // 只回傳輸入的名稱，由頁面送出刪除；取消時 afterClosed 回 undefined。
@@ -20,6 +21,9 @@ export interface DeleteBookDialogData { bookId: string; name: string }
     <mat-dialog-content>
       @if (preview(); as p) {
         <p class="warning">刪除後，這本帳本的所有交易、預定支出、預算與設定都會永久移除，無法復原。</p>
+        @if (data.isLastBook) {
+          <p class="warning last-book">這是你唯一的帳本。刪除後你將無法再登入，除非有人把你加為成員。</p>
+        }
         <dl class="counts">
           <dt>開帳日</dt><dd>{{ p.openingDate }}</dd>
           @if (p.lockDate) {
