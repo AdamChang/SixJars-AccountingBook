@@ -60,7 +60,7 @@ describe('App', () => {
     expect(logout).toHaveBeenCalled();
   });
 
-  // Q23：帳本名稱是選單，可以切換帳本；非建立者看不到「新增帳本…」（Q15）
+  // Q23：帳本名稱是選單，可以切換帳本；非建立者看不到「建立帳本…」（Q15）
   it('book_menu_lists_books_and_marks_current_one', async () => {
     const { openBookMenu } = setup(me(), BOOK);
     const menu = await openBookMenu();
@@ -77,7 +77,7 @@ describe('App', () => {
     const menu = await openBookMenu();
     expect(document.querySelector('.quota-hint')).toBeNull();
 
-    await menu.clickItem({ text: '新增帳本…' });
+    await menu.clickItem({ text: '建立帳本…' });
 
     expect(start).toHaveBeenCalledTimes(1);
   });
@@ -87,7 +87,7 @@ describe('App', () => {
     const { openBookMenu } = setup(me({ canCreateBooks: true, remainingBookQuota: 0 }), BOOK);
     const menu = await openBookMenu();
 
-    const [create] = await menu.getItems({ text: '新增帳本…' });
+    const [create] = await menu.getItems({ text: '建立帳本…' });
     expect(await create.isDisabled()).toBe(true);
     const hint = document.querySelector('.quota-hint')!;
     expect(hint.textContent!.trim()).toBe('已達 5 本上限');

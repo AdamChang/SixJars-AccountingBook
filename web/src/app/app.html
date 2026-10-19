@@ -4,7 +4,7 @@
 @if (session.me(); as me) {
   <mat-toolbar class="app-bar">
     @if (currentBook.book(); as book) {
-      <!-- Q23：帳本名稱是選單，切換帳本與「新增帳本…」 -->
+      <!-- Q23：帳本名稱是選單，切換帳本與「建立帳本…」 -->
       <button mat-button type="button" class="book-name" [matMenuTriggerFor]="bookMenu">{{ book.name }} <span aria-hidden="true">▾</span></button>
       <mat-menu #bookMenu="matMenu">
         @for (item of me.books; track item.id) {
@@ -15,7 +15,7 @@
           <mat-divider />
           <button mat-menu-item type="button" class="create-book" [disabled]="me.remainingBookQuota === 0"
                   [attr.aria-describedby]="me.remainingBookQuota === 0 ? 'book-quota-hint' : null"
-                  (click)="bookCreation.start()">新增帳本…</button>
+                  (click)="bookCreation.start()">建立帳本…</button>
           @if (me.remainingBookQuota === 0) {
             <!-- 5 與後端 CreateBook.MaxOwnedBooks 相同（spec Q15 的文案）；後端改上限時一起改 -->
             <p class="quota-hint" id="book-quota-hint">已達 5 本上限</p>

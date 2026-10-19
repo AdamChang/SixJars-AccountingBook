@@ -17,7 +17,7 @@ export class BookCreation {
   private readonly router = inject(Router);
   private readonly notifier = inject(Notifier);
 
-  // 動態載入對話框 chunk 期間為 true：連按「新增帳本」時不會開出第二個對話框
+  // 動態載入對話框 chunk 期間為 true：連按「建立帳本」時不會開出第二個對話框
   private opening = false;
 
   async start(): Promise<void> {
