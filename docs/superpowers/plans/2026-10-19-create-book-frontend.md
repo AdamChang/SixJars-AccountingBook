@@ -1193,3 +1193,14 @@ git commit -m "test(web): 建立帳本 e2e：選單送出名稱與 XSRF，reload
 | `angular.json` initial budget：warning 700kB、error 1MB；目前 `main` 約 204kB | ✅ | `angular.json:37-42`、`dist/web/browser`（5842d76 的 build） | Task 5 跑 `ng build` 檢查 |
 | Create 的檔案尚不存在 | ✅ | `core/book/` 只有 `book.guard*`、`current-book*`；`e2e/` 沒有 `create-book.spec.ts` | — |
 | 測試碼競態：`BookCreation.enter` 是 async，斷言包在 `vi.waitFor`；對話框以 mock 取代，不受關閉動畫影響（#6 的教訓）；`flush({ ...BOOK })` 產生新參考，避免「同一本重新載入」的測試因為參考相同而空轉 | ✅ | — | — |
+
+## 執行結果與偏差（2026-10-20，前端 checkpoint）
+
+- Commit：`2991d38`（Task 1）、`a0c58cb`（Task 2）、`68dc38e`（Task 3）、`d35890a`（Task 4）、`c6ebeb4`（Task 5，含延遲載入）、`7517350`（Task 6）、`65a8d1c`（Task 7）、`7c93957`（Task 8）、`f7c6477`（Task 9）、`b45f759`＋`8b38b99`（最終審查修正）。
+- 測試：基準線 357（42 檔）→ 358 → 359 → 363（43）→ 367（44）→ 370 → 371 → 375 → 376 → **381（44 檔）**，每次 exit 0、沒有 Unhandled Errors。Playwright 13 → **14**。`ng build` initial **666.58 kB**，沒有 warning。後端（rebase 後含標籤功能）**644** 通過、失敗 0、略過 0。
+- 變異檢查：每個 Task 都以預期的理由變紅（Task 5 另加「spec 不 await start()」、Task 9 拿掉 `session.reload()`）。
+- **偏差 1（開工前）**：分支已 rebase 到 master `0fc51a7`（標籤功能、交易改在對話框編輯），基準線與分頁順序都變了；已用 `ed868e7` 回寫計畫：數字 +40、`TAB_KEYS` 加入 `tags`（0–4）、交易頁 spec 的 `setup` 第二個參數改為函式、e2e 新帳本補 `tags: []`。
+- **偏差 2（Task 5）**：工具列選單讓 initial bundle 變成 738.13 kB，超過 700 kB budget。採用計畫的備案：`BookCreation.start()` 改為 async，以 `await import('./create-book-dialog')` 延遲載入對話框（665.51 kB）；`book-creation.spec` 改為 await `start()`。`angular.json` 沒有改。
+- **偏差 3（最終審查）**：補上 BookCreation 的 400 分支測試；`start()` 加重入保護（載入中連點只開一個對話框）與 chunk 載入失敗時顯示 `UNAVAILABLE_MESSAGE`（以 `protected loadDialog()` 作為測試接縫）；建立成功後 `reload` 失敗仍導向新帳本並顯示成功訊息；工具列 ▾ 改為 `aria-hidden`、名額用完的提示以 `aria-describedby` 連到停用項、對話框錯誤加 `role="alert"`；對話框輸入框按 Enter 送出；`api-error.ts` 註明 interceptor 不通知 `forbidden`。
+- 延後的小問題：Enter 送出沒有檢查 IME 組字（Safari 上用中文輸入法選字時可能提早送出，建議加 `!$event.isComposing`）；`TAB_KEYS` 只有 `accounts` 與未知值有測試；交易頁提示可加 `role="status"`；e2e 的按鈕名稱是子字串比對；`settings` 以外的 e2e me mock 沒有新欄位（等同 false）。
+- Commit 的 Co-Authored-By 標示實際執行的模型（Haiku 5.5／Sonnet 5.5）。
