@@ -134,6 +134,20 @@ public class CreateBookEndpointsTests(PostgresFixture postgres)
     }
 
     [Fact]
+    public async Task Missing_opening_date_is_400()
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        await factory.AddCreatorAsync(Creator, Ct);
+        var client = await factory.CreateMemberClientAsync(Creator);
+
+        // 沒帶 openingDate 會綁成 default(DateOnly)＝0001-01-01，必須被擋下而不是建出開帳日 0001 的帳本。
+        var response = await client.PostAsJsonAsync("/api/books", new { name = "家庭帳本" }, Ct);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await response.Content.ReadFromJsonAsync<JsonElement>(Ct)).GetProperty("errors").TryGetProperty("openingDate", out _).Should().BeTrue();
+    }
+
+    [Fact]
     public async Task Concurrent_creates_cannot_exceed_the_quota()
     {
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);

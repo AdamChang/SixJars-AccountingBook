@@ -24,8 +24,13 @@ public sealed record CreatedBookSnapshot(string Name, DateOnly OpeningDate);
 
 internal sealed class CreateBookValidator : AbstractValidator<CreateBook>
 {
-    // 與 BookConfiguration 的名稱長度一致。
-    public CreateBookValidator() => RuleFor(c => c.Name).NotEmpty().MaximumLength(100);
+    public CreateBookValidator()
+    {
+        // 與 BookConfiguration 的名稱長度一致。
+        RuleFor(c => c.Name).NotEmpty().MaximumLength(100);
+        // 沒帶 openingDate 時 JSON 會綁成 default(DateOnly)（0001-01-01），視為缺漏而非有效開帳日。
+        RuleFor(c => c.OpeningDate).NotEqual(default(DateOnly));
+    }
 }
 
 internal sealed class CreateBookHandler(ISixJarsDbContext db, ICurrentUser user, IAuditTrail audit, TimeProvider clock)
