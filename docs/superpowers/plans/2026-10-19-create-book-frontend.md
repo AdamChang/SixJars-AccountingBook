@@ -18,14 +18,14 @@
 
 ### 環境
 
-- 工作目錄：`F:\VibeCode\SixJars-AccountingBook\web`。分支：`claude/create-book`（從 `claude/last-book-warning` 的 `5842d76` 開出），與後端同一條分支，**不是 master**。
+- 工作目錄：`F:\VibeCode\SixJars-AccountingBook\web`。分支：`claude/create-book`（已 rebase 到 master `0fc51a7` 之上，#8 為 `cd823e2`），與後端同一條分支，**不是 master**。
 - 全部單元測試：`npx ng test --watch=false; "exit=$LASTEXITCODE"`。單一檔案：`npx ng test --watch=false --include src/app/<path>.spec.ts; "exit=$LASTEXITCODE"`。
 - E2E：`npx playwright test`（mock API，不需要後端）。單一檔案：`npx playwright test e2e/<name>.spec.ts`。建置：`npx ng build`。
 
-### 基準線（2026-10-19 本機實測，`5842d76`）
+### 基準線（2026-10-20 本機實測，`9a8697a`，rebase 後含標籤功能）
 
-- `ng test`：**317 passed（39 個檔案）**，exit code 0。
-- Playwright：**10 passed**。
+- `ng test`：**357 passed（42 個檔案）**，exit code 0。
+- Playwright：**13 passed**。
 - 開工前再跑一次，確認數字相同（後端計畫不會動到 `web/`）。數字低於基準線，就代表弄壞了東西。各 Task 的 Expected 是**預測**，以實際結果為準，只要只增不減即可。
 
 ### `ng test` 一律看 exit code
@@ -132,7 +132,7 @@ Task 1、2、3、8 互相獨立；Task 3 只用到既有的 `ApiError` 型別。
 
 - [ ] Step 4：兩個單一檔案全綠，`exit=0`。
 - [ ] 變異檢查：拿掉 `case 403`，`403 -> forbidden` 必須變紅（實際值是 `{ kind: 'unavailable' }`）；確認後還原。
-- [ ] Step 5：`npx ng test --watch=false; "exit=$LASTEXITCODE"`。Expected：**318 passed（39 個檔案）**、`exit=0`、沒有 Unhandled Errors。
+- [ ] Step 5：`npx ng test --watch=false; "exit=$LASTEXITCODE"`。Expected：**358 passed（42 個檔案）**、`exit=0`、沒有 Unhandled Errors。
 - [ ] Step 6：Commit
 
 ```powershell
@@ -197,7 +197,7 @@ git commit -m "feat(web): 403 分類為 forbidden，登入拒絕說明涵蓋建�
 
 - [ ] Step 4：單一檔案全綠，比原本多 1 個，`exit=0`。
 - [ ] 變異檢查：把 `create` 的 body 改成 `{ name: body.name }`，`create_posts_name_and_opening_date` 必須變紅；確認後還原。
-- [ ] Step 5：`npx ng test --watch=false; "exit=$LASTEXITCODE"`。Expected：**319 passed（39 個檔案）**、`exit=0`。另外執行 `npx playwright test`，Expected：**10 passed**（只動了 fixture）。
+- [ ] Step 5：`npx ng test --watch=false; "exit=$LASTEXITCODE"`。Expected：**359 passed（42 個檔案）**、`exit=0`。另外執行 `npx playwright test`，Expected：**13 passed**（只動了 fixture）。
 - [ ] Step 6：Commit
 
 ```powershell
@@ -397,7 +397,7 @@ export class CreateBookDialog {
 
 - [ ] Step 4：單一檔案，**4 passed**，`exit=0`。
 - [ ] 變異檢查：把 `canSubmit` 的 `this.name().trim()` 改成 `this.name()`，`defaults_opening_date_to_local_today_and_requires_a_name` 必須在「只有空白」那一步變紅；確認後還原。（選做：把預設值改成 `new Date().toISOString().slice(0, 10)`，同一個測試應在日期那一步變紅。）
-- [ ] Step 5：`npx ng test --watch=false; "exit=$LASTEXITCODE"`。Expected：**323 passed（40 個檔案）**、`exit=0`。
+- [ ] Step 5：`npx ng test --watch=false; "exit=$LASTEXITCODE"`。Expected：**363 passed（43 個檔案）**、`exit=0`。
 - [ ] Step 6：Commit
 
 ```powershell
@@ -596,7 +596,7 @@ export class BookCreation {
   - 把 `enter` 的前兩行對調（先導頁再 reload），`success_reloads_session_then_opens_accounts_tab_of_new_book` 必須在 `invocationCallOrder` 那一行變紅。
   - 把 `error` 裡的 `dialog.busy.set(false);` 拿掉，`domain_error_keeps_dialog_open_with_backend_message` 必須變紅。
   - 各自還原。
-- [ ] Step 5：`npx ng test --watch=false; "exit=$LASTEXITCODE"`。Expected：**327 passed（41 個檔案）**、`exit=0`。
+- [ ] Step 5：`npx ng test --watch=false; "exit=$LASTEXITCODE"`。Expected：**367 passed（44 個檔案）**、`exit=0`。
 - [ ] Step 6：Commit
 
 ```powershell
@@ -759,7 +759,7 @@ describe('App', () => {
 
 - [ ] Step 4：單一檔案，**5 passed**，`exit=0`。
 - [ ] 變異檢查：把 `[disabled]="me.remainingBookQuota === 0"` 改成 `[disabled]="false"`，`create_is_disabled_with_hint_when_quota_is_used_up` 必須變紅；把 `@if (me.canCreateBooks)` 改成 `@if (true)`，`book_menu_lists_books_and_marks_current_one` 必須變紅（多出「新增帳本…」）。各自還原。
-- [ ] Step 5：`npx ng test --watch=false; "exit=$LASTEXITCODE"`。Expected：**330 passed（41 個檔案）**、`exit=0`。另外執行 `npx ng build`：`App` 與首頁是 eager 載入，這個 Task 讓 initial bundle 多了 dialog／menu／form-field；確認沒有超過 `angular.json` 的 initial budget（warning 700kB）。**出現 budget warning 就停下來回報**，備案是在 `BookCreation.start()` 裡以 `await import('./create-book-dialog')` 延遲載入對話框。
+- [ ] Step 5：`npx ng test --watch=false; "exit=$LASTEXITCODE"`。Expected：**370 passed（44 個檔案）**、`exit=0`。另外執行 `npx ng build`：`App` 與首頁是 eager 載入，這個 Task 讓 initial bundle 多了 dialog／menu／form-field；確認沒有超過 `angular.json` 的 initial budget（warning 700kB）。**出現 budget warning 就停下來回報**，備案是在 `BookCreation.start()` 裡以 `await import('./create-book-dialog')` 延遲載入對話框。
 - [ ] Step 6：Commit
 
 ```powershell
@@ -854,7 +854,7 @@ git commit -m "feat(web): 工具列帳本名稱改成選單，可以切換帳本
 
 - [ ] Step 4：單一檔案，**4 passed**，`exit=0`。
 - [ ] 變異檢查：把 `canCreateBooks` 改成建構時讀一次的值 `protected readonly canCreateBooks = signal(this.session.me()!.canCreateBooks);`（需 import `signal`），新測試必須在後半段（按鈕仍在）變紅；確認後還原。
-- [ ] Step 5：`npx ng test --watch=false; "exit=$LASTEXITCODE"`。Expected：**331 passed（41 個檔案）**、`exit=0`。
+- [ ] Step 5：`npx ng test --watch=false; "exit=$LASTEXITCODE"`。Expected：**371 passed（44 個檔案）**、`exit=0`。
 - [ ] Step 6：Commit
 
 ```powershell
@@ -869,7 +869,7 @@ git commit -m "feat(web): 建立者沒有帳本時，首頁提供建立帳本的
 **Files:** Modify: `web/src/app/features/settings/settings.page.ts`、`settings.page.html`、`settings.page.spec.ts`
 
 容易錯的地方：
-1. **`ActivatedRoute`**：`settings.page.spec.ts` 沒有 `provideRouter`，而 Angular 22.2.1 的 `ActivatedRoute` 只由 `provideRouter`／`RouterModule` 提供（`_router_module-chunk.mjs`）；頁面一注入它，**既有的 12 個設定頁測試全部會 NullInjectorError**。setup 改為提供一個假的 `ActivatedRoute`（只有 `queryParamMap`）。
+1. **`ActivatedRoute`**：`settings.page.spec.ts` 沒有 `provideRouter`，而 Angular 22.2.1 的 `ActivatedRoute` 只由 `provideRouter`／`RouterModule` 提供（`_router_module-chunk.mjs`）；頁面一注入它，**既有的 16 個設定頁測試全部會 NullInjectorError**。setup 改為提供一個假的 `ActivatedRoute`（只有 `queryParamMap`）。
 2. **路由重用**：在帳本 A 的設定頁用工具列建立帳本 B，會從 `/books/A/settings` 導到 `/books/B/settings?tab=accounts`，Angular 會**重用同一個 `SettingsPage`**。只在建構時讀一次 `?tab=` 的話，B 不會落在帳戶分頁。所以初始分頁要在「換帳本」時重新套用。
 3. **但不能在重新載入同一本時套用**：每次寫入後 `run()` 都會 `currentBook.reload()`，`book()` 會換成新物件。來源如果是 `{ bookId, tab }` 物件，每次儲存都會把使用者拉回 `?tab=` 的分頁。所以來源 `computed` 要自訂 `equal`，只比較 `bookId` 與 `tab`。
 4. 分頁要雙向綁定 `[(selectedIndex)]`：單向綁定時，使用者手動換分頁後 signal 的值沒變，換帳本時重新算出同一個值也不會觸發更新。
@@ -950,7 +950,7 @@ git commit -m "feat(web): 建立者沒有帳本時，首頁提供建立帳本的
       });
     ```
 
-- [ ] Step 2：`npx ng test --watch=false --include src/app/features/settings/settings.page.spec.ts; "exit=$LASTEXITCODE"`。預期：`tab_query_param_opens_that_tab` 與 `tab_query_param_reapplies…` 失敗（選中的是「分類」）；`delete_dialog_has_no_login_warning_for_a_creator` 失敗（警告存在）；`unknown_tab…` 此時會**通過**（現況本來就是第 0 個分頁），它守的是實作之後的退回行為。既有 12 個測試必須維持綠燈（假的 `ActivatedRoute` 還沒有人用）。
+- [ ] Step 2：`npx ng test --watch=false --include src/app/features/settings/settings.page.spec.ts; "exit=$LASTEXITCODE"`。預期：`tab_query_param_opens_that_tab` 與 `tab_query_param_reapplies…` 失敗（選中的是「分類」）；`delete_dialog_has_no_login_warning_for_a_creator` 失敗（警告存在）；`unknown_tab…` 此時會**通過**（現況本來就是第 0 個分頁），它守的是實作之後的退回行為。既有 16 個測試必須維持綠燈（假的 `ActivatedRoute` 還沒有人用）。
 - [ ] Step 3：最小實作
   - `settings.page.ts`：
     - import：`computed` 已有；`toSignal` 加進 `@angular/core/rxjs-interop` 那一行；`ActivatedRoute` 加進 `@angular/router` 那一行；`map` 加進 `rxjs` 那一行。
@@ -958,7 +958,7 @@ git commit -m "feat(web): 建立者沒有帳本時，首頁提供建立帳本的
 
       ```ts
       // ?tab= 的值，依分頁順序（spec F5）；不認得的值用第一個分頁
-      const TAB_KEYS = ['categories', 'accounts', 'funds', 'data'];
+      const TAB_KEYS = ['categories', 'accounts', 'funds', 'tags', 'data'];
       ```
 
     - 類別內（`lockDate` 之後）加上：
@@ -988,12 +988,12 @@ git commit -m "feat(web): 建立者沒有帳本時，首頁提供建立帳本的
       ```
 
   - `settings.page.html` 第一行改為 `<mat-tab-group class="ledger-sheet" [(selectedIndex)]="selectedTab">`。
-- [ ] Step 4：單一檔案，**16 passed**（原本 12＋4），`exit=0`。
+- [ ] Step 4：單一檔案，**20 passed**（原本 16＋4），`exit=0`。
 - [ ] 變異檢查：
   - 拿掉 `tabTarget` 的 `equal` 選項，`tab_query_param_reapplies_only_when_book_changes` 必須在「同一本重新載入」那一步變紅（被拉回「帳戶」）。
   - 拿掉 `&& !me.canCreateBooks`，`delete_dialog_has_no_login_warning_for_a_creator` 必須變紅。
   - 各自還原。
-- [ ] Step 5：`npx ng test --watch=false; "exit=$LASTEXITCODE"`。Expected：**335 passed（41 個檔案）**、`exit=0`。
+- [ ] Step 5：`npx ng test --watch=false; "exit=$LASTEXITCODE"`。Expected：**375 passed（44 個檔案）**、`exit=0`。
 - [ ] Step 6：Commit
 
 ```powershell
@@ -1009,7 +1009,7 @@ git commit -m "feat(web): 設定頁支援 ?tab= 開啟指定分頁；建立者�
 
 從首頁、書籤或切換帳本進到一本空帳本時，表單沒有帳戶可選，使用者不知道下一步。容易錯的地方：判斷的是「**未封存**的帳戶」，帳戶全部封存的舊帳本也一樣不能記帳；測試用全部封存的帳本，就能同時抓到「只判斷 `accounts.length === 0`」的寫法。若 `TransactionForm` 在沒有可用帳戶時拋錯（`Unhandled Error` 或 exit code 1），**停下來回報**，不要在這個 Task 裡改表單。
 
-- [ ] Step 1：`transactions.page.spec.ts`
+- [ ] Step 1：`transactions.page.spec.ts`（rebase 後 `setup(url, closedWith)` 的第二個參數是函式，新測試傳 `undefined` 沿用預設值）
   - dto import 補上 `BookDto`：`import { BookDto, TransactionDto } from '../../core/api/dto';`
   - `setup` 加第三個參數 `book: BookDto = BOOK`，`CurrentBook` 的 mock 改為 `{ provide: CurrentBook, useValue: { book: signal(book) } }`。
   - `loads_transactions_for_query_month` 結尾加上 `expect(page.el.querySelector('.no-accounts')).toBeNull();`
@@ -1019,7 +1019,7 @@ git commit -m "feat(web): 設定頁支援 ?tab= 開啟指定分頁；建立者�
       // 新建立的帳本沒有帳戶，封存的也不能用：提示到設定頁的帳戶分頁新增（spec F6）
       it('hints_settings_accounts_tab_when_no_active_account', async () => {
         const archived = BOOK.accounts.map(account => ({ ...account, archivedAt: '2026-01-01T00:00:00Z' }));
-        const page = await setup('/books/book-1/transactions?month=202603', true, { ...BOOK, accounts: archived });
+        const page = await setup('/books/book-1/transactions?month=202603', undefined, { ...BOOK, accounts: archived });
         await page.flushList(202603, []);
 
         const link = page.el.querySelector<HTMLAnchorElement>('.no-accounts a')!;
@@ -1053,7 +1053,7 @@ git commit -m "feat(web): 設定頁支援 ?tab= 開啟指定分頁；建立者�
   - `transactions.page.scss` 新增 `.no-accounts { margin: 0; padding: 12px 16px; }`。
 - [ ] Step 4：單一檔案全綠，比原本多 1 個，`exit=0`。
 - [ ] 變異檢查：把 `!book.accounts.some(account => account.archivedAt === null)` 改成 `book.accounts.length === 0`，新測試必須變紅；確認後還原。
-- [ ] Step 5：`npx ng test --watch=false; "exit=$LASTEXITCODE"`。Expected：**336 passed（41 個檔案）**、`exit=0`。
+- [ ] Step 5：`npx ng test --watch=false; "exit=$LASTEXITCODE"`。Expected：**376 passed（44 個檔案）**、`exit=0`。
 - [ ] Step 6：Commit
 
 ```powershell
@@ -1076,7 +1076,7 @@ import { expect, test } from '@playwright/test';
 import { BOOK, BOOK_ID, mockApi } from './fixtures';
 
 const NEW_ID = 'b2';
-const NEW_BOOK = { id: NEW_ID, name: '新帳本', openingDate: '2026-10-19', lockDate: null, accounts: [], planningFunds: [], categories: [] };
+const NEW_BOOK = { id: NEW_ID, name: '新帳本', openingDate: '2026-10-19', lockDate: null, accounts: [], planningFunds: [], categories: [], tags: [] };
 
 // 從工具列的帳本選單建立：送出名稱、開帳日與 XSRF；reload me 後選單出現新帳本，並落在新帳本設定頁的帳戶分頁（spec Q21、F5）
 test('toolbar_menu_creates_book_and_opens_its_accounts_tab', async ({ page }) => {
@@ -1123,7 +1123,7 @@ test('toolbar_menu_creates_book_and_opens_its_accounts_tab', async ({ page }) =>
 - [ ] Step 2：Task 1–8 完成後這條 e2e 一寫完就會是綠的，所以用變異檢查證明它有效：暫時拿掉 `BookCreation.enter` 裡的 `await this.session.reload();`，執行 `npx playwright test e2e/create-book.spec.ts`，應該在最後一個斷言失敗（`me` 沒有重新載入，選單沒有「新帳本」）；確認後還原。
 - [ ] Step 3：（不需要實作）
 - [ ] Step 4：`npx playwright test e2e/create-book.spec.ts`，**1 passed**。
-- [ ] Step 5：`npx playwright test`，Expected：**11 passed**。`npx ng test --watch=false; "exit=$LASTEXITCODE"`，Expected：**336 passed（41 個檔案）**、`exit=0`。`npx ng build`：成功、沒有 warning。
+- [ ] Step 5：`npx playwright test`，Expected：**14 passed**。`npx ng test --watch=false; "exit=$LASTEXITCODE"`，Expected：**376 passed（44 個檔案）**、`exit=0`。`npx ng build`：成功、沒有 warning。
 - [ ] Step 6：Commit
 
 ```powershell
@@ -1135,8 +1135,8 @@ git commit -m "test(web): 建立帳本 e2e：選單送出名稱與 XSRF，reload
 
 ## 完成後的驗證（前端 checkpoint）
 
-- [ ] `npx ng test --watch=false; "exit=$LASTEXITCODE"`：**336 passed（41 個檔案）**左右、`exit=0`、沒有 Unhandled Errors。
-- [ ] `npx playwright test`：**11 passed**。
+- [ ] `npx ng test --watch=false; "exit=$LASTEXITCODE"`：**376 passed（44 個檔案）**左右、`exit=0`、沒有 Unhandled Errors。
+- [ ] `npx playwright test`：**14 passed**。
 - [ ] `npx ng build`：成功，沒有 warning（含 budget）。
 - [ ] 後端再跑一次 `dotnet test --solution SixJars.slnx`，數字與後端 checkpoint 相同。
 - [ ] `git status --short`：只剩使用者尚未核准 commit 的 `docs/superpowers/` 文件（若已另外 commit 則為乾淨）；`angular.json` 沒有被改動。
@@ -1182,7 +1182,7 @@ git commit -m "test(web): 建立帳本 e2e：選單送出名稱與 XSRF，reload
 | 選單在測試裡不需要 animations provider | ✅ | `settings.page.spec.ts` 已用 `MatMenuHarness`，沒有提供 animations | — |
 | **`ActivatedRoute` 沒有 `providedIn: 'root'`，只由 `provideRouter`／`RouterModule` 提供** | ⚠️ | `router/fesm2022/_router_module-chunk.mjs:1619,1836` | 設定頁 spec 沒有 `provideRouter`：Task 7 setup 改為提供假的 `ActivatedRoute`，否則既有測試全數 NullInjectorError |
 | `App`、`HomePage` 的 spec 沒有 `HttpClient`，注入真的 `BookCreation` 會失敗 | ⚠️ | `app.spec.ts`、`home.page.spec.ts` 的 providers | Task 5、6 的 setup 提供 `BookCreation` mock |
-| 設定頁分頁順序：分類／帳戶／財務規劃帳戶／鎖帳日與資料 | ✅ | `settings.page.html` | `TAB_KEYS` 對應 0–3 |
+| 設定頁分頁順序：分類／帳戶／財務規劃帳戶／標籤／鎖帳日與資料（rebase 後多了「標籤」） | ✅ | `settings.page.html` | `TAB_KEYS` 對應 0–4 |
 | 財務規劃帳戶分組的 `data-group` 是 `planning-funds` | ✅ | `settings-rules.ts:29` | Task 7 測試用這個選擇器 |
 | `SettingsPage.book` 是 `computed(() => currentBook.book()!)`；`run()` 成功後 `currentBook.reload()` | ✅ | `settings.page.ts` | Task 7 的 `equal`（重新載入不重設分頁） |
 | 路由 `books/:bookId` 底下的子路由會在換 `bookId` 時重用元件；`bookGuard` 換帳本時重新 `load` | ✅ | `app.routes.ts`、`book.guard.ts` | Task 7 換帳本時重新套用 `?tab=` |

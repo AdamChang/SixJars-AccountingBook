@@ -39,7 +39,7 @@
 | F2 | 對話框欄位：名稱（必填，最多 100 字）、開帳日（預設 `toDateString(new Date())`）。對話框不呼叫 API，也不自己關閉：以 `submitted` output 回報輸入，由 `BookCreation` 送出、決定是否關閉，失敗時呼叫對話框的 `showError()`，送出中設定 `busy` | 與 `DeleteBookDialog` 相同的分工（對話框不碰 API）；`toDateString` 已是 app 內的「今天」寫法。不能沿用 `afterClosed()` 回傳結果，因為 F3 要求 422 時對話框不關閉（事實查核時修正） | 對話框自己呼叫 API；`afterClosed()` 回傳輸入（422 時對話框已經關了） |
 | F3 | 錯誤：`forbidden` 顯示「你不在建立者名單，無法建立帳本」並 `session.reload()`（名單可能剛被移除）；`domain` 顯示後端訊息、對話框不關，讓使用者改名稱；`validation` 顯示在欄位下 | 名額用完、同名都是使用者可以理解的訊息，後端已經寫好 | 422 時關閉對話框（使用者要重打一次） |
 | F4 | `classifyError` 的 403 回傳 `{ kind: 'forbidden' }` | 目前 403 落到 `default`，會被當成 `unavailable`，顯示「暫時無法連線」 | — |
-| F5 | 設定頁讀 `?tab=` query param 決定 `mat-tab-group` 的 `selectedIndex`，值為 `categories`／`accounts`／`funds`／`data`；不認得的值用第 0 個。換帳本時重新套用（在設定頁建立另一本帳本時，路由會重用同一個 `SettingsPage`），但同一本帳本重新載入（每次寫入後的 `currentBook.reload`）時不重設 | 目前沒有 deep link；只讀不寫，切換分頁不改網址。重新套用的條件是事實查核時補上的：只在建構時讀一次，路由重用時新帳本不會落在帳戶分頁；每次 `book()` 變動都套用，則每次儲存都會把使用者拉回帳戶分頁 | 切換時同步改網址（範圍外，返回鍵行為也會改變） |
+| F5 | 設定頁讀 `?tab=` query param 決定 `mat-tab-group` 的 `selectedIndex`，值為 `categories`／`accounts`／`funds`／`tags`／`data`（依分頁順序；「標籤」分頁在 rebase 到 master 後加入）；不認得的值用第 0 個。換帳本時重新套用（在設定頁建立另一本帳本時，路由會重用同一個 `SettingsPage`），但同一本帳本重新載入（每次寫入後的 `currentBook.reload`）時不重設 | 目前沒有 deep link；只讀不寫，切換分頁不改網址。重新套用的條件是事實查核時補上的：只在建構時讀一次，路由重用時新帳本不會落在帳戶分頁；每次 `book()` 變動都套用，則每次儲存都會把使用者拉回帳戶分頁 | 切換時同步改網址（範圍外，返回鍵行為也會改變） |
 | F6 | 交易頁在 `book.accounts` 沒有任何未封存的帳戶時，在表單上方顯示提示與「前往設定」連結（`?tab=accounts`） | 從其他入口進到空帳本的人也知道怎麼開始 | 只在建立後導頁（從其他入口進來時沒有提示） |
 | #8 | 刪除對話框的 `isLastBook` 改為 `me.books.length === 1 && !me.canCreateBooks` | 建立者沒有帳本也能登入，不需要警告 | — |
 | F7 | `DENIED_MESSAGE` 改為「登入未完成：可能是此 Google 帳號不是任何帳本的成員、也不在建立者名單，或登入時取消了授權」 | 白名單的定義改了，說明要跟著改 | — |
