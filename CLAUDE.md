@@ -34,7 +34,7 @@ Clean Architecture：`Domain` ← `Application` ← `Infrastructure` ← `Api` /
 - **Application**：每個 use case 一個檔案，內含 `record` request + `internal` handler（MediatR），依功能資料夾分（Books、Transactions、Planning、Ledger、Auditing、Backup、LegacyImport…）。Pipeline 依序為 `BookAccessBehavior` → `ValidationBehavior`。
   - 帶 `Guid BookId` 的 request **必須**實作 `IBookScoped`：非成員一律 404（不是 403，也不先回 400）。唯一例外是 `ICliOnlyRequest`（必須是 `internal`，Api 因此參考不到）。`BookScopeConventionTests` 會檢查。
   - 寫入操作的慣例（參考 `Transactions/DeleteTransaction.cs`）：查詢同時帶 `BookId` 條件、先檢查鎖帳日（`EnsureUnlocked`）、以 `ExpectVersion` 做樂觀並行（409）、用 `IAuditTrail.Record` 留前後快照（ADR 0006）、軟刪除，全部在同一次 `SaveChangesAsync`。
-  - 例外對應：`NotFoundException` → 404、`DomainException` → 422、`DbUpdateConcurrencyException` → 409、validation → 400（`Api/Infrastructure/ApiExceptionHandler.cs`）。
+  - 例外對應：`NotFoundException` → 404、`ForbiddenException` → 403、`DomainException` → 422、`DbUpdateConcurrencyException` → 409、validation → 400（`Api/Infrastructure/ApiExceptionHandler.cs`）。`ForbiddenException` 只用在不屬於帳本範圍的權限拒絕（例如不在建立者名單，ADR 0011）；帳本範圍的拒絕仍一律 404。
   - 「今天」一律用注入的 `TimeProvider` 與 `TaipeiTime`，不要用 `DateTime.Now`。
 - **Infrastructure**：EF Core + Npgsql（PostgreSQL / Neon，ADR 0007），configuration 與 migration 在 `Persistence/`；月報彙總用 SQL（`Ledger/SqlLedgerSummaryQuery.cs`）；舊 Excel 讀取（ExcelDataReader）與 CSV/XLSX 匯出（ClosedXML）。
 - **Api**：Minimal API，endpoint 依資源分檔在 `Endpoints/`，`/api` group 一律需登入並掛 `AntiforgeryFilter`。BFF 模式：Cookie + Google OIDC，白名單即帳本成員表（ADR 0005）；cookie 用 `__Host-` 前綴，本機必須跑 https。
