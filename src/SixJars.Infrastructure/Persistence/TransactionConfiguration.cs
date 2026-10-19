@@ -27,6 +27,17 @@ internal sealed class TransactionConfiguration : IEntityTypeConfiguration<Transa
             posting.HasIndex(p => p.AccountId);
         });
 
+        // TagId 不建指向 Tags 的 FK：EF 不允許指向 owned type 的關聯，參照完整性由 Domain 保證（spec D1）。
+        builder.OwnsMany(t => t.Tags, tag =>
+        {
+            tag.ToTable("TransactionTags");
+            tag.WithOwner().HasForeignKey("TransactionId");
+            tag.HasKey("TransactionId", nameof(TransactionTag.TagId));
+            tag.HasIndex(x => x.TagId);
+        });
+
         builder.Navigation(t => t.Postings).UsePropertyAccessMode(PropertyAccessMode.Field);
+        builder.Navigation(t => t.Tags).UsePropertyAccessMode(PropertyAccessMode.Field);
+        builder.Ignore(t => t.TagIds);
     }
 }
