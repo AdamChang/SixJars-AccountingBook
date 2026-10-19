@@ -16,6 +16,14 @@ describe('BookApi', () => {
   });
   afterEach(() => httpTesting.verify());
 
+  it('create_posts_name_and_opening_date', async () => {
+    const created = firstValueFrom(api.create({ name: '家庭帳本', openingDate: '2026-10-19' }));
+    const request = httpTesting.expectOne({ method: 'POST', url: '/api/books' });
+    expect(request.request.body).toEqual({ name: '家庭帳本', openingDate: '2026-10-19' });
+    request.flush({ id: 'b9' }, { status: 201, statusText: 'Created' });
+    expect(await created).toEqual({ id: 'b9' });
+  });
+
   it('get_gets_book_by_id', () => {
     const book: BookDto = {
       id: 'b1', name: '帳本', openingDate: '2026-01-01', lockDate: null,

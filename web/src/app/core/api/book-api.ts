@@ -2,13 +2,18 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import {
-  AddAccountBody, AddCategoryBody, AddPlanningFundBody, AddTagBody, BookDeletionPreviewDto, BookDto, ExpenseNature, ReorderBody,
-  SettingPath,
+  AddAccountBody, AddCategoryBody, AddPlanningFundBody, AddTagBody, BookDeletionPreviewDto, BookDto, CreateBookBody, ExpenseNature,
+  ReorderBody, SettingPath,
 } from './dto';
 
 @Injectable({ providedIn: 'root' })
 export class BookApi {
   private readonly http = inject(HttpClient);
+
+  // 建立者建立空白帳本（issue #7）；403 不在建立者名單、422 book-quota-exceeded／duplicate-name
+  create(body: CreateBookBody): Observable<{ id: string }> {
+    return this.http.post<{ id: string }>('/api/books', body);
+  }
 
   get(bookId: string): Observable<BookDto> {
     return this.http.get<BookDto>(`/api/books/${bookId}`);
