@@ -1,7 +1,8 @@
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router, convertToParamMap } from '@angular/router';
+import { of } from 'rxjs';
 import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { MatButtonHarness } from '@angular/material/button/testing';
 import { MatDialogHarness } from '@angular/material/dialog/testing';
@@ -18,13 +19,15 @@ import { Notifier } from '../../core/errors/notifier';
 import { BOOK } from '../transactions/testing/book-fixture';
 import { SettingsPage } from './settings.page';
 
-async function setup() {
+async function setup(options: { tab?: string } = {}) {
   const notifier = { show: vi.fn() };
   TestBed.configureTestingModule({
     providers: [
       provideHttpClient(withInterceptors([apiErrorInterceptor])), provideHttpClientTesting(),
       { provide: Notifier, useValue: notifier },
       { provide: BrowserLocation, useValue: { assign: vi.fn(), currentPath: () => '/' } },
+      // 頁面只讀 queryParamMap（spec F5）；不用 provideRouter，避免真的路由介入
+      { provide: ActivatedRoute, useValue: { queryParamMap: of(convertToParamMap(options.tab ? { tab: options.tab } : {})) } },
     ],
   });
   const httpTesting = TestBed.inject(HttpTestingController);
@@ -50,7 +53,8 @@ async function setup() {
     httpTesting.expectOne(`/api/books/${BOOK.id}`).flush(BOOK);
     await fixture.whenStable();
   };
-  return { fixture, loader, rootLoader, el, httpTesting, notifier, openTab, rowLabels, expectReload };
+  const selectedTab = async () => (await (await loader.getHarness(MatTabGroupHarness)).getSelectedTab()).getLabel();
+  return { fixture, loader, rootLoader, el, httpTesting, notifier, openTab, rowLabels, expectReload, selectedTab };
 }
 
 const ACCOUNTS_ORDER = { method: 'PUT', url: `/api/books/${BOOK.id}/accounts/order` };
@@ -258,9 +262,10 @@ describe('SettingsPage', () => {
   }
 
   // authGuard 會先載入 me；這裡用真的 SessionService 載入，讓頁面讀得到使用者有哪些帳本
-  async function signIn(ctx: Awaited<ReturnType<typeof setup>>, books: MeDto['books']) {
+  async function signIn(ctx: Awaited<ReturnType<typeof setup>>, books: MeDto['books'], canCreateBooks = false) {
     const loaded = TestBed.inject(SessionService).load();
-    ctx.httpTesting.expectOne('/api/me').flush({ subject: 's', email: null, books });
+    const me: MeDto = { subject: 's', email: null, books, canCreateBooks, remainingBookQuota: canCreateBooks ? 4 : 0 };
+    ctx.httpTesting.expectOne('/api/me').flush(me);
     await vi.waitFor(() => ctx.httpTesting.expectOne('/api/antiforgery/token').flush(null));
     await loaded;
   }
@@ -289,8 +294,46 @@ describe('SettingsPage', () => {
     expect(await openDeleteDialog(ctx)).toBeNull();
   });
 
+  it('tab_query_param_opens_that_tab', async () => {
+    const { selectedTab } = await setup({ tab: 'accounts' });
+    expect(await selectedTab()).toBe('帳戶');
+  });
+
+  it('unknown_tab_query_param_opens_first_tab', async () => {
+    const { selectedTab } = await setup({ tab: 'nope' });
+    expect(await selectedTab()).toBe('分類');
+  });
+
+  // 寫入後重新載入同一本，不能把使用者拉回 ?tab= 的分頁；
+  // 在設定頁建立另一本帳本時路由會重用這個元件，新帳本要落在 ?tab= 指定的分頁（spec F5）
+  it('tab_query_param_reapplies_only_when_book_changes', async () => {
+    const { openTab, selectedTab, httpTesting, fixture } = await setup({ tab: 'accounts' });
+    await openTab('財務規劃帳戶', '[data-group="planning-funds"]');
+
+    // flush 新物件：book() 換成不同的參考，才能證明「同一本」不會重設
+    const reloaded = TestBed.inject(CurrentBook).reload(BOOK.id);
+    httpTesting.expectOne(`/api/books/${BOOK.id}`).flush({ ...BOOK });
+    await reloaded;
+    await fixture.whenStable();
+    expect(await selectedTab()).toBe('財務規劃帳戶');
+
+    const other = TestBed.inject(CurrentBook).load('book-2');
+    httpTesting.expectOne('/api/books/book-2').flush({ ...BOOK, id: 'book-2', name: '新帳本' });
+    await other;
+    await fixture.whenStable();
+    expect(await selectedTab()).toBe('帳戶');
+  });
+
+  // 建立者沒有帳本也能登入（ADR 0011），刪掉最後一本不需要警告（#8）
+  it('delete_dialog_has_no_login_warning_for_a_creator', async () => {
+    const ctx = await setup();
+    await signIn(ctx, [{ id: BOOK.id, name: BOOK.name }], true);
+
+    expect(await openDeleteDialog(ctx)).toBeNull();
+  });
+
   async function expectMeReload(httpTesting: HttpTestingController) {
-    await vi.waitFor(() => httpTesting.expectOne('/api/me').flush({ subject: 's', email: null, books: [] }));
+    await vi.waitFor(() => httpTesting.expectOne('/api/me').flush({ subject: 's', email: null, books: [], canCreateBooks: false, remainingBookQuota: 0 }));
     await vi.waitFor(() => httpTesting.expectOne('/api/antiforgery/token').flush(null));
   }
 

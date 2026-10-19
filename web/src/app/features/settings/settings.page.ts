@@ -1,13 +1,13 @@
 import { NgTemplateOutlet } from '@angular/common';
 import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, linkedSignal } from '@angular/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatTabsModule } from '@angular/material/tabs';
-import { Router } from '@angular/router';
-import { Observable, filter, switchMap } from 'rxjs';
+import { ActivatedRoute, Router } from '@angular/router';
+import { Observable, filter, map, switchMap } from 'rxjs';
 import { BookApi } from '../../core/api/book-api';
 import { SessionService } from '../../core/auth/session.service';
 import { CurrentBook } from '../../core/book/current-book';
@@ -19,6 +19,9 @@ import { DeleteBookDialog, DeleteBookDialogData } from './delete-book-dialog';
 import { SettingDialog, SettingDialogData, SettingDialogResult } from './setting-dialog';
 import { ReorderRequest, SettingList } from './setting-list';
 import { SettingGroup, accountGroup, categoryGroups, fundGroup, reorderRequest, tagGroup } from './settings-rules';
+
+// ?tab= 的值，依分頁順序（spec F5）；不認得的值用第一個分頁
+const TAB_KEYS = ['categories', 'accounts', 'funds', 'tags', 'data'];
 
 const NOT_FOUND = '此項目已不存在';
 
@@ -48,6 +51,19 @@ export class SettingsPage {
   protected readonly funds = computed(() => fundGroup(this.book().planningFunds));
   protected readonly tags = computed(() => tagGroup(this.book().tags));
   protected readonly lockDate = linkedSignal(() => this.book().lockDate ?? '');
+  private readonly tabParam = toSignal(inject(ActivatedRoute).queryParamMap.pipe(map(params => params.get('tab'))), {
+    requireSync: true,
+  });
+  // 只讀不寫：切換分頁不改網址（spec F5）。路由會重用這個元件（在設定頁建立另一本帳本），所以換帳本時重新套用 ?tab=；
+  // 但寫入後 currentBook.reload 會換掉 book 物件，同一本帳本不能因此跳回 ?tab= 的分頁，所以只比較 id 與 tab
+  private readonly tabTarget = computed(
+    () => ({ bookId: this.book().id, tab: this.tabParam() }),
+    { equal: (a, b) => a.bookId === b.bookId && a.tab === b.tab },
+  );
+  protected readonly selectedTab = linkedSignal({
+    source: this.tabTarget,
+    computation: ({ tab }) => Math.max(0, TAB_KEYS.indexOf(tab ?? '')),
+  });
 
   protected exportUrl(file: string): string {
     return `/api/books/${this.book().id}/export/${file}`;
@@ -149,8 +165,9 @@ export class SettingsPage {
 
   protected onDeleteBook(): void {
     const book = this.book();
-    // 只剩這一本時要警告刪除後無法再登入（#8）；能進到這一頁，me.books 一定含這本帳本
-    const isLastBook = this.session.me()?.books.length === 1;
+    // 只剩這一本、而且不是建立者時，才警告刪除後無法再登入（#8）；建立者沒有帳本也能登入（ADR 0011）
+    const me = this.session.me();
+    const isLastBook = me?.books.length === 1 && !me.canCreateBooks;
     this.dialog.open<DeleteBookDialog, DeleteBookDialogData, string>(DeleteBookDialog, { data: { bookId: book.id, name: book.name, isLastBook } })
       .afterClosed()
       .pipe(
