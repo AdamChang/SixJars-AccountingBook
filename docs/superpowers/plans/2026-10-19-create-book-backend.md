@@ -1203,3 +1203,16 @@ git commit -m "feat(api): /me 回報 canCreateBooks 與 remainingBookQuota" -m "
 | ADR 0010 的格式、ADR 0005 的標題、`CONTEXT.md` 的「刪除帳本 (Delete Book)」詞條 | ✅ | `0010-…md`、`0005-…md:1`、`CONTEXT.md:125` | — |
 | Create 的檔案尚不存在（`BookCreator.cs`、`BookCreatorConfiguration.cs`、`AddBookCreator.cs`、`RemoveBookCreator.cs`、`ForbiddenException.cs`、`CreateBook.cs`、`BookCreatorTests.cs`、`CreateBookEndpointsTests.cs`、ADR 0011） | ✅ | 逐一 `test -e` | — |
 | 測試碼競態：`Concurrent_creates_cannot_exceed_the_quota` 用 `Task.WhenAll`，兩個 client 各自的 scope 與連線；結果以 `.Order()` 比對，不假設哪個先完成 | ✅ | — | 拿掉鎖的變異檢查不保證變紅，Task 6 已寫明 |
+
+## 執行結果與偏差（2026-10-19，後端 checkpoint）
+
+- Commit：`66a34ec`（Task 1）、`7a9fe44`（Task 2）、`751dee0`（Task 3，migration `20261019020021_AddBookCreators`）、`2c39242`（Task 4）、`b44f914`（Task 5）、`17486e0`＋`27986cb`（Task 6 與審查修正）、`4aa7734`（Task 7）、`37f4ca3`＋`bfc8baf`（最終審查修正）。
+- 測試：基準線 549（開工前重跑確認，0 略過）→ 554 → 558 → 561 → 562 → 572 → 574 → 577 → **579**，失敗 0、略過 0（Acceptance 有讀到舊帳本）。
+- 建置：0 錯誤。基準線其實有 1 個既有的編譯器警告 EF1002（`tests/SixJars.Api.Tests/DeleteBookEndpointsTests.cs:189`，來自 ec0ab26），本計畫沒有新增任何警告；「執行前必讀」寫的「0 個編譯器警告」不精確。
+- 變異檢查：每個 Task 都以預期的理由變紅。唯一例外是預告過的「拿掉 advisory lock」：`Concurrent_creates_cannot_exceed_the_quota` 連跑 10 次仍綠。
+- **偏差 1（Task 6 審查）**：因為端點層的並發測試觀察不到競態，Q16 實際上沒有任何會失敗的測試。新增 `tests/SixJars.Infrastructure.Tests/Persistence/TransactionLockTests.cs`：兩個 DbContext，同 key 在持有者 commit 前不會完成、commit 後完成；不同 key 不互等。變異「每次換 key」「改用 `pg_try_advisory_xact_lock`」都會變紅。原本的並發測試保留為 smoke test。「鎖必須在計數之前」的順序仍只靠程式碼審查與 D6 註解。
+- **偏差 2（最終審查）**：`CreateBookValidator` 原本沒有驗證 `openingDate`，body 缺這個欄位會建出開帳日 0001-01-01 的帳本（201）；補上 `NotEqual(default(DateOnly))` 與 `Missing_opening_date_is_400`。API 表多了一列：缺 `openingDate` → 400（`errors.openingDate`）。
+- **偏差 3（最終審查）**：計畫沒有更新操作文件。`README.md` 的 CLI 區塊與 `docs/deploy.md` §10 補上 `add-creator`／`remove-creator`（部署順序：先套 migration bundle，再 `add-creator`）。`CLAUDE.md` 的 CLI 清單仍未更新，待使用者決定。
+- 另補測試：同一個 email 同時是未綁定成員與未綁定建立者，登入一次後兩者都綁定、只有成員綁定留稽核。
+- 延後的小問題（審查判定不阻擋合併）：`/api/me` 的剩餘名額依賴「`ListMemberBooksAsync` 等於 `OwnedBookIds`」（加入非擁有者角色時要改）；「是否為建立者」的查詢在三處重複；`MaximumLength(100)` 檢查 trim 前長度；`RemoveBookCreator` 沒有 validator；缺 >100 字、403 body、Email 為 null 的測試；`BookCreator.BindSubject` 空白 sub 沒有專屬測試。
+- Commit 的 Co-Authored-By 標示實際執行的模型（Haiku 5.5／Sonnet 5.5），不是計畫範例的 Opus 5.5。
