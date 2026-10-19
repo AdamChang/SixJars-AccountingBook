@@ -24,10 +24,14 @@ public sealed record CreatedBookSnapshot(string Name, DateOnly OpeningDate);
 
 internal sealed class CreateBookValidator : AbstractValidator<CreateBook>
 {
+    private const int MaxNameLength = 100;
+
     public CreateBookValidator()
     {
-        // 與 BookConfiguration 的名稱長度一致。
-        RuleFor(c => c.Name).NotEmpty().MaximumLength(100);
+        // 與 BookConfiguration 的名稱長度一致。Book 存的是 trim 後的名稱，所以字數也以 trim 後為準。
+        RuleFor(c => c.Name).NotEmpty()
+            .Must(name => name is null || name.Trim().Length <= MaxNameLength)
+            .WithMessage($"名稱不可超過 {MaxNameLength} 個字。");
         // 沒帶 openingDate 時 JSON 會綁成 default(DateOnly)（0001-01-01），視為缺漏而非有效開帳日。
         RuleFor(c => c.OpeningDate).NotEqual(default(DateOnly));
     }
