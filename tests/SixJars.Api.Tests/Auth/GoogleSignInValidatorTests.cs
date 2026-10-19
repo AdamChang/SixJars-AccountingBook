@@ -229,6 +229,26 @@ public class GoogleSignInValidatorTests(PostgresFixture postgres)
         (await ReloadCreatorAsync(factory, creator.Id)).GoogleSubject.Should().Be("another-sub");
     }
 
+    [Fact]
+    public async Task Email_that_is_both_member_and_creator_binds_both_but_audits_only_the_member()
+    {
+        await using var factory = await CreateFactoryAsync();
+        var book = await factory.SeedBookAsync(Ct, ownerSubject: null);
+        var member = await AddMemberAsync(factory, book.Id, Email);
+        var creator = await AddCreatorAsync(factory, Email);
+
+        var accepted = await ValidateAsync(factory, Principal(Subject, Email, "true"));
+
+        accepted.Should().BeTrue();
+        (await ReloadAsync(factory, member.Id)).GoogleSubject.Should().Be(Subject);
+        (await ReloadCreatorAsync(factory, creator.Id)).GoogleSubject.Should().Be(Subject);
+        // 成員綁定留一筆稽核；建立者名單不屬於任何帳本，不留（Q24）。
+        var entries = await EntriesAsync(factory);
+        entries.Should().ContainSingle();
+        entries[0].EntityType.Should().Be(AuditEntityTypes.BookMember);
+        entries[0].EntityId.Should().Be(member.Id);
+    }
+
     private static async Task<BookCreator> AddCreatorAsync(ApiFactory factory, string email, string? subject = null)
     {
         var creator = BookCreator.Create(email, Now.AddDays(-1));
