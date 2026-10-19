@@ -31,6 +31,16 @@ describe('SettingList', () => {
   const button = (row: number, cls: 'up' | 'down') =>
     el.querySelectorAll<HTMLElement>('.active .row')[row].querySelector<HTMLButtonElement>(`button.${cls}`)!;
 
+  it('row_with_color_shows_color_dot_before_label', async () => {
+    fixture.componentRef.setInput('rows', [{ id: 't', label: '旅遊', detail: '藍綠', archived: false, color: 'Teal' }, ...ROWS]);
+    await fixture.whenStable();
+    const rows = el.querySelectorAll<HTMLElement>('.active .row');
+    const dot = rows[0].querySelector<HTMLElement>('.color-dot')!;
+    expect(dot.style.getPropertyValue('background-color')).toBe('var(--tag-teal-fg)');
+    expect(dot.nextElementSibling?.classList.contains('label')).toBe(true);
+    expect(rows[1].querySelector('.color-dot')).toBeNull();
+  });
+
   it('up_button_moves_row_and_emits_ids', async () => {
     button(1, 'up').click();
     await fixture.whenStable();

@@ -1,5 +1,5 @@
-import { AccountDto, CategoryDto, PlanningFundDto } from '../../core/api/dto';
-import { accountGroup, categoryGroups, fundGroup, moveRow, reorderRequest } from './settings-rules';
+import { AccountDto, CategoryDto, PlanningFundDto, TagDto } from '../../core/api/dto';
+import { accountGroup, categoryGroups, fundGroup, moveRow, reorderRequest, tagGroup } from './settings-rules';
 
 const archived = '2026-05-01T00:00:00+00:00';
 const cat = (id: string, name: string, kind: 'Income' | 'Expense', parentId: string | null, sortOrder: number,
@@ -39,6 +39,20 @@ describe('settings-rules', () => {
   it('fund_group_has_no_detail', () => {
     const funds: PlanningFundDto[] = [{ id: 'f1', name: '旅遊基金', openingBalance: 0, sortOrder: 0, archivedAt: null }];
     expect(fundGroup(funds)).toMatchObject({ path: 'planning-funds', rows: [{ id: 'f1', label: '旅遊基金', detail: '', archived: false }] });
+  });
+
+  it('tag_group_rows_carry_color_and_color_name_in_sort_order', () => {
+    const tags: TagDto[] = [
+      { id: 't2', name: '旅遊', color: 'Teal', sortOrder: 1, archivedAt: archived },
+      { id: 't1', name: '工作', color: 'Blue', sortOrder: 0, archivedAt: null },
+    ];
+    const group = tagGroup(tags);
+    expect(group).toMatchObject({ key: 'tags', title: '標籤', path: 'tags', categoryKind: null, parentId: null });
+    expect(group.rows).toEqual([
+      { id: 't1', label: '工作', detail: '藍', archived: false, color: 'Blue' },
+      { id: 't2', label: '旅遊', detail: '藍綠', archived: true, color: 'Teal' },
+    ]);
+    expect(reorderRequest(group, ['t1'])).toEqual({ ids: ['t1', 't2'] });
   });
 
   it('move_row_returns_new_array', () => {

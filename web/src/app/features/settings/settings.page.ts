@@ -14,16 +14,17 @@ import { CurrentBook } from '../../core/book/current-book';
 import { ApiError } from '../../core/errors/api-error';
 import { Notifier } from '../../core/errors/notifier';
 import { confirm } from '../../shared/confirm-dialog';
+import { nextTagColor } from '../../shared/tags';
 import { DeleteBookDialog, DeleteBookDialogData } from './delete-book-dialog';
 import { SettingDialog, SettingDialogData, SettingDialogResult } from './setting-dialog';
 import { ReorderRequest, SettingList } from './setting-list';
-import { SettingGroup, accountGroup, categoryGroups, fundGroup, reorderRequest } from './settings-rules';
+import { SettingGroup, accountGroup, categoryGroups, fundGroup, reorderRequest, tagGroup } from './settings-rules';
 
 const NOT_FOUND = '此項目已不存在';
 
 const labelOf = (group: SettingGroup, id: string) => group.rows.find(row => row.id === id)?.label ?? '';
 
-// 帳本設定：分類、帳戶、財務規劃帳戶的維護，加上鎖帳日與下載
+// 帳本設定：分類、帳戶、財務規劃帳戶、標籤的維護，加上鎖帳日與下載
 @Component({
   selector: 'app-settings-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -45,6 +46,7 @@ export class SettingsPage {
   protected readonly categoryGroups = computed(() => categoryGroups(this.book().categories));
   protected readonly accounts = computed(() => accountGroup(this.book().accounts));
   protected readonly funds = computed(() => fundGroup(this.book().planningFunds));
+  protected readonly tags = computed(() => tagGroup(this.book().tags));
   protected readonly lockDate = linkedSignal(() => this.book().lockDate ?? '');
 
   protected exportUrl(file: string): string {
@@ -75,6 +77,7 @@ export class SettingsPage {
     const bookId = this.book().id;
     const data: SettingDialogData = {
       mode: 'add', path: group.path, categoryKind: group.categoryKind ?? undefined, isMain: group.parentId === null,
+      defaultColor: group.path === 'tags' ? nextTagColor(this.book().tags.map(t => t.color)) : undefined,
     };
     this.openDialog(data, result => {
       const added = `已新增「${result.name}」`;
@@ -90,6 +93,8 @@ export class SettingsPage {
           return this.run(this.api.add(bookId, 'categories', {
             name: result.name, kind: group.categoryKind!, nature: result.nature, parentId: group.parentId,
           }), added);
+        case 'tags':
+          return this.run(this.api.add(bookId, 'tags', { name: result.name, color: result.color! }), added);
       }
     });
   }
@@ -122,6 +127,12 @@ export class SettingsPage {
           },
           // nature 為 null（非支出主分類）時後端不修改性質
           result => this.run(this.api.updateCategory(book.id, id, { name: result.name, nature: result.nature }), updated(result)));
+        break;
+      }
+      case 'tags': {
+        const tag = book.tags.find(t => t.id === id)!;
+        this.openDialog({ mode: 'edit', path: 'tags', name: tag.name, color: tag.color },
+          result => this.run(this.api.updateTag(book.id, id, { name: result.name, color: result.color! }), updated(result)));
         break;
       }
     }

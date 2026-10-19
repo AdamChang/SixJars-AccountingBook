@@ -21,7 +21,12 @@ export const BOOK: BookDto = {
     { id: 'cat-salary', name: '薪資', kind: 'Income', nature: null, parentId: null, sortOrder: 0, archivedAt: null },
     { id: 'cat-bonus', name: '獎金', kind: 'Income', nature: null, parentId: 'cat-salary', sortOrder: 0, archivedAt: null },
   ],
-  tags: [],
+  // 設定排序（工作、旅遊、舊專案）與陣列順序不同；舊專案已封存
+  tags: [
+    { id: 'tag-trip', name: '旅遊', color: 'Teal', sortOrder: 1, archivedAt: null },
+    { id: 'tag-work', name: '工作', color: 'Blue', sortOrder: 0, archivedAt: null },
+    { id: 'tag-old', name: '舊專案', color: 'Purple', sortOrder: 2, archivedAt: '2026-02-01T00:00:00+00:00' },
+  ],
 };
 
 // 模擬後端 201 回應：把送出的 input 原樣轉成 TransactionDto
