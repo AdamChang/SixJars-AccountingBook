@@ -1,6 +1,7 @@
 reference/
 .claude/
-.github/
+.github/*
+!.github/workflows/
 obj/
 bin/
 src/.vs/
