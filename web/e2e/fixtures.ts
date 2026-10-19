@@ -37,7 +37,7 @@ export interface MockApi {
 export async function mockApi(page: Page, options: MockApiOptions = {}): Promise<MockApi> {
   const api: MockApi = { posts: [], xsrfTokens: [] };
 
-  // 預設不是建立者：既有 e2e 不會看到「新增帳本…」（issue #7）
+  // 預設不是建立者：既有 e2e 不會看到「建立帳本…」（issue #7）
   await page.route('**/api/me', options.me ?? (route =>
     route.fulfill({
       json: { subject: 'e2e', email: null, books: [{ id: BOOK_ID, name: BOOK.name }], canCreateBooks: false, remainingBookQuota: 0 },

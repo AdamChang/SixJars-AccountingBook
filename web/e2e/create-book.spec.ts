@@ -29,7 +29,7 @@ test('toolbar_menu_creates_book_and_opens_its_accounts_tab', async ({ page }) =>
 
   await page.goto(`/books/${BOOK_ID}/transactions`);
   await page.getByRole('button', { name: BOOK.name }).click();
-  await page.getByRole('menuitem', { name: '新增帳本…' }).click();
+  await page.getByRole('menuitem', { name: '建立帳本…' }).click();
   await page.getByLabel('帳本名稱').fill('新帳本');
   await page.getByLabel('開帳日').fill('2026-10-19');
   await page.getByRole('button', { name: '建立', exact: true }).click();
