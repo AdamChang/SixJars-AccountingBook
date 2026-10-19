@@ -361,4 +361,10 @@ private static bool SameInput(TransactionInput a, TransactionInput b) =>
   - `EnsureNoNewArchivedTags` 放在 `TransactionBuilder`（internal static），沒有另開類別。
   - Task 7 改了既有的 `TransactionExportTests`（「標籤」欄插在「備註」前，備註從 L 欄移到 M 欄）；Task 8 把 `Backup_format_version_is_4` 改成 `_is_5`。
 - Checkpoint：`dotnet build` 0 錯誤，編譯器警告只有基準線就有的 `EF1002`。`dotnet test --solution SixJars.slnx`：總計 614（基準線 549，+65），成功 592，略過 22，失敗 0；略過的仍是找不到 `reference/2026帳本v1.xlsm` 的 Acceptance／舊 Excel 測試。
-- **手動驗證（本機跑 API 走一次流程）尚未執行**：需要 Google OIDC 登入，由使用者執行。
+- 手動驗證（2026-10-19）：本機 Postgres 套用 migration，以最小 v5 備份 `restore-backup` 建測試帳本，再 `add-member`。API 跑在 `https://localhost:5001`（Development＋user-secrets 的 Google 設定）。使用者在內建瀏覽器登入 Google 後，以頁面內的 `fetch`（帶 `X-XSRF-TOKEN`）逐項驗證，全部符合預期：
+  - 標籤：建立 201；名稱只差空白／大小寫 422；9 個字、不在色盤的顏色 400；`GET` 帳本的 `tags` 依 SortOrder、顏色為字串。
+  - 交易：掛兩個標籤（反序送出）回傳依 Guid 排序；不帶標籤回 `[]`；重複標籤 400。
+  - 篩選：`?budgetMonth=202610&tagId=` 只回掛著該標籤的交易。
+  - CSV：「標籤」欄在「備註」前，依設定排序串成「工作、旅遊」，無標籤為空白。
+  - 封存後：新增交易帶封存標籤 422；修改時保留原本的封存標籤 200；新加另一個封存標籤 422 `rule`；刪除被參照的標籤 422 `in-use`；修改時不帶 `tagIds` 清空（D4）；只改標籤用舊 version 409。
+  - 第一次登入在 `/auth/callback` 出現 `Correlation failed`（找不到 correlation cookie）而導到 `/denied`，重新登入即成功；與白名單、標籤功能無關，沒有再現，未深究。
