@@ -18,7 +18,7 @@ dotnet test --project tests/SixJars.Api.Tests --filter-method "*Delete*"
 # 新增 migration（DesignTimeDbContextFactory 不實際連線）
 dotnet ef migrations add <Name> --project src/SixJars.Infrastructure --startup-project src/SixJars.Infrastructure --output-dir Persistence/Migrations
 
-# CLI（管理工具：import-legacy / add-member / restore-backup），連線字串只讀環境變數 ConnectionStrings__SixJars
+# CLI（管理工具：import-legacy / add-member / add-creator / remove-creator / restore-backup），連線字串只讀環境變數 ConnectionStrings__SixJars
 dotnet run --project src/SixJars.Cli -- --help
 ```
 
