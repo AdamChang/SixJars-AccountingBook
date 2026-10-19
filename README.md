@@ -30,7 +30,7 @@ src/
   SixJars.Api             Web API（composition root）
   SixJars.Cli             管理工具（composition root，與 API 共用 Application）
 tests/                    Domain / Application / Infrastructure / Api / Cli / Acceptance
-web/                      Angular PWA（記帳、總覽、預定支出、帳本設定）
+web/                      Angular PWA（記帳、總覽、預定支出、預算、帳本設定）
 .github/workflows/        GitHub Actions CI
 ```
 
@@ -41,13 +41,14 @@ web/                      Angular PWA（記帳、總覽、預定支出、帳本�
 - **標籤**：帳本自訂標籤（名稱最多 8 字、不分大小寫不可重複，12 色固定色盤），可排序、封存、刪除（使用中者不可刪）；每筆交易最多掛 4 個標籤，交易清單可依標籤篩選，匯出與備份都包含標籤。
 - **預定支出**：固定／貸款／特別支出的月度預計項目，付款時連結實際交易。
 - **週期預定支出**：定義週期項目後依月份產生當月預定支出；未付款的項目可用週期項目現值更新。
+- **預算**：浮動支出主分類的每月上限，可設預設值並覆寫個別歸屬月份，未用完不累積；實際支出含子分類與電子錢包消費，顯示預算、實際、剩餘與使用率。有預算的分類須先清除預算才能改支出性質或刪除。
 - **月摘要**：指定歸屬月份與基準日的帳戶餘額、可用現金、月可用餘額。
 - **稽核與軟刪除**：每次寫入留下前後快照；刪除只標記，不參與計算。
 - **樂觀並行**：更新／刪除需帶版本號，衝突回 409。
-- **匯出與備份**：交易明細 CSV／XLSX（含標籤欄）；整本帳 JSON 備份（格式 v5，含標籤，可用 CLI 還原）。
+- **匯出與備份**：交易明細 CSV／XLSX（含標籤欄）；整本帳 JSON 備份（格式 v5，含預算與標籤，可用 CLI 還原）。
 - **舊帳匯入**：CLI 把舊 Excel 記帳本轉成新帳本，附檢查報告與 dry-run。
 - **權限**：Google 登入，只有帳本成員可存取；非成員一律 404。目前只實作「擁有者」角色。
-- **Web 前端**：記帳頁（鍵盤快速連續記帳、手機兩行清單）、總覽頁、預定支出頁（本月清單、產生、付款、週期項目）、設定頁（含標籤管理、匯出與備份下載）；記帳時可選標籤，交易清單以色塊顯示標籤並可依標籤篩選當月交易；可安裝為 PWA。
+- **Web 前端**：記帳頁（鍵盤快速連續記帳、手機兩行清單）、總覽頁、預定支出頁（本月清單、產生、付款、週期項目）、預算頁（依月份切換、行內編輯預設值與覆寫值；總覽頁有本月預算摘要卡）、設定頁（含標籤管理、匯出與備份下載）；記帳時可選標籤，交易清單以色塊顯示標籤並可依標籤篩選當月交易；可安裝為 PWA。
 
 ## 使用方式
 
@@ -136,7 +137,7 @@ npx ng serve
 | `GET /auth/login`、`POST /auth/logout` | Google 登入／登出 |
 | `GET /api/antiforgery/token` | 取得 XSRF token（非 GET 請求須帶 `X-XSRF-TOKEN` header） |
 | `GET /api/me`、`GET /api/books` | 登入者資訊、可存取的帳本 |
-| `/api/books/{bookId}/…` | `accounts`、`planning-funds`、`categories`、`tags`（含 `archive`、`unarchive`、`order`）、`lock-date`、`transactions`（清單可帶 `budgetMonth`、`tagId` 篩選）、`planned-expenses`（含 `generate`、`refresh`、`pay`）、`recurring-planned-expenses`、`summary`、`audit`、`export/*` |
+| `/api/books/{bookId}/…` | `accounts`、`planning-funds`、`categories`、`tags`（含 `archive`、`unarchive`、`order`）、`lock-date`、`transactions`（清單可帶 `budgetMonth`、`tagId` 篩選）、`planned-expenses`（含 `generate`、`refresh`、`pay`）、`recurring-planned-expenses`、`budgets`（含各分類的 `default` 與 `overrides/{budgetMonth}`）、`summary`、`audit`、`export/*` |
 | 其他路徑 | 由 API 提供前端靜態檔，deep link 回 `index.html` |
 
 ### CLI 管理工具
