@@ -104,6 +104,33 @@ namespace SixJars.Infrastructure.Persistence.Migrations
                     b.ToTable("Books");
                 });
 
+            modelBuilder.Entity("SixJars.Domain.Members.BookCreator", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("AddedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)");
+
+                    b.Property<string>("GoogleSubject")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Email")
+                        .IsUnique();
+
+                    b.HasIndex("GoogleSubject");
+
+                    b.ToTable("BookCreators");
+                });
+
             modelBuilder.Entity("SixJars.Domain.Members.BookMember", b =>
                 {
                     b.Property<Guid>("Id")

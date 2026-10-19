@@ -44,6 +44,8 @@ public static class CliApp
         {
             ImportLegacyCommand(host),
             AddMemberCommand(host),
+            AddCreatorCommand(host),
+            RemoveCreatorCommand(host),
             RestoreBackupCommand(host),
         };
 
@@ -117,6 +119,32 @@ public static class CliApp
             var bookId = parseResult.GetValue(book);
             var memberId = await sender.Send(new AddOwner(bookId, parseResult.GetValue(email)!), ct);
             await output.WriteLineAsync($"已加入擁有者（成員 Id {memberId}，帳本 {bookId}）。");
+            return 0;
+        }, ct));
+        return command;
+    }
+
+    private static Command AddCreatorCommand(Host host)
+    {
+        var email = new Option<string>("--email") { Description = "建立者的 Google email", Required = true };
+        var command = new Command("add-creator", "把 email 加進建立者名單：可以在 Web 建立帳本，沒有帳本也能登入（ADR 0011）。") { email };
+        command.SetAction((parseResult, ct) => host.RunAsync(async (sender, output) =>
+        {
+            var id = await sender.Send(new AddBookCreator(parseResult.GetValue(email)!), ct);
+            await output.WriteLineAsync($"已加入建立者名單（Id {id}）。");
+            return 0;
+        }, ct));
+        return command;
+    }
+
+    private static Command RemoveCreatorCommand(Host host)
+    {
+        var email = new Option<string>("--email") { Description = "建立者的 Google email", Required = true };
+        var command = new Command("remove-creator", "從建立者名單移除 email；已建立的帳本不受影響。") { email };
+        command.SetAction((parseResult, ct) => host.RunAsync(async (sender, output) =>
+        {
+            await sender.Send(new RemoveBookCreator(parseResult.GetValue(email)!), ct);
+            await output.WriteLineAsync("已從建立者名單移除。");
             return 0;
         }, ct));
         return command;
