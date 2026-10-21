@@ -36,8 +36,10 @@ public static class YearlyReport
     /// <param name="today">台北時間的今天所在的月份。</param>
     public static YearlyReportResult Build(Book book, int year, IEnumerable<ReportFlow> flows, BudgetMonth today)
     {
-        var tree = ReportTree.Build(book, flows, width: 12, m => m.Year == year ? m.Month - 1 : null);
-        var (averageFrom, divisor) = AverageMonths(book.OpeningDate, year, today);
+        var yearFlows = flows.Where(f => f.Month.Year == year).ToList();
+        var tree = ReportTree.Build(book, yearFlows, width: 12, m => m.Month - 1);
+        var lastMonthWithData = yearFlows.Where(f => f.Amount != 0m).Select(f => f.Month.Month).DefaultIfEmpty(0).Max();
+        var (averageFrom, divisor) = AverageMonths(book.OpeningDate, year, today, lastMonthWithData);
         var incomeTotal = tree.Income.Totals.Sum();
 
         YearlyFigures Figures(decimal[] months)
@@ -74,10 +76,14 @@ public static class YearlyReport
             new YearlyPlanning(Funds(f => f.Allocation), Funds(f => f.Withdrawal), Funds(f => f.Return)));
     }
 
-    /// <summary>開帳前的月份不可能有交易，不攤進月平均（spec Q10）。</summary>
-    private static (int? From, int? Divisor) AverageMonths(DateOnly openingDate, int year, BudgetMonth today)
+    /// <summary>
+    /// 開帳前的月份不可能有交易，不攤進月平均；今年算到本月，但歸屬在本月之後的交易已計入總計，
+    /// 所以算到兩者較晚的月份（spec Q10）。
+    /// </summary>
+    /// <param name="lastMonthWithData">這一年最後一個有交易的歸屬月份；沒有時為 0。</param>
+    private static (int? From, int? Divisor) AverageMonths(DateOnly openingDate, int year, BudgetMonth today, int lastMonthWithData)
     {
-        int? to = year < today.Year ? 12 : year == today.Year ? today.Month : null;
+        int? to = year < today.Year ? 12 : year == today.Year ? Math.Max(today.Month, lastMonthWithData) : null;
         if (to is not { } end || year < openingDate.Year)
         {
             return (null, null);

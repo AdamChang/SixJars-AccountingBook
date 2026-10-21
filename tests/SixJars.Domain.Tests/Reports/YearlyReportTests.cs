@@ -114,6 +114,34 @@ public class YearlyReportTests
         report.ExpenseTotal.MonthlyAverage.Should().BeNull();
     }
 
+    // 今年：歸屬在本月之後的交易（例如卡費歸到下個月）已計入總計，分母要算到那個月（最終審查 Minor #3）
+    [Theory]
+    [InlineData(202611, 11)] // 最後一筆在本月之後：算到 11 月
+    [InlineData(202608, 10)] // 最後一筆在本月之前：仍算到本月
+    public void Current_year_average_runs_to_the_later_of_today_and_the_last_month_with_data(int lastFlowKey, int divisor)
+    {
+        ReportFlow[] flows = [Flow(202602, TransactionKind.Expense, -1000m, _lunch), Flow(lastFlowKey, TransactionKind.Expense, -100m, _lunch)];
+
+        var report = YearlyReport.Build(_book, 2026, flows, BudgetMonth.FromKey(202610));
+
+        report.AverageFromMonth.Should().Be(1);
+        report.AverageDivisor.Should().Be(divisor);
+        report.ExpenseTotal.MonthlyAverage.Should().Be(Math.Round(1100m / divisor, 2, MidpointRounding.AwayFromZero));
+    }
+
+    [Fact]
+    public void Current_opening_year_average_runs_to_a_later_budget_month()
+    {
+        var book = new Book("年中開帳", new DateOnly(2026, 8, 1));
+        var food = book.AddExpenseCategory("飲食", ExpenseNature.Floating);
+        ReportFlow[] flows = [new(BudgetMonth.FromKey(202612), TransactionKind.Expense, food.Id, null, null, -500m)];
+
+        var report = YearlyReport.Build(book, 2026, flows, BudgetMonth.FromKey(202610));
+
+        report.AverageFromMonth.Should().Be(8);
+        report.AverageDivisor.Should().Be(5);
+    }
+
     [Fact]
     public void Average_starts_in_january_after_the_opening_year()
     {
