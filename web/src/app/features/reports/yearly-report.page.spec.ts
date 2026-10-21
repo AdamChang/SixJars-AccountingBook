@@ -108,6 +108,20 @@ describe('YearlyReportPage', () => {
     expect(el.textContent).toContain('無法載入這一年的報表');
   });
 
+  // 比照月報的「本月沒有支出」：整年沒有支出時不畫只有軸線的空圖（最終審查 Minor #4）
+  it('shows_an_empty_message_instead_of_a_chart_without_spending', async () => {
+    const empty: YearlyReportDto = {
+      ...REPORT,
+      expenses: REPORT.expenses.map(s => ({ ...s, figures: figures(0, null, null), lines: [] })),
+      expenseTotal: figures(0, null, null),
+    };
+    const { charts, el } = await setup(empty);
+    expect(charts).toHaveLength(0);
+    expect(el.querySelector('app-chart')).toBeNull();
+    expect(el.textContent).toContain('這一年沒有支出');
+    expect(el.querySelector('table')).not.toBeNull();
+  });
+
   it('draws_a_stacked_bar_of_the_four_natures', async () => {
     const { charts } = await setup();
     expect(charts).toHaveLength(1);

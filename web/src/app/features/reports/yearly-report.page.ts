@@ -83,9 +83,11 @@ export class YearlyReportPage {
     ].filter(group => group.lines.length > 0);
   });
 
+  // 比照月報：整年沒有支出時不畫只有軸線的空圖，改顯示文字
   protected readonly chart = computed(() => {
     const report = this.report();
-    return report ? yearlyStackedBar(report, this.palette) : null;
+    const hasSpending = report?.expenses.some(s => s.figures.months.some(v => v > 0)) ?? false;
+    return report && hasSpending ? yearlyStackedBar(report, this.palette) : null;
   });
 
   protected readonly monthHeaders = MONTH_HEADERS;

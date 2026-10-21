@@ -24,6 +24,8 @@
       <figcaption>每月支出依性質</figcaption>
       <app-chart [config]="bar" label="{{ year() }} 年每月支出依性質的堆疊長條圖，數字見下方表格" />
     </figure>
+  } @else {
+    <p class="status ledger-sheet">這一年沒有支出</p>
   }
 
   @if (r.averageDivisor === null || r.averageFromMonth === null) {
