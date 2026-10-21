@@ -219,4 +219,29 @@ public class MonthlyReportTests
         Section(report, ReportSectionKind.Floating).Lines.Select(l => (l.Id, l.Amount))
             .Should().Equal(budget.Rows.Where(r => r.Actual != 0m).Select(r => (r.CategoryId.Value, r.Actual)));
     }
+
+    // 封存只影響之後能不能選，不能讓歷史的金額從報表消失（D8）
+    [Fact]
+    public void Archived_categories_loan_accounts_and_funds_are_still_listed()
+    {
+        var at = DateTimeOffset.UtcNow;
+        _book.ArchiveCategory(_transport.Id, at);
+        _book.ArchiveCategory(_lunch.Id, at);
+        _book.ArchiveAccount(_mortgage.Id, 0m, at);
+        _book.ArchivePlanningFund(_travel.Id, 0m, at);
+
+        var report = Build(
+        [
+            Flow(TransactionKind.Expense, -60m, _transport),
+            Flow(TransactionKind.Expense, -100m, _lunch),
+            Flow(TransactionKind.LoanPayment, 2000m, counter: _mortgage, principal: 1500m),
+            Flow(TransactionKind.FundAllocation, 300m, fund: _travel),
+        ]);
+
+        var floating = Section(report, ReportSectionKind.Floating);
+        floating.Lines.Select(l => (l.Name, l.Amount)).Should().Equal(("飲食", 100m), ("交通", 60m));
+        floating.Lines.Single(l => l.Name == "飲食").Children.Select(c => (c.Name, c.Amount)).Should().Equal(("午餐", 100m));
+        Section(report, ReportSectionKind.Loan).Lines.Select(l => (l.Name, l.Amount)).Should().Equal(("房貸", 2000m));
+        report.Planning.Select(p => (p.Name, p.Allocation)).Should().Equal(("旅遊", 300m));
+    }
 }
