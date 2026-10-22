@@ -2,7 +2,7 @@
 
 個人／家庭記帳系統，移植自「富朋友理財記帳本」Excel。以一本連續、不分年度的帳本記錄每筆金錢流動，計算可用現金、月可用餘額與淨值。
 
-> 目前進度：P1 帳務核心、P2 Web API／CLI／部署、P3 Angular PWA（記帳與總覽）、P4 段 J 帳本設定、段 K 預定支出與週期預定支出、段 L 預算、交易標籤已完成；P4 段 M 報表尚未實作（見 [P4 設計](docs/superpowers/specs/2026-10-06-p4-settings-planning-budget-reports-design.md)）。領域用語見 [`CONTEXT.md`](CONTEXT.md)，設計決策見 [`docs/adr/`](docs/adr/)。
+> 目前進度：P1 帳務核心、P2 Web API／CLI／部署、P3 Angular PWA（記帳與總覽）、P4 段 J 帳本設定、段 K 預定支出與週期預定支出、段 L 預算、段 M 報表、交易標籤已完成，P1–P4 完成（見 [P4 設計](docs/superpowers/specs/2026-10-06-p4-settings-planning-budget-reports-design.md)）。領域用語見 [`CONTEXT.md`](CONTEXT.md)，設計決策見 [`docs/adr/`](docs/adr/)。
 
 ## Tech Stack
 
@@ -16,7 +16,7 @@
 | 檔案 | ExcelDataReader（讀舊 `.xlsm`）、ClosedXML（匯出 `.xlsx`） |
 | CLI | System.CommandLine |
 | 測試 | xUnit v3（Microsoft.Testing.Platform）、FluentAssertions、Testcontainers（PostgreSQL 17） |
-| 前端 | Angular 22（standalone、zoneless、signals）、Angular Material／CDK、PWA（service worker，不支援離線） |
+| 前端 | Angular 22（standalone、zoneless、signals）、Angular Material／CDK、Chart.js、PWA（service worker，不支援離線） |
 | 前端測試 | Vitest、Playwright（API 以 mock 取代） |
 | 部署 | Docker（前後端同一個 image，由 API 提供前端）、Google Cloud Run（台灣）、Secret Manager |
 
@@ -30,7 +30,7 @@ src/
   SixJars.Api             Web API（composition root）
   SixJars.Cli             管理工具（composition root，與 API 共用 Application）
 tests/                    Domain / Application / Infrastructure / Api / Cli / Acceptance
-web/                      Angular PWA（記帳、總覽、預定支出、預算、帳本設定）
+web/                      Angular PWA（記帳、總覽、預定支出、預算、報表、帳本設定）
 .github/workflows/        GitHub Actions CI
 ```
 
@@ -42,13 +42,14 @@ web/                      Angular PWA（記帳、總覽、預定支出、預算�
 - **預定支出**：固定／貸款／特別支出的月度預計項目，付款時連結實際交易。
 - **週期預定支出**：定義週期項目後依月份產生當月預定支出；未付款的項目可用週期項目現值更新。
 - **預算**：浮動支出主分類的每月上限，可設預設值並覆寫個別歸屬月份，未用完不累積；實際支出含子分類與電子錢包消費，顯示預算、實際、剩餘與使用率。有預算的分類須先清除預算才能改支出性質或刪除。
+- **報表**：月報（依性質 → 主分類 → 子分類，附未付預定與月可用餘額對照、甜甜圈圖）與年報（12 個月並列、佔收入比、月平均、堆疊長條圖）。
 - **月摘要**：指定歸屬月份與基準日的帳戶餘額、可用現金、月可用餘額。
 - **稽核與軟刪除**：每次寫入留下前後快照；刪除只標記，不參與計算。
 - **樂觀並行**：更新／刪除需帶版本號，衝突回 409。
 - **匯出與備份**：交易明細 CSV／XLSX（含標籤欄）；整本帳 JSON 備份（格式 v5，含預算與標籤，可用 CLI 還原）。
 - **舊帳匯入**：CLI 把舊 Excel 記帳本轉成新帳本，附檢查報告與 dry-run。
 - **權限**：Google 登入，只有帳本成員可存取；非成員一律 404。目前只實作「擁有者」角色。
-- **Web 前端**：記帳頁（鍵盤快速連續記帳、手機兩行清單）、總覽頁、預定支出頁（本月清單、產生、付款、週期項目）、預算頁（依月份切換、行內編輯預設值與覆寫值；總覽頁有本月預算摘要卡）、設定頁（含標籤管理、匯出與備份下載）；記帳時可選標籤，交易清單以色塊顯示標籤並可依標籤篩選當月交易；可安裝為 PWA。
+- **Web 前端**：記帳頁（鍵盤快速連續記帳、手機兩行清單）、總覽頁、預定支出頁（本月清單、產生、付款、週期項目）、預算頁（依月份切換、行內編輯預設值與覆寫值；總覽頁有本月預算摘要卡）、報表頁（月報、年報，依月份切換、可展開分類）、設定頁（含標籤管理、匯出與備份下載）；記帳時可選標籤，交易清單以色塊顯示標籤並可依標籤篩選當月交易；可安裝為 PWA。
 
 ## 使用方式
 
@@ -137,7 +138,7 @@ npx ng serve
 | `GET /auth/login`、`POST /auth/logout` | Google 登入／登出 |
 | `GET /api/antiforgery/token` | 取得 XSRF token（非 GET 請求須帶 `X-XSRF-TOKEN` header） |
 | `GET /api/me`、`GET /api/books` | 登入者資訊、可存取的帳本 |
-| `/api/books/{bookId}/…` | `accounts`、`planning-funds`、`categories`、`tags`（含 `archive`、`unarchive`、`order`）、`lock-date`、`transactions`（清單可帶 `budgetMonth`、`tagId` 篩選）、`planned-expenses`（含 `generate`、`refresh`、`pay`）、`recurring-planned-expenses`、`budgets`（含各分類的 `default` 與 `overrides/{budgetMonth}`）、`summary`、`audit`、`export/*` |
+| `/api/books/{bookId}/…` | `accounts`、`planning-funds`、`categories`、`tags`（含 `archive`、`unarchive`、`order`）、`lock-date`、`transactions`（清單可帶 `budgetMonth`、`tagId` 篩選）、`planned-expenses`（含 `generate`、`refresh`、`pay`）、`recurring-planned-expenses`、`budgets`（含各分類的 `default` 與 `overrides/{budgetMonth}`）、`summary`、`reports/monthly`、`reports/yearly`、`audit`、`export/*` |
 | 其他路徑 | 由 API 提供前端靜態檔，deep link 回 `index.html` |
 
 ### CLI 管理工具

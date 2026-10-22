@@ -102,3 +102,26 @@ export interface BudgetTotalsDto { budget: number; actual: number; remaining: nu
 export interface BudgetSheetDto { rows: BudgetRowDto[]; totals: BudgetTotalsDto }
 export interface BudgetOverrideDto { budgetMonth: number; amount: number }
 export interface CategoryBudgetDto { categoryId: string; defaultAmount: number | null; overrides: BudgetOverrideDto[] }
+
+export type ReportSectionKind = 'Income' | 'Floating' | 'Fixed' | 'Loan' | 'Special';
+// Unassigned 是「（未分子類）」，id 與它的主分類相同
+export type ReportLineKind = 'Category' | 'Unassigned' | 'LoanAccount' | 'PlanningFund';
+export interface ReportLineDto {
+  kind: ReportLineKind; id: string; name: string; amount: number;
+  principal: number | null; interest: number | null; children: ReportLineDto[];
+}
+export interface ReportSectionDto { kind: ReportSectionKind; total: number; unpaid: number | null; lines: ReportLineDto[] }
+export interface PlanningLineDto { fundId: string; name: string; allocation: number; withdrawal: number; return: number }
+export interface MonthlyReportDto {
+  budgetMonth: number; monthlyDisposable: number; income: ReportSectionDto; expenses: ReportSectionDto[];
+  expenseTotal: number; unpaidTotal: number; planning: PlanningLineDto[];
+}
+export interface YearlyFiguresDto { months: number[]; total: number; shareOfIncome: number | null; monthlyAverage: number | null }
+export interface YearlyLineDto { kind: ReportLineKind; id: string; name: string; figures: YearlyFiguresDto; children: YearlyLineDto[] }
+export interface YearlySectionDto { kind: ReportSectionKind; figures: YearlyFiguresDto; lines: YearlyLineDto[] }
+export interface YearlyPlanningDto { allocation: YearlyLineDto[]; withdrawal: YearlyLineDto[]; return: YearlyLineDto[] }
+export interface YearlyReportDto {
+  // averageFromMonth：月平均從幾月算起（開帳那一年是開帳月份），沒有月平均時為 null
+  year: number; averageDivisor: number | null; averageFromMonth: number | null; income: YearlySectionDto; expenses: YearlySectionDto[];
+  expenseTotal: YearlyFiguresDto; planning: YearlyPlanningDto;
+}

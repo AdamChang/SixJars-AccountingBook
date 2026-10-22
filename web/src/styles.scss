@@ -28,6 +28,19 @@
   --tag-indigo-bg: #4b0082; --tag-indigo-fg: #ffffff;    // 12.95
   --tag-purple-bg: #800080; --tag-purple-fg: #ffffff;    // 9.42
   --tag-pink-bg: #ffc0cb; --tag-pink-fg: #000000;        // 13.65
+
+  // 報表圖表（P4 M）：dataviz 參考類別色依固定順序取用，以 --ledger-sheet 為底跑過 validate_palette（含甜甜圈首尾相接的配對）。
+  // 黃、綠、粉三色對白底不到 3:1，所以每張圖旁都有同樣數字的表格。
+  --chart-floating: #2a78d6;
+  --chart-fixed: #eb6834;
+  --chart-loan: #1baf7a;
+  --chart-special: #eda100;
+  --chart-series-1: #2a78d6;
+  --chart-series-2: #eb6834;
+  --chart-series-3: #1baf7a;
+  --chart-series-4: #eda100;
+  --chart-series-5: #e87ba4;
+  --chart-series-6: #008300;
 }
 
 html {

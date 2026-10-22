@@ -1,0 +1,30 @@
+:host { display: block; max-width: 1200px; margin: 0 auto; padding: 8px 16px 32px; }
+.year-nav { display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 4px; }
+.year {
+  min-width: 5.5em; text-align: center; font-family: var(--font-serif); font-weight: 700; font-size: 1.5rem;
+  font-variant-numeric: tabular-nums; letter-spacing: 0.06em; color: var(--ink);
+}
+.step { font-size: 1.75rem; line-height: 1; color: var(--ink); }
+.report-switch { display: flex; justify-content: center; gap: 4px; margin-bottom: 12px; }
+.report-switch a[aria-current='page'] { font-weight: 700; text-decoration: underline; text-underline-offset: 4px; }
+
+figure { margin: 0 0 16px; padding: 12px; }
+figcaption { margin-bottom: 8px; font-family: var(--font-serif); font-weight: 700; color: var(--ledger-heading); }
+app-chart { height: 280px; }
+.status { padding: 16px; color: var(--mat-sys-on-surface-variant); }
+.note { margin: 0 0 8px; font-size: 0.8125rem; color: var(--mat-sys-on-surface-variant); }
+
+// 18 欄很寬：表格在自己的容器內橫向捲動，第一欄固定在左側
+.table-wrap { overflow-x: auto; margin-bottom: 16px; }
+table.ledger td.amount { width: auto; min-width: 5.5em; white-space: nowrap; }
+th {
+  padding: 8px 12px; text-align: left; font-family: var(--font-serif); font-weight: 700; font-size: 0.875rem;
+  color: var(--ledger-heading); letter-spacing: 0.08em; border-bottom: 1px solid var(--ledger-rule-strong); white-space: nowrap;
+}
+th.amount-head { text-align: right; }
+tr > :first-child { position: sticky; left: 0; z-index: 1; background: var(--ledger-sheet); min-width: 9em; }
+.section-head > * { background: var(--ledger-paper); color: var(--ink); }
+.section-head > :first-child { background: var(--ledger-paper); }
+.name-cell { display: flex; align-items: center; gap: 4px 8px; white-space: nowrap; }
+.toggle { width: 32px; height: 32px; padding: 0; margin-left: -8px; color: var(--ink); }
+.grand-total > * { border-top: 2px solid var(--ledger-rule-strong); color: var(--ink); }

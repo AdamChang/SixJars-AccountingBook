@@ -12,6 +12,7 @@ public sealed class ExcelLegacyWorkbookReader : ILegacyWorkbookReader
     private const string SettingsSheet = "設定";
     private const string ListSheet = "清單";
     private const string BudgetSheet = "預算";
+    private const string SummarySheet = "總表";
 
     static ExcelLegacyWorkbookReader() => Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
 
@@ -29,7 +30,11 @@ public sealed class ExcelLegacyWorkbookReader : ILegacyWorkbookReader
             .Select(month => ReadMonth(month, sheets[$"{month}月"], budget))
             .ToList();
 
-        return new LegacyWorkbook(ReadSettings(sheets[SettingsSheet], sheets[ListSheet]), ReadFloatingCategories(sheets[ListSheet]), months);
+        // 「總表」只供驗收比對（P4 M plan M6），缺表時不影響匯入
+        var summary = sheets.GetValueOrDefault(SummarySheet);
+        return new LegacyWorkbook(
+            ReadSettings(sheets[SettingsSheet], sheets[ListSheet]), ReadFloatingCategories(sheets[ListSheet]), months,
+            summary is null ? null : ReadYearTotals(summary));
     }
 
     private static LegacySettings ReadSettings(SheetGrid settings, SheetGrid list) => new(
@@ -100,7 +105,29 @@ public sealed class ExcelLegacyWorkbookReader : ILegacyWorkbookReader
         CardOutstanding: sheet.NamedAmounts("E", "X", 110, 119),
         LoanRemaining: sheet.NamedAmounts("E", "X", 124, 131),
         FundBalances: sheet.NamedAmounts("S", "AA", 10, 17),
-        FloatingActuals: budget?.NamedAmounts("C", BudgetActualColumn(month), 4, 28) ?? []);
+        FloatingActuals: budget?.NamedAmounts("C", BudgetActualColumn(month), 4, 28) ?? [],
+        Report: ReadReportFigures(sheet));
+
+    /// <summary>儲存格位址見 P4 M plan Task 6 的表（2026-10-13 以公式查證）。</summary>
+    private static LegacyReportFigures ReadReportFigures(SheetGrid sheet) => new(
+        IncomeItems: sheet.NamedAmounts("E", "J", 10, 17),
+        FloatingMains: [.. sheet.NamedAmounts("E", "J", 34, 46), .. sheet.NamedAmounts("S", "X", 34, 45)],
+        FloatingTotal: sheet.Number("X46"),
+        FixedTotal: sheet.Number("X70"),
+        LoanTotal: sheet.Number("X82"),
+        SpecialTotal: sheet.Number("X92"),
+        FundAllocations: sheet.NamedAmounts("S", "AE", 10, 17),
+        FundWithdrawals: sheet.NamedAmounts("S", "X", 22, 29),
+        FundReturns: sheet.NamedAmounts("S", "AA", 22, 29));
+
+    private static LegacyYearFigures ReadYearTotals(SheetGrid summary) => new(
+        IncomeItems: summary.NamedAmounts("F", "AU", 17, 24),
+        FloatingMains: summary.NamedAmounts("F", "AU", 51, 75),
+        FloatingTotal: summary.Number("AU76"),
+        FixedTotal: summary.Number("AU98"),
+        LoanTotal: summary.Number("AU108"),
+        SpecialTotal: summary.Number("AU116"),
+        FundAllocations: summary.NamedAmounts("F", "AU", 31, 38));
 
     /// <summary>「預算」工作表每月三欄（預算分配、實際支出、誤差），1 月的實際支出在 E 欄，12 月在 AL 欄。</summary>
     private static string BudgetActualColumn(int month) =>
