@@ -85,6 +85,13 @@ describe('YearlyReportPage', () => {
     expect(el.textContent).toContain('月平均以 8–12 月計算');
   });
 
+  // 開帳日是 12 月 31 日時，開帳那一年只有 12 月一個月：不寫成「12–12 月」（2026-10-23 手動驗證）
+  it('explains_a_single_month_average_without_a_range', async () => {
+    const { el } = await setup({ ...REPORT, averageDivisor: 1, averageFromMonth: 12 });
+    expect(el.textContent).toContain('月平均以 12 月計算');
+    expect(el.textContent).not.toContain('12–12');
+  });
+
   it('year_nav_moves_the_month_param_by_a_year', async () => {
     const { el, fixture, http } = await setup();
     el.querySelector<HTMLButtonElement>('button[aria-label="下一年"]')!.click();

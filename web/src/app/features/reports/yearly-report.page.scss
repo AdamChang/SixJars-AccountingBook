@@ -14,7 +14,7 @@ app-chart { height: 280px; }
 .status { padding: 16px; color: var(--mat-sys-on-surface-variant); }
 .note { margin: 0 0 8px; font-size: 0.8125rem; color: var(--mat-sys-on-surface-variant); }
 
-// 18 欄很寬：表格在自己的容器內橫向捲動，第一欄固定在左側
+// 16 欄很寬：手機寬度時表格在自己的容器內橫向捲動，第一欄固定在左側
 .table-wrap { overflow-x: auto; margin-bottom: 16px; }
 table.ledger td.amount { width: auto; min-width: 5.5em; white-space: nowrap; }
 th {
@@ -28,3 +28,17 @@ tr > :first-child { position: sticky; left: 0; z-index: 1; background: var(--led
 .name-cell { display: flex; align-items: center; gap: 4px 8px; white-space: nowrap; }
 .toggle { width: 32px; height: 32px; padding: 0; margin-left: -8px; color: var(--ink); }
 .grand-total > * { border-top: 2px solid var(--ledger-rule-strong); color: var(--ink); }
+
+// 電腦寬度：16 欄要一個畫面看完（同 Excel 總表），解除寬度上限並縮小數字格的留白與字級；
+// 數字特別長而仍然放不下時，照樣退回容器內橫向捲動
+@media (min-width: 1024px) {
+  :host { max-width: none; padding: 8px 24px 32px; }
+  th, table.ledger td { padding: 6px 4px; font-size: 0.75rem; letter-spacing: 0; }
+  table.ledger td.amount { min-width: 0; }
+  tr > :first-child { min-width: 7em; padding-left: 10px; }
+}
+
+// 更寬的螢幕空間足夠，換回較大的字與較寬的留白（13px 時約需 1,320px，1440px 視窗扣掉頁面留白仍放得下）
+@media (min-width: 1440px) {
+  th, table.ledger td { padding: 6px 6px; font-size: 0.8125rem; }
+}

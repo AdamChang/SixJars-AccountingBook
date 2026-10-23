@@ -30,6 +30,9 @@
 
   @if (r.averageDivisor === null || r.averageFromMonth === null) {
     <p class="note">未來的年份與開帳之前不計算月平均</p>
+  } @else if (r.averageDivisor === 1) {
+    <!-- 只有一個月（例如 12 月 31 日開帳的那一年）時不寫成「12–12 月」 -->
+    <p class="note">月平均以 {{ r.averageFromMonth }} 月計算</p>
   } @else if (r.averageDivisor < 12) {
     <!-- 今年算到本月；開帳那一年從開帳月份算起（spec Q10） -->
     <p class="note">月平均以 {{ r.averageFromMonth }}–{{ r.averageFromMonth + r.averageDivisor - 1 }} 月計算</p>
