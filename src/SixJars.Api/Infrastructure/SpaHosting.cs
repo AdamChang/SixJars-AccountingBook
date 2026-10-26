@@ -8,7 +8,7 @@ namespace SixJars.Api.Infrastructure;
 /// </summary>
 /// <remarks>
 /// fallback 刻意用「改寫路徑」的 middleware，而不是 <c>MapFallbackToFile</c>：後者會在 EndpointDataSource 多出一個
-/// 沒有 HttpMethodMetadata 的匿名 endpoint，違反 SecurityConventionTests 的匿名白名單（只允許 /health 與 /auth/**）。
+/// 沒有 HttpMethodMetadata 的匿名 endpoint，違反 SecurityConventionTests 的匿名白名單（只允許 /health、/health/ready 與 /auth/**）。
 /// 改寫路徑不新增 endpoint，安全慣例不必放寬。
 /// </remarks>
 public static class SpaHosting

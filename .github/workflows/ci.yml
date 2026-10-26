@@ -4,6 +4,8 @@ on:
   pull_request:
   push:
     branches: [master]
+  # deploy.yml 在部署 tag 前重跑同一組測試（ADR 0012）
+  workflow_call:
 
 concurrency:
   group: ci-${{ github.ref }}

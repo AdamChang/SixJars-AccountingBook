@@ -1,7 +1,7 @@
 # 部署：Cloud Run 與 Neon
 
-本文件列出把 SixJars API 部署到 Google Cloud Run（asia-east1）與 Neon PostgreSQL 的完整步驟（spec §8.4、ADR 0004、ADR 0007）。
-**所有指令都由使用者自己執行**；repo 與 image 裡沒有任何真實的連線字串、client secret 或 license key。
+本文件列出把 SixJars API 部署到 Google Cloud Run（asia-east1）與 Neon PostgreSQL 的完整步驟（spec §8.4、ADR 0004、ADR 0007、ADR 0012）。
+一次性設定與 migration **由使用者自己執行**；之後的部署由 GitHub Actions 在 push 版本 tag 時進行（第 7 節）。repo 與 image 裡沒有任何真實的連線字串、client secret 或 license key。
 
 指令以 Windows PowerShell 撰寫（行尾的 `` ` `` 是換行接續）。在 bash 中，環境變數改寫成 `export 名稱=值`，行尾接續改用 `\`。
 
@@ -16,6 +16,11 @@
    - [本機驗證 production build 的登入與 service worker](#本機驗證-production-build-的登入與-service-worker)
 6. [Secret Manager](#6-secret-manager)
 7. [Cloud Run 部署](#7-cloud-run-部署)
+   - [7.1 一次性 GCP 設定](#71-一次性-gcp-設定)
+   - [7.2 GitHub 設定](#72-github-設定)
+   - [7.3 發版](#73-發版)
+   - [7.4 第一次部署之後](#74-第一次部署之後)
+   - [7.5 回滾](#75-回滾)
 8. [閒置與喚醒：預設不設定 Cloud Scheduler](#8-閒置與喚醒預設不設定-cloud-scheduler)
 9. [首次搬家：匯入舊 Excel](#9-首次搬家匯入舊-excel)
 10. [新增成員](#10-新增成員)
@@ -31,30 +36,33 @@
 | .NET SDK 10.0.401 以上（`global.json`） | 產生 migration bundle、執行 CLI |
 | `dotnet-ef` 10.0.12 | `dotnet tool install --global dotnet-ef --version 10.0.12` |
 | Docker Desktop | 本機驗證 image（第 2 節） |
-| Google Cloud SDK（`gcloud`） | Secret Manager、Cloud Run |
+| Google Cloud SDK（`gcloud`） | Secret Manager、Cloud Run、第 7.1 節的一次性設定 |
+| PowerShell | 執行 `scripts/setup-gcp.ps1`（Windows PowerShell 5.1 或 PowerShell 7） |
+| `gh` CLI（選用） | 由腳本設定 GitHub variables 與 environment |
 | `psql`，或 Neon console 的 SQL Editor | 建立資料庫角色 |
 
 ```powershell
 gcloud auth login
 gcloud config set project <gcp-project-id>
 gcloud config set run/region asia-east1
-gcloud services enable run.googleapis.com secretmanager.googleapis.com artifactregistry.googleapis.com cloudbuild.googleapis.com
+# 第 7.1 節的腳本也會啟用這些 API，以及 WIF 需要的 iam、iamcredentials、sts
+gcloud services enable run.googleapis.com secretmanager.googleapis.com artifactregistry.googleapis.com
 ```
 
-環境變數一覽（範本見 repo 根目錄的 `.env.example`）：
+環境變數一覽（範本見 repo 根目錄的 `.env.example`；正式環境由 `deploy.yml` 設定）：
 
 | 變數 | 內容 |
 |---|---|
 | `ConnectionStrings__SixJars` | Neon 直連 endpoint 的連線字串，帶 `SSL Mode=Require`，使用 app 角色 |
 | `Authentication__Google__ClientId`、`Authentication__Google__ClientSecret` | Google OAuth client |
-| `MediatR__LicenseKey` | MediatR 授權金鑰（沒有設定時只記一筆 warning） |
+| `MediatR__LicenseKey` | MediatR 授權金鑰（沒有設定時只記一筆 warning）；正式環境來自 GitHub secret `MEDIATR_LICENSE_KEY`，以一般環境變數提供 |
 | `ASPNETCORE_ENVIRONMENT` | 正式環境為 `Production`（未設定時的預設值）。Development 以外缺少 Google 設定時，app 會在啟動時失敗（T36） |
 
 ---
 
 ## 2. 本機驗證 Docker image
 
-雲端 container 中的 `docker build` 因 proxy 的 CA 無法 restore NuGet 套件，image 尚未驗證過。**第一次部署前，請在自己的電腦上完成以下檢查。**
+Deploy workflow 每次都會在 runner 上 build image，並自動檢查 2.2（時區）與 2.3（個資）；2.5 的 `/health` 則由部署後的 smoke test 涵蓋。本節是在本機排查 image 問題用的手動步驟。2026-10-26 已在雲端 container 以注入 proxy CA 的方式 build 成功，`/health` 與 `/health/ready`（套用 migration 前 503、後 200）都實測通過。
 
 ### 2.1 建置
 
@@ -233,7 +241,7 @@ CREATE TABLE should_fail (id int);
 
 ## 4. Migration bundle
 
-**不在 app 啟動時自動 migrate**（spec §8.4）：Cloud Run 多個 instance 同時啟動會互相競爭，而且 app 角色本來就沒有 DDL 權限。每次部署含 schema 變更的版本前，都先在本機執行 bundle。
+**不在 app 啟動時自動 migrate**（spec §8.4），**也不在 deploy workflow 裡 migrate**（ADR 0012）：Cloud Run 多個 instance 同時啟動會互相競爭，app 角色本來就沒有 DDL 權限，DDL 角色的憑證也不離開本機。每次發版含 schema 變更時，在 merge 到 `master` 之後、push tag 之前（第 7.3 節），先在本機執行 bundle。漏跑時，新版的 startup probe（`/health/ready`）會擋下部署。
 
 ```powershell
 # 產生自含執行檔（Windows；在 Linux／macOS 上把 -r 改成 linux-x64／osx-arm64）
@@ -350,10 +358,10 @@ netsh interface ipv4 show excludedportrange protocol=tcp
 
 ## 6. Secret Manager
 
-把三個機密存成 secret。用 PowerShell 時以暫存檔傳入，避免值出現在命令列歷史中，用完立即刪除暫存檔。
+Secret Manager 只放兩個機密（ADR 0012）。用 PowerShell 時以暫存檔傳入，避免值出現在命令列歷史中，用完立即刪除暫存檔。
 
 ```powershell
-# 每個 secret 各做一次：sixjars-db（app 角色的連線字串）、sixjars-google-client-secret、sixjars-mediatr-license
+# 每個 secret 各做一次：sixjars-db（app 角色的連線字串）、sixjars-google-client-secret
 notepad secret.txt     # 貼上值後存檔，結尾不要有換行
 gcloud secrets create sixjars-db --replication-policy=automatic --data-file=secret.txt
 Remove-Item secret.txt
@@ -361,57 +369,122 @@ Remove-Item secret.txt
 
 - `sixjars-db`：`Host=<neon-host>;Port=5432;Database=sixjars;Username=sixjars_app;Password=<app 密碼>;SSL Mode=Require`（**app 角色**，不是 migrator）。
 - `sixjars-google-client-secret`：OAuth client secret。
-- `sixjars-mediatr-license`：MediatR license key。
-- Google Client ID 不是機密，以一般環境變數提供即可。
+- Google Client ID 不是機密，存在 GitHub repository variable `GOOGLE_CLIENT_ID`（第 7.2 節）。
+- MediatR license key 不放 Secret Manager，存在 GitHub Actions secret `MEDIATR_LICENSE_KEY`，部署時以一般環境變數交給 Cloud Run（ADR 0012：不再增加 secret version；license key 不是存取憑證）。
 
-更新值時加一個新版本：`gcloud secrets versions add sixjars-db --data-file=secret.txt`，再重新部署（或部署新 revision），新的 instance 才會讀到。
+更新值時加一個新版本：`gcloud secrets versions add sixjars-db --data-file=secret.txt`。Cloud Run 只在 instance 啟動時讀 secret，要讓新值生效，到 GitHub Actions 重跑最近一次的 Deploy（第 7.3 節）。
 
-讓 Cloud Run 的 service account 讀得到 secret（預設是 Compute Engine default service account；若另外建立專用 service account，改用它的 email）：
-
-```powershell
-$projectNumber = gcloud projects describe <gcp-project-id> --format="value(projectNumber)"
-foreach ($s in "sixjars-db", "sixjars-google-client-secret", "sixjars-mediatr-license") {
-  gcloud secrets add-iam-policy-binding $s `
-    --member="serviceAccount:$projectNumber-compute@developer.gserviceaccount.com" `
-    --role="roles/secretmanager.secretAccessor"
-}
-```
+讀取權只授予 runtime SA `sixjars-run`，由第 7.1 節的腳本設定。舊版文件曾經把讀取權授予 Compute Engine default service account；腳本加上 `-RemoveComputeSecretAccess` 會一併移除。
 
 ---
 
 ## 7. Cloud Run 部署
 
-由 Cloud Build 以 repo 根目錄的 `Dockerfile` 建置後部署：
+由 GitHub Actions（`.github/workflows/deploy.yml`）在 push 版本 tag 時部署（ADR 0012）：
+
+1. 檢查 tag 指向的 commit 已在 `master` 上。
+2. 重跑 `ci.yml`（後端與前端的全部測試）。
+3. 以 Workload Identity Federation 登入 GCP（GitHub 不存 service account key）。
+4. 在 runner 上 build image，檢查有 `Asia/Taipei` 時區檔、沒有舊 Excel，推到 Artifact Registry（版本 tag 與 commit SHA 各一個 tag）。
+5. `gcloud run deploy`：runtime SA `sixjars-run`，startup probe 為 `/health/ready`。
+6. smoke test：`/health` 與 `/health/ready` 都要回 200。
+
+### 7.1 一次性 GCP 設定
+
+前提：第 1–6 節已完成。在 repo 根目錄執行（可以重複執行，已存在的資源會略過）：
 
 ```powershell
-gcloud run deploy sixjars `
-  --source . `
-  --region asia-east1 `
-  --allow-unauthenticated `
-  --min-instances 0 `
-  --max-instances 2 `
-  --memory 512Mi `
-  --set-env-vars "ASPNETCORE_ENVIRONMENT=Production,Authentication__Google__ClientId=<client-id>.apps.googleusercontent.com" `
-  --set-secrets "ConnectionStrings__SixJars=sixjars-db:latest,Authentication__Google__ClientSecret=sixjars-google-client-secret:latest,MediatR__LicenseKey=sixjars-mediatr-license:latest"
+gcloud auth login
+./scripts/setup-gcp.ps1 -ProjectId <gcp-project-id> -RemoveComputeSecretAccess
 ```
 
-- `--allow-unauthenticated`：讓瀏覽器連得到，登入與授權由 app 自己處理（Google 登入加上帳本成員白名單）。
-- `--min-instances 0`：閒置時不計費，維持在免費方案內。代價是冷啟動，見第 8 節。
-- container 監聽 8080（`ASPNETCORE_HTTP_PORTS`），與 Cloud Run 預設的 `PORT=8080` 一致；**不要**另外指定 `--port`。
-- `--source .` 會上傳 build context。`.dockerignore` 已排除 `reference/`、`.env`、tests、docs，不會上傳個資。
+腳本建立的資源：
 
-部署完成後：
+| 資源 | 內容 |
+|---|---|
+| Artifact Registry `asia-east1/sixjars` | Docker repo；cleanup policy 只保留最近 3 個版本（GCP 每天背景執行，不是 push 當下） |
+| `sixjars-run@<project>.iam.gserviceaccount.com` | Cloud Run 執行身分；只能讀 `sixjars-db`、`sixjars-google-client-secret` |
+| `sixjars-deploy@<project>.iam.gserviceaccount.com` | GitHub Actions 的部署身分：`roles/run.admin`（專案）、`roles/artifactregistry.writer`（`sixjars` repo）、對 `sixjars-run` 的 `roles/iam.serviceAccountUser` |
+| Workload Identity pool `github`、provider `github-actions` | 只接受 `AdamChang/SixJars-AccountingBook` 的 `production` environment、`refs/tags/v*` 發出的 token |
+
+腳本最後印出第 7.2 節要填的值。已裝 `gh` CLI 並 `gh auth login` 時，可以加上 `-SetGitHubVariables -GoogleClientId <client-id>.apps.googleusercontent.com`，由腳本一併設定 variables 與 environment；`MEDIATR_LICENSE_KEY` 仍要自己設定。
+
+### 7.2 GitHub 設定
+
+在 GitHub repo 頁面 → **Settings** → 左側 **Secrets and variables** → **Actions**：
+
+1. **Variables** 分頁 → **New repository variable**，逐一新增：
+
+   | Name | Value |
+   |---|---|
+   | `GCP_PROJECT_ID` | GCP 專案 ID |
+   | `GCP_WIF_PROVIDER` | `projects/<專案編號>/locations/global/workloadIdentityPools/github/providers/github-actions`（腳本會印出） |
+   | `GCP_DEPLOYER_SA` | `sixjars-deploy@<project>.iam.gserviceaccount.com` |
+   | `GOOGLE_CLIENT_ID` | `<client-id>.apps.googleusercontent.com` |
+
+2. **Secrets** 分頁 → **New repository secret**：Name 填 `MEDIATR_LICENSE_KEY`，Secret 貼上 MediatR Community license key。
+   也可以用 CLI：`gh secret set MEDIATR_LICENSE_KEY`（會提示貼上，值不會留在命令列歷史）。
+
+Variables 的值在 workflow log 中看得到，只放非機密；secret 在 log 中會被遮蔽。
+
+接著建立 environment：**Settings** → **Environments** → **New environment**，名稱 `production`：
+
+- **Deployment branches and tags** 選 **Selected branches and tags** → **Add deployment branch or tag rule** → Ref type 選 **Tag**，Name pattern 填 `v*`。
+- 不需要在 environment 裡放 secret 或 variable（都放在 repository 層級）。
+
+WIF provider 也只信任 `production` environment 的 tag，所以這兩道限制缺一不可：沒有 environment 時，GCP 會拒絕發憑證。
+
+### 7.3 發版
+
+```powershell
+# 1. 改動已 merge 到 master；含 migration 時，先在本機對 Neon 套用（第 4 節）
+.\efbundle.exe --connection $migrator
+
+# 2. 對 master 上的 commit 打 tag 並 push
+git switch master
+git pull
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+到 GitHub 的 **Actions** 分頁看 Deploy 的進度。第一版是 `v1.0.0`，之後依改動大小遞增（`v1.0.1`、`v1.1.0`）。
+
+- **漏跑 migration**：新 revision 的 startup probe（`/health/ready`）一直回 503，Cloud Run 不會把流量切過去，舊版繼續服務，workflow 失敗。補跑第 4 節的 bundle 後，到 Actions 對這次的 Deploy 按 **Re-run all jobs**。
+- **同一個版本重新部署**（例如更新了 secret 的值）：同樣在 Actions 對最近一次的 Deploy 按 **Re-run all jobs**，不必另打 tag。
+- **migration 必須向前相容**：先 migrate、再部署，中間仍是舊版在服務；要刪欄位或改名時，分成「先加、後刪」兩次發版（ADR 0012）。
+- startup probe 最多等約 130 秒，涵蓋 Neon 從暫停中喚醒的時間。
+
+### 7.4 第一次部署之後
 
 ```powershell
 $url = gcloud run services describe sixjars --region asia-east1 --format="value(status.url)"
 curl.exe -i "$url/health"
+curl.exe -i "$url/health/ready"
 ```
 
-預期：`200 OK`。若是 503，代表連不上資料庫：檢查連線字串（直連 host、`SSL Mode=Require`）與 secret 權限。若 revision 根本起不來，用 `gcloud run services logs read sixjars --region asia-east1` 查看；缺少 Google 設定時，啟動訊息會指出缺少哪個環境變數。
+預期都是 `200 OK`。`/health` 是 503 代表連不上資料庫：檢查連線字串（直連 host、`SSL Mode=Require`）與 `sixjars-run` 的 secret 權限。`/health/ready` 是 503 而 `/health` 是 200，代表還有 migration 沒套用。revision 起不來時，用 `gcloud run services logs read sixjars --region asia-east1` 查看；缺少 Google 設定時，啟動訊息會指出缺少哪個環境變數。
 
 接著回到第 5 節，把 `$url/auth/callback` 加進 OAuth client 的 redirect URI，再以瀏覽器開啟 `$url/auth/login` 驗證登入（真實的 Google 登入只能手動驗證）。
 
 最後檢查 service worker 不會干擾登入：首次造訪後，service worker 應已註冊（DevTools → Application → Service Workers）。接著重新整理頁面、登出、再登入一次，`/auth/callback` 與 `/denied` 的轉址都必須正常運作，不可被快取的 `index.html` 直接回應。
+
+部署參數（在 `deploy.yml`）：
+
+- `--allow-unauthenticated`：讓瀏覽器連得到，登入與授權由 app 自己處理（Google 登入加上帳本成員白名單）。
+- `--min-instances 0`：閒置時不計費，維持在免費方案內。代價是冷啟動，見第 8 節。
+- container 監聽 8080（`ASPNETCORE_HTTP_PORTS`），與 Cloud Run 預設的 `PORT=8080` 一致；**不要**另外指定 `--port`。
+- `--set-env-vars`、`--set-secrets` 每次都整組覆寫：在 console 手動加的環境變數，下次部署會消失，請改 `deploy.yml`。
+
+### 7.5 回滾
+
+新 revision 起不來時，Cloud Run 本來就不會切流量。上線後才發現問題，手動切回上一個 revision（migration 不回滾）：
+
+```powershell
+gcloud run revisions list --service sixjars --region asia-east1
+gcloud run services update-traffic sixjars --region asia-east1 --to-revisions <舊 revision 名稱>=100
+```
+
+切回後，最新的 revision 不會自動拿回流量；修正後打新的 tag，`gcloud run deploy` 會把流量切到新 revision。Artifact Registry 只保留最近 3 個版本，太舊的 revision 會因為 image 已被刪除而無法再啟動。
 
 ---
 
@@ -535,7 +608,9 @@ dotnet run --project src/SixJars.Cli -- restore-backup --file <備份檔路徑>.
 - **登入 cookie 無法從伺服器端撤銷**：cookie 有效 14 天，且會隨使用自動延長（sliding）。被偷的 cookie 只要對方仍是成員就有效。
   - 把成員從帳本移除後，該帳號立刻拿不到帳本資料：每個請求都會查成員表。
   - 懷疑 cookie 外洩時，最徹底的做法是清空 `DataProtectionKeys` 表，讓所有 cookie 失效（所有人都要重新登入）。
-- **角色分離**：Cloud Run 只拿到 `sixjars_app`（DML）的連線字串；`sixjars_migrator`（DDL）只在本機執行 bundle 時使用，不放進 Secret Manager。
+- **角色分離**：Cloud Run 只拿到 `sixjars_app`（DML）的連線字串；`sixjars_migrator`（DDL）只在本機執行 bundle 時使用，不放進 Secret Manager 或 GitHub。
+- **部署身分**：GitHub Actions 以 WIF 取得短期憑證，不存 service account key；WIF 只信任本 repo `production` environment 的 `v*` tag。`sixjars-deploy` 不能讀任何 secret；app 以 `sixjars-run` 執行，只能讀兩個 secret。
+- **MediatR license key 以明碼出現**在 Cloud Run revision 的設定裡（專案內有 Viewer 權限的人都看得到）；它不是存取憑證，外洩只有授權問題（ADR 0012）。
 - **Forwarded headers**：app 信任任何來源的 `X-Forwarded-Proto`／`X-Forwarded-For`，因為 Cloud Run 的 container 只能經由 Google 前端連到。若改成其他可以直接連到 app 的部署方式，必須改回只信任該 proxy 的 IP（見 `ForwardedHeadersSetup`）。
 - **機密不進 repo**：`.env` 已列入 `.gitignore`，repo 只放 `.env.example`；`reference/`（舊 Excel，個資）永遠不可 commit，也不會進 image。
 - **個資**：舊 Excel 只在本機匯入時使用；匯入完成後不需要上傳到任何地方。
