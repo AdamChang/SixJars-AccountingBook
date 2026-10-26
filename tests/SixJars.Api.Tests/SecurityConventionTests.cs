@@ -19,7 +19,7 @@ public class SecurityConventionTests(PostgresFixture postgres)
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
     /// <summary>
-    /// 不在 <c>/api</c> 底下、不要求登入的只有 <c>/health</c> 與 <c>/auth/**</c>；
+    /// 不在 <c>/api</c> 底下、不要求登入的只有 <c>/health</c>、<c>/health/ready</c> 與 <c>/auth/**</c>；
     /// 其他路徑一律要掛在 <c>/api</c> 群組，才會套到 <c>RequireAuthorization()</c>。
     /// </summary>
     [Fact]
@@ -31,7 +31,7 @@ public class SecurityConventionTests(PostgresFixture postgres)
         var endpoints = ApiEndpoints.Under(factory, "/api/");
         endpoints.Should().HaveCountGreaterThanOrEqualTo(18, "帳本範圍至少 15 個，加上 /api/me、/api/books 與 /api/antiforgery/token");
         ApiEndpoints.All(factory).Select(e => e.RoutePattern.RawText!).Except(endpoints.Select(e => e.RoutePattern.RawText!))
-            .Should().OnlyContain(path => path == "/health" || path.StartsWith("/auth/", StringComparison.Ordinal));
+            .Should().OnlyContain(path => path == "/health" || path == "/health/ready" || path.StartsWith("/auth/", StringComparison.Ordinal));
 
         List<string> leaks = [];
         foreach (var (method, url) in ApiEndpoints.Calls(endpoints, book.Id.Value))

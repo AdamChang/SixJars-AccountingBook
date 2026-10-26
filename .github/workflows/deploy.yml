@@ -1,0 +1,144 @@
+name: Deploy
+
+# 以版本 tag 部署到 Cloud Run（ADR 0012、docs/deploy.md §7）：
+#   git tag v1.0.0 && git push origin v1.0.0
+# 打 tag 前必須先在本機對 Neon 執行 migration bundle（docs/deploy.md §4）；
+# 漏跑時新 revision 的 startup probe（/health/ready）不會通過，流量留在舊版，這個 workflow 失敗。
+on:
+  push:
+    tags: ['v*.*.*']
+
+# 同一時間只部署一個版本；排隊中的不取消，部署到一半被中斷比較麻煩。
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  verify-tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: tag 指向的 commit 必須已在 master 上
+        run: |
+          git fetch --no-tags origin master
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/master; then
+            echo "::error::$GITHUB_REF_NAME 指向的 commit 不在 master 上：請先 merge 到 master，再對 master 上的 commit 打 tag。"
+            exit 1
+          fi
+
+  ci:
+    needs: verify-tag
+    uses: ./.github/workflows/ci.yml
+
+  deploy:
+    needs: ci
+    runs-on: ubuntu-latest
+    # Environment 限定只有 v* tag 能部署（deployment protection rule），WIF 也只信任這個 environment 的 tag。
+    environment:
+      name: production
+      url: ${{ steps.deploy.outputs.url }}
+    permissions:
+      contents: read
+      id-token: write # WIF：向 GitHub 取 OIDC token，換 GCP 的短期憑證，repo 裡沒有任何 service account key
+    env:
+      REGION: asia-east1
+      SERVICE: sixjars
+      IMAGE: asia-east1-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/sixjars/sixjars-api
+      # app 執行身分：只能讀 sixjars-db 與 sixjars-google-client-secret 兩個 secret
+      RUNTIME_SA: sixjars-run@${{ vars.GCP_PROJECT_ID }}.iam.gserviceaccount.com
+    steps:
+      - name: 檢查 repository variables
+        env:
+          GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+          GCP_WIF_PROVIDER: ${{ vars.GCP_WIF_PROVIDER }}
+          GCP_DEPLOYER_SA: ${{ vars.GCP_DEPLOYER_SA }}
+          GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}
+          MEDIATR_LICENSE_KEY: ${{ secrets.MEDIATR_LICENSE_KEY }}
+        run: |
+          missing=0
+          for name in GCP_PROJECT_ID GCP_WIF_PROVIDER GCP_DEPLOYER_SA GOOGLE_CLIENT_ID MEDIATR_LICENSE_KEY; do
+            if [ -z "${!name}" ]; then echo "::error::未設定 $name（見 docs/deploy.md §7.2）"; missing=1; fi
+          done
+          exit $missing
+
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOYER_SA }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - run: gcloud auth configure-docker asia-east1-docker.pkg.dev --quiet
+
+      - uses: docker/setup-buildx-action@v3
+
+      # 先 load 到本機檢查，通過才 push；版本 tag 與 commit SHA 各一個 tag，Artifact Registry 只保留最近 3 個版本。
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          # 不附 provenance attestation：push 的是單一 linux/amd64 manifest，Artifact Registry 的版本數也單純
+          provenance: false
+          tags: |
+            ${{ env.IMAGE }}:${{ github.ref_name }}
+            ${{ env.IMAGE }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # 缺時區資料時 /summary 與匯出會回 500（docs/deploy.md §2.2）。
+      - name: image 內有 Asia/Taipei 時區檔
+        run: docker run --rm --entrypoint ls "$IMAGE:$GITHUB_SHA" -l /usr/share/zoneinfo/Asia/Taipei
+
+      # reference/（舊 Excel，個資）絕不可進 image（docs/deploy.md §2.3）。
+      - name: image 內沒有個資
+        run: |
+          found=$(docker run --rm --entrypoint sh "$IMAGE:$GITHUB_SHA" -c "find / -xdev \( -name reference -o -name '*.xlsm' -o -name '*.xlsx' \) 2>/dev/null")
+          if [ -n "$found" ]; then echo "::error::image 內有不該出現的檔案："; echo "$found"; exit 1; fi
+
+      - run: docker push --all-tags "$IMAGE"
+
+      # startup probe 用 /health/ready：資料庫還有未套用的 migration 時，新 revision 起不來、不會拿到流量。
+      # 最長等 10 + 12×10 秒，涵蓋 Neon 從暫停中喚醒的時間。
+      # MediatR license 不是存取憑證，以一般環境變數提供（不另外占用 Secret Manager 的 secret version，ADR 0012）。
+      # --set-env-vars 用 ^##^ 當分隔符，值裡出現逗號也不會被切開。
+      - id: deploy
+        name: 部署到 Cloud Run
+        env:
+          GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}
+          MEDIATR_LICENSE_KEY: ${{ secrets.MEDIATR_LICENSE_KEY }}
+        run: |
+          gcloud run deploy "$SERVICE" \
+            --image "$IMAGE:$GITHUB_SHA" \
+            --region "$REGION" \
+            --service-account "$RUNTIME_SA" \
+            --allow-unauthenticated \
+            --min-instances 0 \
+            --max-instances 2 \
+            --memory 512Mi \
+            --set-env-vars "^##^ASPNETCORE_ENVIRONMENT=Production##Authentication__Google__ClientId=$GOOGLE_CLIENT_ID##MediatR__LicenseKey=$MEDIATR_LICENSE_KEY" \
+            --set-secrets "ConnectionStrings__SixJars=sixjars-db:latest,Authentication__Google__ClientSecret=sixjars-google-client-secret:latest" \
+            --startup-probe "httpGet.path=/health/ready,httpGet.port=8080,initialDelaySeconds=10,periodSeconds=10,timeoutSeconds=8,failureThreshold=12" \
+            --quiet
+          echo "url=$(gcloud run services describe "$SERVICE" --region "$REGION" --format='value(status.url)')" >> "$GITHUB_OUTPUT"
+
+      - name: Smoke test
+        env:
+          URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          for path in /health /health/ready; do
+            ok=0
+            for attempt in 1 2 3 4 5 6; do
+              status=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "$URL$path" || true)
+              echo "$path 第 $attempt 次：$status"
+              if [ "$status" = "200" ]; then ok=1; break; fi
+              sleep 10
+            done
+            if [ $ok -ne 1 ]; then echo "::error::$URL$path 沒有回 200"; exit 1; fi
+          done

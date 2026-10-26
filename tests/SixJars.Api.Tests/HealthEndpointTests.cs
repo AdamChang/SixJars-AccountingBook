@@ -31,6 +31,40 @@ public class HealthEndpointTests(PostgresFixture postgres)
     }
 
     [Fact]
+    public async Task Ready_when_every_migration_is_applied()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var factory = await ApiFactory.CreateAsync(postgres, ct);
+
+        var response = await factory.CreateClient().GetAsync("/health/ready", ct);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task Not_ready_while_a_migration_is_pending()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        // 只套用到第一個 migration：模擬「部署了新版、但忘了先在本機跑 migration bundle」
+        await using var factory = new ApiFactory(await postgres.CreateConnectionStringAtAsync("InitialLedger", ct));
+
+        var response = await factory.CreateClient().GetAsync("/health/ready", ct);
+
+        response.StatusCode.Should().Be(HttpStatusCode.ServiceUnavailable);
+    }
+
+    [Fact]
+    public async Task Not_ready_when_the_database_is_unreachable()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var factory = new ApiFactory("Host=127.0.0.1;Port=1;Database=x;Username=x;Password=x;Timeout=2");
+
+        var response = await factory.CreateClient().GetAsync("/health/ready", ct);
+
+        response.StatusCode.Should().Be(HttpStatusCode.ServiceUnavailable);
+    }
+
+    [Fact]
     public void Startup_fails_without_a_connection_string()
     {
         // 前提：執行測試的環境沒有設定 ConnectionStrings__SixJars

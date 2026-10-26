@@ -18,7 +18,7 @@
 | 測試 | xUnit v3（Microsoft.Testing.Platform）、FluentAssertions、Testcontainers（PostgreSQL 17） |
 | 前端 | Angular 22（standalone、zoneless、signals）、Angular Material／CDK、Chart.js、PWA（service worker，不支援離線） |
 | 前端測試 | Vitest、Playwright（API 以 mock 取代） |
-| 部署 | Docker（前後端同一個 image，由 API 提供前端）、Google Cloud Run（台灣）、Secret Manager |
+| 部署 | Docker（前後端同一個 image，由 API 提供前端）、Google Cloud Run（台灣）、Secret Manager、GitHub Actions（版本 tag 觸發，Workload Identity Federation） |
 
 專案結構：
 
@@ -135,6 +135,7 @@ npx ng serve
 | 路徑 | 說明 |
 | --- | --- |
 | `GET /health` | 資料庫連線檢查 |
+| `GET /health/ready` | 資料庫連得上、而且沒有未套用的 migration（Cloud Run startup probe） |
 | `GET /auth/login`、`POST /auth/logout` | Google 登入／登出 |
 | `GET /api/antiforgery/token` | 取得 XSRF token（非 GET 請求須帶 `X-XSRF-TOKEN` header） |
 | `GET /api/me`、`GET /api/books` | 登入者資訊、可存取的帳本 |
@@ -164,7 +165,7 @@ dotnet run --project src/SixJars.Cli -- restore-backup --file <backup.json>
 
 ### 部署
 
-Docker image（multi-stage，同時建置前端並放進 `wwwroot`）、Neon 資料庫角色、migration bundle、Cloud Run 與 Secret Manager 設定見 [`docs/deploy.md`](docs/deploy.md)。
+Docker image（multi-stage，同時建置前端並放進 `wwwroot`）、Neon 資料庫角色、migration bundle、Cloud Run 與 Secret Manager 設定見 [`docs/deploy.md`](docs/deploy.md)。正式環境由 GitHub Actions 部署：在本機套用 migration 後，對 `master` 上的 commit push `v*.*.*` tag（ADR 0012）。
 
 ```powershell
 docker build -t sixjars-api .
