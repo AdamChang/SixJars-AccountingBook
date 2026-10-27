@@ -450,6 +450,7 @@ git push origin v1.0.0
 到 GitHub 的 **Actions** 分頁看 Deploy 的進度。第一版是 `v1.0.0`，之後依改動大小遞增（`v1.0.1`、`v1.1.0`）。
 
 - **漏跑 migration**：新 revision 的 startup probe（`/health/ready`）一直回 503，Cloud Run 不會把流量切過去，舊版繼續服務，workflow 失敗。補跑第 4 節的 bundle 後，到 Actions 對這次的 Deploy 按 **Re-run all jobs**。
+- **連線字串錯誤**：症狀和漏跑 migration 一樣，startup probe 一直回 503。實際案例：`v1.0.1` 第一次部署時，`sixjars-db` 裡 app 角色的密碼打錯，每次 probe 約 450ms 就回 503，log 裡也沒有任何 EF 的 SQL。要分辨這兩種情況，看 `SixJars.Api.Health` 的 warning（`v1.0.2` 起才有）：會寫明是連不上資料庫還是漏跑 migration，連不上時附上 Npgsql 的錯誤，密碼錯是 `28P01: password authentication failed`。修法是用 `gcloud secrets versions add` 加一個正確值的新版本（第 6 節），再按 **Re-run all jobs**。
 - **同一個版本重新部署**（例如更新了 secret 的值）：同樣在 Actions 對最近一次的 Deploy 按 **Re-run all jobs**，不必另打 tag。
 - **migration 必須向前相容**：先 migrate、再部署，中間仍是舊版在服務；要刪欄位或改名時，分成「先加、後刪」兩次發版（ADR 0012）。
 - startup probe 最多等約 130 秒，涵蓋 Neon 從暫停中喚醒的時間。
@@ -462,7 +463,7 @@ curl.exe -i "$url/health"
 curl.exe -i "$url/health/ready"
 ```
 
-預期都是 `200 OK`。`/health` 是 503 代表連不上資料庫：檢查連線字串（直連 host、`SSL Mode=Require`）與 `sixjars-run` 的 secret 權限。`/health/ready` 是 503 而 `/health` 是 200，代表還有 migration 沒套用。revision 起不來時，用 `gcloud run services logs read sixjars --region asia-east1` 查看；缺少 Google 設定時，啟動訊息會指出缺少哪個環境變數。
+預期都是 `200 OK`。`/health` 是 503 代表連不上資料庫：檢查連線字串（直連 host、app 角色的帳密、`SSL Mode=Require`）與 `sixjars-run` 的 secret 權限。`/health/ready` 是 503 而 `/health` 是 200，代表還有 migration 沒套用。revision 起不來時，用 `gcloud run services logs read sixjars --region asia-east1` 查看；缺少 Google 設定時，啟動訊息會指出缺少哪個環境變數。
 
 接著回到第 5 節，把 `$url/auth/callback` 加進 OAuth client 的 redirect URI，再以瀏覽器開啟 `$url/auth/login` 驗證登入（真實的 Google 登入只能手動驗證）。
 
