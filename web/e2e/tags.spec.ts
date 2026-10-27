@@ -84,8 +84,10 @@ test.describe('narrow viewport', () => {
     await routeTransactions(page, [], []);
     const overflow = () => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
 
-    await page.goto(`/books/${BOOK_ID}/transactions?month=202601&tag=tag-trip`);
+    // 三個條件都生效，三個選單和清除鍵都會出現（transaction filters Q8）
+    await page.goto(`/books/${BOOK_ID}/transactions?month=202601&tag=tag-trip&category=cat-food&account=acc-cash`);
     await expect(page.locator('td.mat-column-note .tag-chip')).toHaveText('旅遊');
+    await expect(page.getByRole('button', { name: '清除篩選' })).toBeVisible();
     expect(await overflow()).toBe(0);
 
     await page.goto(`/books/${BOOK_ID}/settings`);
