@@ -217,6 +217,89 @@ public class TransactionsEndpointsTests(PostgresFixture postgres)
     }
 
     [Fact]
+    public async Task List_by_main_category_includes_subcategories_and_any_kind()
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var book = await factory.SeedBookAsync(Ct);
+        var client = await factory.CreateMemberClientAsync();
+        var bank = book.FindAccount("國泰世華銀行")!.Id.Value;
+        var loanMain = book.FindCategory("貸款支出")!.Id.Value;
+        var onMain = await CreateAsync(client, book,
+            new { kind = "Expense", date = "2026-01-05", amount = -100m, accountId = bank, categoryId = loanMain });
+        // 貸款繳款的利息掛子分類：不限交易類型（transaction filters spec Q3）
+        var payment = await CreateAsync(client, book, new
+        {
+            kind = "LoanPayment", date = "2026-01-06", amount = 20000m, loanPrincipal = 15000m, accountId = bank,
+            counterAccountId = book.FindAccount("房屋貸款")!.Id.Value, categoryId = book.FindCategory("貸款支出", "房屋貸款")!.Id.Value,
+        });
+        await CreateLunchAsync(client, book, "2026-01-07", "別的分類");
+
+        var list = await ListAsync(client, book, $"?categoryId={loanMain}");
+
+        list.Select(t => t.Id).Should().Equal(onMain, payment);
+    }
+
+    [Fact]
+    public async Task List_by_subcategory_matches_only_itself()
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var book = await factory.SeedBookAsync(Ct);
+        var client = await factory.CreateMemberClientAsync();
+        await CreateAsync(client, book, new
+        {
+            kind = "Expense", date = "2026-01-05", amount = -50m,
+            accountId = book.FindAccount("現金")!.Id.Value, categoryId = book.FindCategory("主食")!.Id.Value,
+        });
+        var lunch = await CreateLunchAsync(client, book, "2026-01-06", "午餐");
+
+        var list = await ListAsync(client, book, $"?categoryId={book.FindCategory("主食", "午餐")!.Id.Value}");
+
+        list.Select(t => t.Id).Should().Equal(lunch);
+    }
+
+    [Fact]
+    public async Task List_by_category_of_another_book_returns_nothing()
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var mine = await factory.SeedBookAsync(Ct);
+        var other = await factory.SeedBookAsync(Ct);
+        var client = await factory.CreateMemberClientAsync();
+        await CreateLunchAsync(client, mine, "2026-01-05", "我的");
+
+        // 跟 accountId、tagId 一樣：別本帳的 Id 只是查不到，不是 404（transaction filters spec Q11）
+        var list = await ListAsync(client, mine, $"?categoryId={other.FindCategory("主食")!.Id.Value}");
+
+        list.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Category_filter_combines_with_account_and_month()
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var book = await factory.SeedBookAsync(Ct);
+        var client = await factory.CreateMemberClientAsync();
+        var cash = book.FindAccount("現金")!.Id.Value;
+        var food = book.FindCategory("主食")!.Id.Value;
+        var match = await CreateLunchAsync(client, book, "2026-01-05", "符合");
+        await CreateLunchAsync(client, book, "2026-02-05", "別的月份");
+        // 同月份、同帳戶、不同分類：少了這一筆，分類條件被忽略時這條測試也會通過
+        await CreateAsync(client, book, new
+        {
+            kind = "Income", date = "2026-01-07", amount = 1000m, note = "別的分類",
+            accountId = cash, categoryId = book.FindCategory("工作薪資")!.Id.Value,
+        });
+        await CreateAsync(client, book, new
+        {
+            kind = "Expense", date = "2026-01-06", amount = -80m, note = "別的帳戶",
+            accountId = book.FindAccount("國泰世華銀行")!.Id.Value, categoryId = book.FindCategory("主食", "午餐")!.Id.Value,
+        });
+
+        var list = await ListAsync(client, book, $"?budgetMonth=202601&accountId={cash}&categoryId={food}");
+
+        list.Select(t => t.Id).Should().Equal(match);
+    }
+
+    [Fact]
     public async Task Same_day_order_stays_by_creation_after_update()
     {
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
