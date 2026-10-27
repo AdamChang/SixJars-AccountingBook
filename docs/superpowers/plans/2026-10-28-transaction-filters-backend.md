@@ -222,7 +222,8 @@ Task 1（categoryId 篩選）──► 前端計畫 Task 1（API client 帶 cate
   **變異檢查**（每項做完都要還原）：
   - 拿掉 `|| c.ParentId == categoryId`：`List_by_main_category…` 會變紅。
   - 把 `c.Id == categoryId ||` 拿掉：`List_by_subcategory…`（子分類本身被排除）和 `List_by_main_category…`（直接掛主分類的那筆被排除）會變紅。
-  - 把 `db.Books.Where(b => b.Id == bookId)` 改成 `db.Books`：`List_by_category_of_another_book…` 會變紅。
+  - ~~把 `db.Books.Where(b => b.Id == bookId)` 改成 `db.Books`：`List_by_category_of_another_book…` 會變紅。~~
+    **執行時更正（2026-10-28）**：這是等價變異，測試全過。外層 `query` 已經限定 `t.BookId == bookId`，別本帳的分類 Id 本來就對不到任何交易；Q11 的正確性靠的是外層查詢，不是展開分類時的帳本條件。展開時限定本帳只是為了少掃資料，註解已改成這個說法。
 
 - [ ] **Step 5：跑全部測試**
 
@@ -274,3 +275,5 @@ Task 1（categoryId 篩選）──► 前端計畫 Task 1（API client 帶 cate
 - `dotnet build SixJars.slnx`：0 個警告、0 個錯誤
 - `dotnet test --project tests/SixJars.Domain.Tests`：228 passed、0 skipped
 - Api／Application／Infrastructure／Acceptance：Docker 沒開，**未實測**，開工前補上
+- **開工時補測（2026-10-28，HEAD `a6fe6fb`，Docker 已啟動）**：`dotnet test --solution` 總計 690、失敗 0、略過 0。完整重建時有 1 個既有警告：`tests/SixJars.Api.Tests/DeleteBookEndpointsTests.cs(189)` 的 EF1002，與本計畫無關。先前量到的「0 個警告」是增量 build，沒有重新編譯測試專案。
+- Task 1 完成後：總計 694（+4）、失敗 0。

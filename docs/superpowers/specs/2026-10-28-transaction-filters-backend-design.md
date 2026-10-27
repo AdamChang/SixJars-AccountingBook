@@ -40,7 +40,7 @@
 
 | # | 決定 | 理由 | 被否決的選項 |
 |---|---|---|---|
-| D1 | 分兩步查：先從這本帳的分類裡取出 `Id == categoryId \|\| ParentId == categoryId` 的 id 清單，再用 `ids.Contains(t.CategoryId)` 篩交易 | 寫法與 `SettingReferences.HasPlannedExpensesAsync` 一致，好讀；多一次查詢的成本可以忽略（一本帳的分類只有數十個）。id 清單只取自**這本帳**的分類，所以別本帳的 id 自然會得到空清單（Q11），不必特別處理 | 用相關子查詢一次完成（可讀性較差，且要依賴 EF 能不能翻譯 owned collection 的 `Any`）；把整個 `Book` 載入記憶體（會多讀帳戶、標籤等不需要的資料） |
+| D1 | 分兩步查：先從這本帳的分類裡取出 `Id == categoryId \|\| ParentId == categoryId` 的 id 清單，再用 `ids.Contains(t.CategoryId)` 篩交易 | 寫法與 `SettingReferences.HasPlannedExpensesAsync` 一致，好讀；多一次查詢的成本可以忽略（一本帳的分類只有數十個）。交易查詢本來就限定 `BookId`，別本帳的分類 id 自然對不到任何交易（Q11），不必特別處理；展開時也限定本帳，只是為了少掃資料（執行時的變異檢查證實了這一點） | 用相關子查詢一次完成（可讀性較差，且要依賴 EF 能不能翻譯 owned collection 的 `Any`）；把整個 `Book` 載入記憶體（會多讀帳戶、標籤等不需要的資料） |
 | D2 | id 清單的型別是 `List<CategoryId?>`，因為 `Transaction.CategoryId` 是 nullable | `Contains` 兩邊型別要一致才能交給 EF 翻譯；寫成 `t.CategoryId!.Value` 要多一層 null 處理，而且沒有先例 | `t.CategoryId != null && ids.Contains(t.CategoryId.Value)` |
 | D3 | 不新增 `Transactions(CategoryId)` 索引 | 查詢一定帶 `BookId`，前端也一定帶 `budgetMonth`，掃描範圍只有一個月（約 200 筆） | 新增索引（需要 migration，換到的效能沒有意義） |
 | D4 | 參數加在 `ListTransactions` 最後，給預設值 `= null` | 跟 `TagId` 一樣，既有的建構呼叫不必改 | — |
