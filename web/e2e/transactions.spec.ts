@@ -5,7 +5,7 @@ const PAGE_URL = `/books/${BOOK_ID}/transactions?month=202601`;
 
 // 新開的記帳頁沒有預設焦點：先用鍵盤選帳戶，之後 Tab 即可到金額
 async function selectAccountWithKeyboard(page: Page): Promise<void> {
-  const account = page.getByRole('combobox', { name: '帳戶' });
+  const account = page.getByRole('combobox', { name: '帳戶', exact: true });
   await account.focus();
   await page.keyboard.press('Enter');
   await expect(page.getByRole('option', { name: '現金' })).toBeVisible();
@@ -19,7 +19,7 @@ async function enterExpense(page: Page, amount: string): Promise<void> {
   await page.keyboard.type(amount);
   await page.keyboard.press('Tab');
   await page.keyboard.press('Tab');
-  await expect(page.getByRole('combobox', { name: '分類' })).toBeFocused();
+  await expect(page.getByRole('combobox', { name: '分類', exact: true })).toBeFocused();
   await page.keyboard.type('早');
   // 過濾後第一個選項要先被標為 active，Enter 才會選取它（否則會和送出競態）
   await expect(page.getByRole('option', { name: '飲食 / 早餐' })).toHaveClass(/mat-mdc-option-active/);
@@ -36,7 +36,7 @@ test('keyboard_only_continuous_entry', async ({ page }) => {
   await page.keyboard.press('Enter');             // 選取選項，不應送出
   // 面板關閉且儲存鈕仍可按（沒進入 pending）後，才斷言沒有 POST
   await expect(page.getByRole('option', { name: '飲食 / 早餐' })).toBeHidden();
-  await expect(page.getByRole('combobox', { name: '分類' })).toHaveValue('飲食 / 早餐');
+  await expect(page.getByRole('combobox', { name: '分類', exact: true })).toHaveValue('飲食 / 早餐');
   await expect(page.getByRole('button', { name: '儲存' })).toBeEnabled();
   expect(api.posts).toHaveLength(0);
 

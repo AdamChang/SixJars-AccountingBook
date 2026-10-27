@@ -56,10 +56,10 @@ test('transaction_with_tag_then_filter_by_tag', async ({ page }) => {
   await expect(page.locator('td.mat-column-note .tag-chip')).toHaveText('旅遊');
 
   // 記一筆掛「旅遊」的支出
-  await page.getByRole('combobox', { name: '帳戶' }).click();
+  await page.getByRole('combobox', { name: '帳戶', exact: true }).click();
   await page.getByRole('option', { name: '現金' }).click();
   await page.getByLabel('金額').fill('300');
-  await page.getByRole('combobox', { name: '分類' }).fill('早');
+  await page.getByRole('combobox', { name: '分類', exact: true }).fill('早');
   await page.getByRole('option', { name: '飲食 / 早餐' }).click();
   await page.getByRole('combobox', { name: '標籤', exact: true }).click();
   await page.getByRole('option', { name: '旅遊' }).click();
