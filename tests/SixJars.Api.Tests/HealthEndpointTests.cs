@@ -1,5 +1,8 @@
+using System.Collections.Concurrent;
 using System.Net;
 using FluentAssertions;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using SixJars.Tests.Shared;
 using Xunit;
 
@@ -45,23 +48,28 @@ public class HealthEndpointTests(PostgresFixture postgres)
     public async Task Not_ready_while_a_migration_is_pending()
     {
         var ct = TestContext.Current.CancellationToken;
+        var logs = new CapturedWarnings();
         // 只套用到第一個 migration：模擬「部署了新版、但忘了先在本機跑 migration bundle」
-        await using var factory = new ApiFactory(await postgres.CreateConnectionStringAtAsync("InitialLedger", ct));
+        await using var factory = new ApiFactory(await postgres.CreateConnectionStringAtAsync("InitialLedger", ct), logs.Register);
 
         var response = await factory.CreateClient().GetAsync("/health/ready", ct);
 
         response.StatusCode.Should().Be(HttpStatusCode.ServiceUnavailable);
+        // Cloud Run 上看不到 probe 的回應內容，只能靠 log 知道漏了哪幾個 migration
+        logs.Messages.Should().ContainSingle(m => m.Contains("migration 未套用") && m.Contains("AddTags"));
     }
 
     [Fact]
     public async Task Not_ready_when_the_database_is_unreachable()
     {
         var ct = TestContext.Current.CancellationToken;
-        await using var factory = new ApiFactory("Host=127.0.0.1;Port=1;Database=x;Username=x;Password=x;Timeout=2");
+        var logs = new CapturedWarnings();
+        await using var factory = new ApiFactory("Host=127.0.0.1;Port=1;Database=x;Username=x;Password=x;Timeout=2", logs.Register);
 
         var response = await factory.CreateClient().GetAsync("/health/ready", ct);
 
         response.StatusCode.Should().Be(HttpStatusCode.ServiceUnavailable);
+        logs.Messages.Should().ContainSingle(m => m.Contains("連不上資料庫") && m.Contains("Failed to connect"));
     }
 
     [Fact]
@@ -73,5 +81,36 @@ public class HealthEndpointTests(PostgresFixture postgres)
         var act = () => factory.CreateClient();
 
         act.Should().Throw<InvalidOperationException>().WithMessage("*ConnectionStrings__SixJars*");
+    }
+
+    /// <summary>收集 SixJars.Api.Health 的 warning（含例外訊息），驗證 /health/ready 未就緒時有留下原因。</summary>
+    private sealed class CapturedWarnings : ILoggerProvider
+    {
+        private readonly ConcurrentQueue<string> _messages = new();
+
+        public IReadOnlyCollection<string> Messages => _messages;
+
+        public void Register(IServiceCollection services) => services.AddSingleton<ILoggerProvider>(this);
+
+        public ILogger CreateLogger(string categoryName) => new Logger(categoryName == "SixJars.Api.Health" ? _messages : null);
+
+        public void Dispose()
+        {
+        }
+
+        private sealed class Logger(ConcurrentQueue<string>? messages) : ILogger
+        {
+            public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+            public bool IsEnabled(LogLevel logLevel) => messages is not null && logLevel >= LogLevel.Warning;
+
+            public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+            {
+                if (IsEnabled(logLevel))
+                {
+                    messages!.Enqueue($"{formatter(state, exception)} {exception?.Message}");
+                }
+            }
+        }
     }
 }
