@@ -56,8 +56,21 @@ export class TransactionsPage {
   // 含已封存的標籤，才篩得到舊交易
   protected readonly tagOptions = computed(() => [...(this.currentBook.book()?.tags ?? [])].sort(bySortOrder));
   protected readonly filterTag = computed(() => this.tagOptions().find(tag => tag.id === this.tagQuery()) ?? null);
-  // Task 5、6 會再加上分類與帳戶
-  protected readonly hasFilter = computed(() => this.filterTag() !== null);
+  private readonly categoryQuery = queryParam(this.route, 'category');
+  // 只列主分類（Q1），含已封存的（Q7）
+  private readonly mainCategories = computed(() =>
+    (this.currentBook.book()?.categories ?? []).filter(category => category.parentId === null).sort(bySortOrder));
+  // 收入、支出各一組（Q2、Q12）；沒有分類的那一組不畫
+  protected readonly categoryGroups = computed(() =>
+    [
+      { label: '收入', categories: this.mainCategories().filter(category => category.kind === 'Income') },
+      { label: '支出', categories: this.mainCategories().filter(category => category.kind === 'Expense') },
+    ].filter(group => group.categories.length > 0));
+  // 子分類的 id 也對不到，等於沒有篩選（F3）
+  protected readonly filterCategory = computed(() =>
+    this.mainCategories().find(category => category.id === this.categoryQuery()) ?? null);
+  // Task 6 會再加上帳戶
+  protected readonly hasFilter = computed(() => this.filterTag() !== null || this.filterCategory() !== null);
   private readonly reload = signal(0);
 
   // 表單只在初始化／切換類型時套用規則，換帳本必須重建；用 @for 以 book.id 為 key 達成
@@ -77,7 +90,7 @@ export class TransactionsPage {
     toObservable(computed(() => ({
       bookId: this.bookId(),
       month: this.month(),
-      filter: { tagId: this.filterTag()?.id },
+      filter: { tagId: this.filterTag()?.id, categoryId: this.filterCategory()?.id },
       reload: this.reload(),
     }))).pipe(
       switchMap(({ bookId, month, filter }) => this.transactionApi.list(bookId, month, filter).pipe(catchError(() => EMPTY))),
@@ -89,9 +102,9 @@ export class TransactionsPage {
     void this.router.navigate([], { relativeTo: this.route, queryParams: { month }, queryParamsHandling: 'merge' });
   }
 
-  // null 時移除 tag query param
-  protected changeTag(tag: string | null): void {
-    void this.router.navigate([], { relativeTo: this.route, queryParams: { tag }, queryParamsHandling: 'merge' });
+  // null 時移除該 query param（F8）
+  protected changeFilter(name: 'tag' | 'category' | 'account', id: string | null): void {
+    void this.router.navigate([], { relativeTo: this.route, queryParams: { [name]: id }, queryParamsHandling: 'merge' });
   }
 
   // 頂端表單只負責新增

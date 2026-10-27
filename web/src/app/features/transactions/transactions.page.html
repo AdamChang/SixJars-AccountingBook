@@ -1,14 +1,30 @@
 <div class="toolbar">
   <app-month-nav [month]="month()" (monthChange)="changeMonth($event)" />
-  <mat-form-field class="tag-field" subscriptSizing="dynamic">
-    <!-- mat-select 把 null 視為未選取、不顯示「全部標籤」選項的文字，所以用 placeholder 補上 -->
-    <mat-select class="tag-filter" aria-label="標籤篩選" placeholder="全部標籤" [value]="filterTag()?.id ?? null" (valueChange)="changeTag($event)">
-      <mat-option [value]="null">全部標籤</mat-option>
-      @for (tag of tagOptions(); track tag.id) {
-        <mat-option [value]="tag.id">{{ tag.name }}{{ tag.archivedAt ? '（已封存）' : '' }}</mat-option>
-      }
-    </mat-select>
-  </mat-form-field>
+  <div class="filters">
+    <mat-form-field class="filter-field" subscriptSizing="dynamic">
+      <!-- mat-select 把 null 視為未選取、不顯示「全部…」選項的文字，所以用 placeholder 補上 -->
+      <mat-select class="tag-filter" aria-label="標籤篩選" placeholder="全部標籤"
+                  [value]="filterTag()?.id ?? null" (valueChange)="changeFilter('tag', $event)">
+        <mat-option [value]="null">全部標籤</mat-option>
+        @for (tag of tagOptions(); track tag.id) {
+          <mat-option [value]="tag.id">{{ tag.name }}{{ tag.archivedAt ? '（已封存）' : '' }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+    <mat-form-field class="filter-field" subscriptSizing="dynamic">
+      <mat-select class="category-filter" aria-label="分類篩選" placeholder="全部分類"
+                  [value]="filterCategory()?.id ?? null" (valueChange)="changeFilter('category', $event)">
+        <mat-option [value]="null">全部分類</mat-option>
+        @for (group of categoryGroups(); track group.label) {
+          <mat-optgroup [label]="group.label">
+            @for (category of group.categories; track category.id) {
+              <mat-option [value]="category.id">{{ category.name }}{{ category.archivedAt ? '（已封存）' : '' }}</mat-option>
+            }
+          </mat-optgroup>
+        }
+      </mat-select>
+    </mat-form-field>
+  </div>
 </div>
 @for (book of currentBookAsList(); track book.id) {
   @if (noActiveAccount()) {

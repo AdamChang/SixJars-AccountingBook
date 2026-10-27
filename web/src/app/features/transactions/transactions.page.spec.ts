@@ -30,6 +30,19 @@ const TX: TransactionDto = transactionDtoFrom(
   },
   { id: 'tx-1', version: 3 },
 );
+// 加上已封存的主分類與帳戶，確認選單會列出它們（Q7）
+const ARCHIVED_AT = '2026-02-01T00:00:00+00:00';
+const FILTER_BOOK: BookDto = {
+  ...BOOK,
+  accounts: [
+    ...BOOK.accounts,
+    { id: 'acc-old', name: '舊帳戶', type: 'Cash', openingBalance: 0, countsAsAvailableCash: true, sortOrder: 5, archivedAt: ARCHIVED_AT },
+  ],
+  categories: [
+    ...BOOK.categories,
+    { id: 'cat-old', name: '舊分類', kind: 'Expense', nature: 'Floating', parentId: null, sortOrder: 1, archivedAt: ARCHIVED_AT },
+  ],
+};
 const listUrl = (month: number) => `/api/books/${BOOK.id}/transactions?budgetMonth=${month}`;
 const DELETE_URL = `/api/books/${BOOK.id}/transactions/${TX.id}?version=${TX.version}`;
 
@@ -76,6 +89,7 @@ async function setup(url: string, closedWith: () => unknown = () => true, book: 
     },
     button: (label: string) => loader.getHarness(MatButtonHarness.with({ selector: `[aria-label="${label}"]` })),
     tagFilter: () => loader.getHarness(MatSelectHarness.with({ selector: '.tag-filter' })),
+    categoryFilter: () => loader.getHarness(MatSelectHarness.with({ selector: '.category-filter' })),
     stable: () => fixture.whenStable(),
   };
 }
@@ -180,6 +194,56 @@ describe('TransactionsPage', () => {
       await page.flushList(202603, []);
       expect(await (await page.tagFilter()).getValueText()).toBe('全部標籤');
       expect(page.el.textContent).toContain('這個月還沒有交易');
+    });
+  });
+
+  describe('category filter', () => {
+    const categoryListUrl = (month: number, categoryId: string) => `${listUrl(month)}&categoryId=${categoryId}`;
+
+    it('loads_with_category_query_and_shows_it_selected', async () => {
+      const page = await setup('/books/book-1/transactions?month=202603&category=cat-food');
+      page.httpTesting.expectOne(categoryListUrl(202603, 'cat-food')).flush([]);
+      await page.stable();
+      expect(await (await page.categoryFilter()).getValueText()).toBe('飲食');
+      expect(page.el.textContent).toContain('這個月沒有符合篩選條件的交易');
+    });
+
+    it('options_are_main_categories_grouped_by_kind_including_archived', async () => {
+      const page = await setup('/books/book-1/transactions?month=202603', undefined, FILTER_BOOK);
+      await page.flushList(202603, []);
+      const select = await page.categoryFilter();
+      expect(await select.getValueText()).toBe('全部分類');
+      await select.open();
+      const groups = await select.getOptionGroups();
+      expect(await Promise.all(groups.map(group => group.getLabelText()))).toEqual(['收入', '支出']);
+      const texts = await Promise.all((await select.getOptions()).map(option => option.getText()));
+      expect(texts).toEqual(['全部分類', '薪資', '飲食', '舊分類（已封存）']);
+      await select.close();
+    });
+
+    it('selecting_category_sets_query_and_month_change_keeps_it', async () => {
+      const page = await setup('/books/book-1/transactions?month=202603');
+      await page.flushList(202603, []);
+      const select = await page.categoryFilter();
+      await select.open();
+      await select.clickOptions({ text: '飲食' });
+      await page.stable();
+      expect(TestBed.inject(Router).url).toBe('/books/book-1/transactions?month=202603&category=cat-food');
+      page.httpTesting.expectOne(categoryListUrl(202603, 'cat-food')).flush([]);
+      await page.stable();
+
+      await (await page.button('上個月')).click();
+      await page.stable();
+      expect(TestBed.inject(Router).url).toBe('/books/book-1/transactions?month=202602&category=cat-food');
+      page.httpTesting.expectOne(categoryListUrl(202602, 'cat-food')).flush([]);
+      await page.stable();
+    });
+
+    // 子分類（F3）與不存在的 id（Q11）都視為沒有篩選
+    it.each(['cat-lunch', 'cat-ghost'])('ignores_category_query_%s', async categoryId => {
+      const page = await setup(`/books/book-1/transactions?month=202603&category=${categoryId}`);
+      await page.flushList(202603, []);
+      expect(await (await page.categoryFilter()).getValueText()).toBe('全部分類');
     });
   });
 
