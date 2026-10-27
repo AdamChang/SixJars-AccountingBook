@@ -96,7 +96,7 @@ RUN apt-get update \
 `reference/`（舊 Excel 帳本）已由 `.dockerignore` 排除，而且 Dockerfile 只複製 `src/` 與 `web/`。用以下指令再確認一次：
 
 ```powershell
-docker run --rm --entrypoint sh sixjars-api -c "ls /app; find / -xdev \( -name reference -o -name '*.xlsm' \) 2>/dev/null"
+docker run --rm --user 0 --entrypoint sh sixjars-api -c "ls /app; find / -xdev \( -name reference -o -name '*.xlsm' \) 2>/dev/null"
 ```
 
 預期：`ls /app` 只有 `SixJars.*.dll` 等發佈成果與 `wwwroot`（前端），`find` 沒有任何輸出。

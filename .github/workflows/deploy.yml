@@ -97,9 +97,10 @@ jobs:
         run: docker run --rm --entrypoint ls "$IMAGE:$GITHUB_SHA" -l /usr/share/zoneinfo/Asia/Taipei
 
       # reference/（舊 Excel，個資）絕不可進 image（docs/deploy.md §2.3）。
+      # 以 root 執行：image 預設的 app 使用者讀不到部分目錄，find 會回 exit 1（bash -e 下整步失敗），也可能漏看檔案。
       - name: image 內沒有個資
         run: |
-          found=$(docker run --rm --entrypoint sh "$IMAGE:$GITHUB_SHA" -c "find / -xdev \( -name reference -o -name '*.xlsm' -o -name '*.xlsx' \) 2>/dev/null")
+          found=$(docker run --rm --user 0 --entrypoint sh "$IMAGE:$GITHUB_SHA" -c "find / -xdev \( -name reference -o -name '*.xlsm' -o -name '*.xlsx' \) 2>/dev/null")
           if [ -n "$found" ]; then echo "::error::image 內有不該出現的檔案："; echo "$found"; exit 1; fi
 
       - run: docker push --all-tags "$IMAGE"
