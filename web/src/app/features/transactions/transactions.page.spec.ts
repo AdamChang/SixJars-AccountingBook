@@ -90,6 +90,7 @@ async function setup(url: string, closedWith: () => unknown = () => true, book: 
     button: (label: string) => loader.getHarness(MatButtonHarness.with({ selector: `[aria-label="${label}"]` })),
     tagFilter: () => loader.getHarness(MatSelectHarness.with({ selector: '.tag-filter' })),
     categoryFilter: () => loader.getHarness(MatSelectHarness.with({ selector: '.category-filter' })),
+    accountFilter: () => loader.getHarness(MatSelectHarness.with({ selector: '.account-filter' })),
     stable: () => fixture.whenStable(),
   };
 }
@@ -244,6 +245,46 @@ describe('TransactionsPage', () => {
       const page = await setup(`/books/book-1/transactions?month=202603&category=${categoryId}`);
       await page.flushList(202603, []);
       expect(await (await page.categoryFilter()).getValueText()).toBe('全部分類');
+    });
+  });
+
+  describe('account filter', () => {
+    it('loads_with_account_query_and_shows_it_selected', async () => {
+      const page = await setup('/books/book-1/transactions?month=202603&account=acc-bank');
+      page.httpTesting.expectOne(`${listUrl(202603)}&accountId=acc-bank`).flush([]);
+      await page.stable();
+      expect(await (await page.accountFilter()).getValueText()).toBe('銀行');
+      expect(page.el.textContent).toContain('這個月沒有符合篩選條件的交易');
+    });
+
+    it('options_include_archived_accounts_in_sort_order', async () => {
+      const page = await setup('/books/book-1/transactions?month=202603', undefined, FILTER_BOOK);
+      await page.flushList(202603, []);
+      const select = await page.accountFilter();
+      expect(await select.getValueText()).toBe('全部帳戶');
+      await select.open();
+      const texts = await Promise.all((await select.getOptions()).map(option => option.getText()));
+      expect(texts).toEqual(['全部帳戶', '現金', '銀行', '信用卡', '悠遊卡', '房貸', '舊帳戶（已封存）']);
+      await select.close();
+    });
+
+    it('selecting_account_combines_with_other_filters', async () => {
+      const page = await setup('/books/book-1/transactions?month=202603&tag=tag-trip&category=cat-food');
+      page.httpTesting.expectOne(`${listUrl(202603)}&tagId=tag-trip&categoryId=cat-food`).flush([]);
+      await page.stable();
+      const select = await page.accountFilter();
+      await select.open();
+      await select.clickOptions({ text: '銀行' });
+      await page.stable();
+      expect(TestBed.inject(Router).url).toBe('/books/book-1/transactions?month=202603&tag=tag-trip&category=cat-food&account=acc-bank');
+      page.httpTesting.expectOne(`${listUrl(202603)}&tagId=tag-trip&categoryId=cat-food&accountId=acc-bank`).flush([]);
+      await page.stable();
+    });
+
+    it('unknown_account_query_is_ignored', async () => {
+      const page = await setup('/books/book-1/transactions?month=202603&account=acc-ghost');
+      await page.flushList(202603, []);
+      expect(await (await page.accountFilter()).getValueText()).toBe('全部帳戶');
     });
   });
 

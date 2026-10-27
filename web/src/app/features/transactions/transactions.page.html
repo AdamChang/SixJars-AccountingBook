@@ -24,6 +24,15 @@
         }
       </mat-select>
     </mat-form-field>
+    <mat-form-field class="filter-field" subscriptSizing="dynamic">
+      <mat-select class="account-filter" aria-label="帳戶篩選" placeholder="全部帳戶"
+                  [value]="filterAccount()?.id ?? null" (valueChange)="changeFilter('account', $event)">
+        <mat-option [value]="null">全部帳戶</mat-option>
+        @for (account of accountOptions(); track account.id) {
+          <mat-option [value]="account.id">{{ account.name }}{{ account.archivedAt ? '（已封存）' : '' }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
   </div>
 </div>
 @for (book of currentBookAsList(); track book.id) {

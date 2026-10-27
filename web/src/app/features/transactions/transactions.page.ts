@@ -69,8 +69,13 @@ export class TransactionsPage {
   // 子分類的 id 也對不到，等於沒有篩選（F3）
   protected readonly filterCategory = computed(() =>
     this.mainCategories().find(category => category.id === this.categoryQuery()) ?? null);
-  // Task 6 會再加上帳戶
-  protected readonly hasFilter = computed(() => this.filterTag() !== null || this.filterCategory() !== null);
+  private readonly accountQuery = queryParam(this.route, 'account');
+  // 平鋪、依設定頁的順序（Q13），含已封存的（Q7）
+  protected readonly accountOptions = computed(() => [...(this.currentBook.book()?.accounts ?? [])].sort(bySortOrder));
+  protected readonly filterAccount = computed(() =>
+    this.accountOptions().find(account => account.id === this.accountQuery()) ?? null);
+  protected readonly hasFilter = computed(() =>
+    this.filterTag() !== null || this.filterCategory() !== null || this.filterAccount() !== null);
   private readonly reload = signal(0);
 
   // 表單只在初始化／切換類型時套用規則，換帳本必須重建；用 @for 以 book.id 為 key 達成
@@ -90,7 +95,7 @@ export class TransactionsPage {
     toObservable(computed(() => ({
       bookId: this.bookId(),
       month: this.month(),
-      filter: { tagId: this.filterTag()?.id, categoryId: this.filterCategory()?.id },
+      filter: { tagId: this.filterTag()?.id, categoryId: this.filterCategory()?.id, accountId: this.filterAccount()?.id },
       reload: this.reload(),
     }))).pipe(
       switchMap(({ bookId, month, filter }) => this.transactionApi.list(bookId, month, filter).pipe(catchError(() => EMPTY))),
