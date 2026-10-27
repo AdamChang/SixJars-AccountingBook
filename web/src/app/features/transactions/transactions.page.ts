@@ -49,6 +49,8 @@ export class TransactionsPage {
   protected readonly tagOptions = computed(() =>
     [...(this.currentBook.book()?.tags ?? [])].sort((a, b) => a.sortOrder - b.sortOrder));
   protected readonly filterTag = computed(() => this.tagOptions().find(tag => tag.id === this.tagId()) ?? null);
+  // Task 5、6 會再加上分類與帳戶
+  protected readonly hasFilter = computed(() => this.filterTag() !== null);
   private readonly reload = signal(0);
 
   // 表單只在初始化／切換類型時套用規則，換帳本必須重建；用 @for 以 book.id 為 key 達成

@@ -23,7 +23,7 @@
   <app-transaction-list class="ledger-sheet"
     [transactions]="transactions()"
     [book]="book"
-    [filterTag]="filterTag()"
+    [filtered]="hasFilter()"
     (edit)="edit(book, $event)"
     (remove)="remove($event)" />
 }

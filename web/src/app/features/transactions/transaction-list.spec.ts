@@ -2,7 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { MatButtonHarness } from '@angular/material/button/testing';
 import { MatTableHarness } from '@angular/material/table/testing';
-import { BookDto, TagDto, TransactionDto, TransactionInput } from '../../core/api/dto';
+import { BookDto, TransactionDto, TransactionInput } from '../../core/api/dto';
 import { BOOK, transactionDtoFrom } from './testing/book-fixture';
 import { TransactionList } from './transaction-list';
 
@@ -19,10 +19,10 @@ function tx(overrides: Partial<TransactionInput> & { id?: string }): Transaction
 
 describe('TransactionList', () => {
   async function setup(
-    transactions: TransactionDto[], book: BookDto = BOOK, filterTag: TagDto | null = null,
+    transactions: TransactionDto[], book: BookDto = BOOK, filtered = false,
   ) {
     const fixture: ComponentFixture<TransactionList> = TestBed.createComponent(TransactionList);
-    fixture.componentRef.setInput('filterTag', filterTag);
+    fixture.componentRef.setInput('filtered', filtered);
     fixture.componentRef.setInput('transactions', transactions);
     fixture.componentRef.setInput('book', book);
     const edit = vi.fn();
@@ -43,10 +43,10 @@ describe('TransactionList', () => {
     expect(cell.textContent!.replace(/\s+/g, '')).toBe('工作旅遊舊專案機票');
   });
 
-  it('empty_message_names_filtered_tag', async () => {
+  it('empty_message_mentions_filters_only_when_filtered', async () => {
     expect((await setup([])).element.textContent).toContain('這個月還沒有交易');
-    const filtered = await setup([], BOOK, BOOK.tags[0]);
-    expect(filtered.element.textContent).toContain('這個月沒有掛著「旅遊」的交易');
+    const filtered = await setup([], BOOK, true);
+    expect(filtered.element.textContent).toContain('這個月沒有符合篩選條件的交易');
   });
 
   it('shows_transfer_as_from_to', async () => {

@@ -129,7 +129,7 @@ describe('TransactionsPage', () => {
       page.httpTesting.expectOne(tagListUrl(202603, 'tag-trip')).flush([]);
       await page.stable();
       expect(await (await page.tagFilter()).getValueText()).toBe('旅遊');
-      expect(page.el.textContent).toContain('這個月沒有掛著「旅遊」的交易');
+      expect(page.el.textContent).toContain('這個月沒有符合篩選條件的交易');
     });
 
     it('options_include_archived_tags_in_sort_order', async () => {
