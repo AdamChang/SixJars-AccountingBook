@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
+import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSelectModule } from '@angular/material/select';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -29,7 +30,7 @@ const bySortOrder = (a: { sortOrder: number }, b: { sortOrder: number }) => a.so
 @Component({
   selector: 'app-transactions-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatSelectModule, RouterLink, MonthNav, TransactionForm, TransactionList],
+  imports: [MatButtonModule, MatSelectModule, RouterLink, MonthNav, TransactionForm, TransactionList],
   templateUrl: './transactions.page.html',
   styleUrl: './transactions.page.scss',
 })
@@ -105,6 +106,13 @@ export class TransactionsPage {
 
   protected changeMonth(month: number): void {
     void this.router.navigate([], { relativeTo: this.route, queryParams: { month }, queryParamsHandling: 'merge' });
+  }
+
+  // 月份是正在看的位置，不算篩選條件（Q14）
+  protected clearFilters(): void {
+    void this.router.navigate([], {
+      relativeTo: this.route, queryParams: { tag: null, category: null, account: null }, queryParamsHandling: 'merge',
+    });
   }
 
   // null 時移除該 query param（F8）

@@ -91,6 +91,7 @@ async function setup(url: string, closedWith: () => unknown = () => true, book: 
     tagFilter: () => loader.getHarness(MatSelectHarness.with({ selector: '.tag-filter' })),
     categoryFilter: () => loader.getHarness(MatSelectHarness.with({ selector: '.category-filter' })),
     accountFilter: () => loader.getHarness(MatSelectHarness.with({ selector: '.account-filter' })),
+    clearButtons: () => loader.getAllHarnesses(MatButtonHarness.with({ text: '清除篩選' })),
     stable: () => fixture.whenStable(),
   };
 }
@@ -285,6 +286,27 @@ describe('TransactionsPage', () => {
       const page = await setup('/books/book-1/transactions?month=202603&account=acc-ghost');
       await page.flushList(202603, []);
       expect(await (await page.accountFilter()).getValueText()).toBe('全部帳戶');
+    });
+  });
+
+  describe('clear filters', () => {
+    it('clear_button_hidden_when_no_effective_filter', async () => {
+      const page = await setup('/books/book-1/transactions?month=202603&tag=tag-ghost');
+      await page.flushList(202603, []);
+      expect(await page.clearButtons()).toHaveLength(0);
+    });
+
+    it('clear_removes_all_filters_and_keeps_month', async () => {
+      const page = await setup('/books/book-1/transactions?month=202603&tag=tag-trip&category=cat-food&account=acc-bank');
+      page.httpTesting.expectOne(`${listUrl(202603)}&tagId=tag-trip&categoryId=cat-food&accountId=acc-bank`).flush([]);
+      await page.stable();
+      const [clear] = await page.clearButtons();
+      await clear.click();
+      await page.stable();
+      expect(TestBed.inject(Router).url).toBe('/books/book-1/transactions?month=202603');
+      await page.flushList(202603, []);
+      expect(await page.clearButtons()).toHaveLength(0);
+      expect(page.el.textContent).toContain('這個月還沒有交易');
     });
   });
 

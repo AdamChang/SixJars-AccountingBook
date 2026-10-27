@@ -33,6 +33,9 @@
         }
       </mat-select>
     </mat-form-field>
+    @if (hasFilter()) {
+      <button mat-button type="button" class="clear-filters" (click)="clearFilters()">清除篩選</button>
+    }
   </div>
 </div>
 @for (book of currentBookAsList(); track book.id) {
