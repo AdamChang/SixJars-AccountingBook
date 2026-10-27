@@ -173,6 +173,14 @@ describe('TransactionsPage', () => {
       expect(TestBed.inject(Router).url).toBe('/books/book-1/transactions?month=202603');
       await page.flushList(202603, []);
     });
+
+    it('unknown_tag_query_is_ignored', async () => {
+      const page = await setup('/books/book-1/transactions?month=202603&tag=tag-ghost');
+      // 不帶 tagId（Q11）
+      await page.flushList(202603, []);
+      expect(await (await page.tagFilter()).getValueText()).toBe('全部標籤');
+      expect(page.el.textContent).toContain('這個月還沒有交易');
+    });
   });
 
   it('reloads_after_create', async () => {

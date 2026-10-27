@@ -2,7 +2,7 @@
   <app-month-nav [month]="month()" (monthChange)="changeMonth($event)" />
   <mat-form-field class="tag-field" subscriptSizing="dynamic">
     <!-- mat-select 把 null 視為未選取、不顯示「全部標籤」選項的文字，所以用 placeholder 補上 -->
-    <mat-select class="tag-filter" aria-label="標籤篩選" placeholder="全部標籤" [value]="tagId()" (valueChange)="changeTag($event)">
+    <mat-select class="tag-filter" aria-label="標籤篩選" placeholder="全部標籤" [value]="filterTag()?.id ?? null" (valueChange)="changeTag($event)">
       <mat-option [value]="null">全部標籤</mat-option>
       @for (tag of tagOptions(); track tag.id) {
         <mat-option [value]="tag.id">{{ tag.name }}{{ tag.archivedAt ? '（已封存）' : '' }}</mat-option>
