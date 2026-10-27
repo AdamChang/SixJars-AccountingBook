@@ -66,7 +66,7 @@ export class TransactionsPage {
   // 載入失敗時 interceptor 已通知，保留上一次的清單
   protected readonly transactions = toSignal(
     toObservable(computed(() => ({ bookId: this.bookId(), month: this.month(), tagId: this.tagId(), reload: this.reload() }))).pipe(
-      switchMap(({ bookId, month, tagId }) => this.transactionApi.list(bookId, month, tagId).pipe(catchError(() => EMPTY))),
+      switchMap(({ bookId, month, tagId }) => this.transactionApi.list(bookId, month, { tagId }).pipe(catchError(() => EMPTY))),
     ),
     { initialValue: [] as TransactionDto[] },
   );

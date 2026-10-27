@@ -41,10 +41,19 @@ describe('TransactionApi', () => {
   });
 
   it('list_adds_tag_id_only_when_given', () => {
-    api.list('b1', 202610, 't1').subscribe();
+    api.list('b1', 202610, { tagId: 't1' }).subscribe();
     httpTesting.expectOne({ method: 'GET', url: '/api/books/b1/transactions?budgetMonth=202610&tagId=t1' }).flush([]);
-    api.list('b1', 202610, null).subscribe();
+    api.list('b1', 202610, { tagId: null }).subscribe();
     httpTesting.expectOne({ method: 'GET', url: '/api/books/b1/transactions?budgetMonth=202610' }).flush([]);
+  });
+
+  it('list_adds_only_given_filters_in_fixed_order', () => {
+    api.list('b1', 202610, { accountId: 'a1', categoryId: 'c1', tagId: 't1' }).subscribe();
+    httpTesting
+      .expectOne({ method: 'GET', url: '/api/books/b1/transactions?budgetMonth=202610&tagId=t1&categoryId=c1&accountId=a1' })
+      .flush([]);
+    api.list('b1', 202610, { categoryId: 'c1', accountId: undefined }).subscribe();
+    httpTesting.expectOne({ method: 'GET', url: '/api/books/b1/transactions?budgetMonth=202610&categoryId=c1' }).flush([]);
   });
 
   it('create_posts_input', () => {
