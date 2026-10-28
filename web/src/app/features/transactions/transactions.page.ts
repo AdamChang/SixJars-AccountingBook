@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
+import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSelectModule } from '@angular/material/select';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -19,10 +20,17 @@ import { TransactionForm } from './transaction-form';
 import { TransactionList } from './transaction-list';
 import { KIND_RULES } from './transaction-rules';
 
+// query param 不存在時為 null
+function queryParam(route: ActivatedRoute, name: string) {
+  return toSignal(route.queryParamMap.pipe(map(params => params.get(name))), { requireSync: true });
+}
+
+const bySortOrder = (a: { sortOrder: number }, b: { sortOrder: number }) => a.sortOrder - b.sortOrder;
+
 @Component({
   selector: 'app-transactions-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatSelectModule, RouterLink, MonthNav, TransactionForm, TransactionList],
+  imports: [MatButtonModule, MatSelectModule, RouterLink, MonthNav, TransactionForm, TransactionList],
   templateUrl: './transactions.page.html',
   styleUrl: './transactions.page.scss',
 })
@@ -43,12 +51,32 @@ export class TransactionsPage {
     this.route.queryParamMap.pipe(map(params => parseBudgetMonth(params.get('month')) ?? budgetMonthOf(new Date()))),
     { requireSync: true },
   );
-  // 標籤篩選只篩當月，換月份時保留（F8）；query param 不存在時不篩選
-  protected readonly tagId = toSignal(this.route.queryParamMap.pipe(map(params => params.get('tag'))), { requireSync: true });
+  // 篩選只篩當月，換月份時保留（tags F8、transaction filters Q5）。
+  // 送給後端、選單綁定、判斷有沒有在篩選，都只看「有效選項」：對不到帳本選項的 query param 等於沒有這個條件（Q11、F2）
+  private readonly tagQuery = queryParam(this.route, 'tag');
   // 含已封存的標籤，才篩得到舊交易
-  protected readonly tagOptions = computed(() =>
-    [...(this.currentBook.book()?.tags ?? [])].sort((a, b) => a.sortOrder - b.sortOrder));
-  protected readonly filterTag = computed(() => this.tagOptions().find(tag => tag.id === this.tagId()) ?? null);
+  protected readonly tagOptions = computed(() => [...(this.currentBook.book()?.tags ?? [])].sort(bySortOrder));
+  protected readonly filterTag = computed(() => this.tagOptions().find(tag => tag.id === this.tagQuery()) ?? null);
+  private readonly categoryQuery = queryParam(this.route, 'category');
+  // 只列主分類（Q1），含已封存的（Q7）
+  private readonly mainCategories = computed(() =>
+    (this.currentBook.book()?.categories ?? []).filter(category => category.parentId === null).sort(bySortOrder));
+  // 收入、支出各一組（Q2、Q12）；沒有分類的那一組不畫
+  protected readonly categoryGroups = computed(() =>
+    [
+      { label: '收入', categories: this.mainCategories().filter(category => category.kind === 'Income') },
+      { label: '支出', categories: this.mainCategories().filter(category => category.kind === 'Expense') },
+    ].filter(group => group.categories.length > 0));
+  // 子分類的 id 也對不到，等於沒有篩選（F3）
+  protected readonly filterCategory = computed(() =>
+    this.mainCategories().find(category => category.id === this.categoryQuery()) ?? null);
+  private readonly accountQuery = queryParam(this.route, 'account');
+  // 平鋪、依設定頁的順序（Q13），含已封存的（Q7）
+  protected readonly accountOptions = computed(() => [...(this.currentBook.book()?.accounts ?? [])].sort(bySortOrder));
+  protected readonly filterAccount = computed(() =>
+    this.accountOptions().find(account => account.id === this.accountQuery()) ?? null);
+  protected readonly hasFilter = computed(() =>
+    this.filterTag() !== null || this.filterCategory() !== null || this.filterAccount() !== null);
   private readonly reload = signal(0);
 
   // 表單只在初始化／切換類型時套用規則，換帳本必須重建；用 @for 以 book.id 為 key 達成
@@ -65,8 +93,13 @@ export class TransactionsPage {
 
   // 載入失敗時 interceptor 已通知，保留上一次的清單
   protected readonly transactions = toSignal(
-    toObservable(computed(() => ({ bookId: this.bookId(), month: this.month(), tagId: this.tagId(), reload: this.reload() }))).pipe(
-      switchMap(({ bookId, month, tagId }) => this.transactionApi.list(bookId, month, tagId).pipe(catchError(() => EMPTY))),
+    toObservable(computed(() => ({
+      bookId: this.bookId(),
+      month: this.month(),
+      filter: { tagId: this.filterTag()?.id, categoryId: this.filterCategory()?.id, accountId: this.filterAccount()?.id },
+      reload: this.reload(),
+    }))).pipe(
+      switchMap(({ bookId, month, filter }) => this.transactionApi.list(bookId, month, filter).pipe(catchError(() => EMPTY))),
     ),
     { initialValue: [] as TransactionDto[] },
   );
@@ -75,9 +108,16 @@ export class TransactionsPage {
     void this.router.navigate([], { relativeTo: this.route, queryParams: { month }, queryParamsHandling: 'merge' });
   }
 
-  // null 時移除 tag query param
-  protected changeTag(tag: string | null): void {
-    void this.router.navigate([], { relativeTo: this.route, queryParams: { tag }, queryParamsHandling: 'merge' });
+  // 月份是正在看的位置，不算篩選條件（Q14）
+  protected clearFilters(): void {
+    void this.router.navigate([], {
+      relativeTo: this.route, queryParams: { tag: null, category: null, account: null }, queryParamsHandling: 'merge',
+    });
+  }
+
+  // null 時移除該 query param（F8）
+  protected changeFilter(name: 'tag' | 'category' | 'account', id: string | null): void {
+    void this.router.navigate([], { relativeTo: this.route, queryParams: { [name]: id }, queryParamsHandling: 'merge' });
   }
 
   // 頂端表單只負責新增

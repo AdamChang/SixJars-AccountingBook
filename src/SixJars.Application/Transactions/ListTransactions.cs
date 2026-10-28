@@ -14,7 +14,9 @@ namespace SixJars.Application.Transactions;
 /// <param name="BudgetMonth">歸屬月份（yyyymm），不是交易日期的月份。</param>
 /// <param name="AccountId">只列出動到該帳戶的交易，包含該帳戶是對方帳戶的情形。</param>
 /// <param name="TagId">只列出掛著該標籤的交易（一次一個，tags spec G16）。</param>
-public sealed record ListTransactions(Guid BookId, DateOnly? From, DateOnly? To, int? BudgetMonth, Guid? AccountId, Guid? TagId = null)
+/// <param name="CategoryId">只列出該分類及其子分類的交易，不限交易類型（transaction filters spec Q1、Q3、Q10）。</param>
+public sealed record ListTransactions(
+    Guid BookId, DateOnly? From, DateOnly? To, int? BudgetMonth, Guid? AccountId, Guid? TagId = null, Guid? CategoryId = null)
     : IRequest<IReadOnlyList<TransactionDto>>, IBookScoped;
 
 /// <summary>歸屬月份必須是合法的 yyyymm；否則 <see cref="BudgetMonth.FromKey"/> 會擲例外，變成 500。</summary>
@@ -64,6 +66,19 @@ internal sealed class ListTransactionsHandler(ISixJarsDbContext db) : IRequestHa
         {
             var tagId = new TagId(tagGuid);
             query = query.Where(t => t.Tags.Any(x => x.TagId == tagId));
+        }
+
+        if (request.CategoryId is { } categoryGuid)
+        {
+            // 主分類連同子分類（spec Q1、Q10、D1）。交易已限定本帳，別本帳的分類 Id 自然篩不到東西（Q11）；
+            // 這裡也只展開本帳的分類，免得掃過所有帳本。nullable 讓 Contains 與 Transaction.CategoryId 型別一致（D2）。
+            var categoryId = new CategoryId(categoryGuid);
+            var categoryIds = await db.Books.Where(b => b.Id == bookId)
+                .SelectMany(b => b.Categories)
+                .Where(c => c.Id == categoryId || c.ParentId == categoryId)
+                .Select(c => (CategoryId?)c.Id)
+                .ToListAsync(cancellationToken);
+            query = query.Where(t => categoryIds.Contains(t.CategoryId));
         }
 
         // 同一天的交易依 Id 排：Guid.CreateVersion7 依建立時間遞增，PostgreSQL 的 uuid 以位元組比較，結果與建立順序一致。

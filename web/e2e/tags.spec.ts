@@ -56,10 +56,10 @@ test('transaction_with_tag_then_filter_by_tag', async ({ page }) => {
   await expect(page.locator('td.mat-column-note .tag-chip')).toHaveText('旅遊');
 
   // 記一筆掛「旅遊」的支出
-  await page.getByRole('combobox', { name: '帳戶' }).click();
+  await page.getByRole('combobox', { name: '帳戶', exact: true }).click();
   await page.getByRole('option', { name: '現金' }).click();
   await page.getByLabel('金額').fill('300');
-  await page.getByRole('combobox', { name: '分類' }).fill('早');
+  await page.getByRole('combobox', { name: '分類', exact: true }).fill('早');
   await page.getByRole('option', { name: '飲食 / 早餐' }).click();
   await page.getByRole('combobox', { name: '標籤', exact: true }).click();
   await page.getByRole('option', { name: '旅遊' }).click();
@@ -84,8 +84,10 @@ test.describe('narrow viewport', () => {
     await routeTransactions(page, [], []);
     const overflow = () => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
 
-    await page.goto(`/books/${BOOK_ID}/transactions?month=202601&tag=tag-trip`);
+    // 三個條件都生效，三個選單和清除鍵都會出現（transaction filters Q8）
+    await page.goto(`/books/${BOOK_ID}/transactions?month=202601&tag=tag-trip&category=cat-food&account=acc-cash`);
     await expect(page.locator('td.mat-column-note .tag-chip')).toHaveText('旅遊');
+    await expect(page.getByRole('button', { name: '清除篩選' })).toBeVisible();
     expect(await overflow()).toBe(0);
 
     await page.goto(`/books/${BOOK_ID}/settings`);

@@ -1,6 +1,7 @@
 :host { display: flex; flex-direction: column; gap: 16px; max-width: 960px; margin: 0 auto; padding: 0 16px 32px; }
 .toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; margin-top: 8px; }
-.tag-field { width: 180px; }
+.filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.filter-field { width: 160px; }
 // 欄位多，窄螢幕在紙張內橫向捲動，不撐開整頁
 app-transaction-list { overflow-x: auto; }
 .no-accounts { margin: 0; padding: 12px 16px; }

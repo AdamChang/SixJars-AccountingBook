@@ -31,16 +31,13 @@ interface TransactionRow {
 export class TransactionList {
   readonly transactions = input.required<TransactionDto[]>();
   readonly book = input.required<BookDto>();
-  // 交易頁正在依標籤篩選時，空清單的說明要點出是哪個標籤（F8）
-  readonly filterTag = input<TagDto | null>(null);
+  // 條件已經顯示在選單上，空清單只需要說明是被篩選掉的（transaction filters Q9、F4）
+  readonly filtered = input(false);
   readonly edit = output<TransactionDto>();
   readonly remove = output<TransactionDto>();
 
   protected readonly columns = ['date', 'kind', 'account', 'category', 'amount', 'note', 'actions'];
-  protected readonly emptyMessage = computed(() => {
-    const tag = this.filterTag();
-    return tag ? `這個月沒有掛著「${tag.name}」的交易` : '這個月還沒有交易';
-  });
+  protected readonly emptyMessage = computed(() => this.filtered() ? '這個月沒有符合篩選條件的交易' : '這個月還沒有交易');
 
   protected readonly rows = computed<TransactionRow[]>(() => {
     const book = this.book();
