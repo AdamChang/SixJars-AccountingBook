@@ -869,6 +869,9 @@ Task 2–7 都會改到 `transactions.page.*`，**不能並行**。Usage-safe ch
 6. 手機寬度（DevTools 375px）：工具列換行後頁面不會橫向捲動；三個選單和按鈕都點得到。
 7. 選單裡已封存的分類和帳戶，名稱後面有「（已封存）」。
 
+**結果（2026-10-28，使用者在 Chrome 上以真實帳本驗證）**：1–6 項通過。第 7 項因為帳本沒有已封存的分類或帳戶，**無資料可以驗證**，只靠單元測試涵蓋（`options_are_main_categories_grouped_by_kind_including_archived`、`options_include_archived_accounts_in_sort_order`）。
+本機的 5001 被第三方服務（GT3 mobile service）占用，這次後端改聽 5002，`ng serve` 改用指向 5002 的臨時 proxy 設定；repo 裡的 `proxy.conf.json` 沒有修改。
+
 ## 後續（不在本計畫內）
 
 - 篩選子分類、條件內多選。
