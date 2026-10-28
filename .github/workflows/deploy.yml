@@ -20,7 +20,7 @@ jobs:
   verify-tag:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: tag 指向的 commit 必須已在 master 上
@@ -66,21 +66,21 @@ jobs:
           done
           exit $missing
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: google-github-actions/auth@v2
+      - uses: google-github-actions/auth@v3
         with:
           workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
           service_account: ${{ vars.GCP_DEPLOYER_SA }}
 
-      - uses: google-github-actions/setup-gcloud@v2
+      - uses: google-github-actions/setup-gcloud@v3
 
       - run: gcloud auth configure-docker asia-east1-docker.pkg.dev --quiet
 
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
 
       # 先 load 到本機檢查，通過才 push；版本 tag 與 commit SHA 各一個 tag，Artifact Registry 只保留最近 3 個版本。
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v7
         with:
           context: .
           load: true
