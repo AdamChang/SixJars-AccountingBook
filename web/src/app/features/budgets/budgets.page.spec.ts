@@ -131,6 +131,47 @@ describe('BudgetsPage', () => {
     expect(document.activeElement).toBe(input);
   });
 
+  // 點「未設」直接開本月預算的編輯，不必經過 ⋮
+  it('clicking_unset_label_edits_override_of_this_month', async () => {
+    const { editor, type, saveButton, httpTesting, row, fixture } = await setup();
+    row('cat-fun').querySelector<HTMLButtonElement>('button.source')!.click();
+    await fixture.whenStable();
+    const input = await editor('cat-fun');
+    expect(input.value).toBe('');
+    expect(input.getAttribute('aria-label')).toBe('娛樂 本月預算');
+    expect(row('cat-fun').querySelector('.editor .target')!.textContent!.trim()).toBe('本月');
+    await vi.waitFor(() => expect(document.activeElement).toBe(input));
+    await type(input, '800');
+    saveButton('cat-fun').click();
+    await fixture.whenStable();
+    const request = httpTesting.expectOne({ method: 'PUT', url: `${base}/cat-fun/overrides/202604` });
+    expect(request.request.body).toEqual({ amount: 800 });
+    request.flush({ categoryId: 'cat-fun', defaultAmount: null, overrides: [{ budgetMonth: 202604, amount: 800 }] });
+    await fixture.whenStable();
+    expect(row('cat-fun').querySelector('.source')!.textContent!.trim()).toBe('本月');
+  });
+
+  it('clicking_override_label_prefills_override_amount', async () => {
+    const { editor, row, fixture } = await setup();
+    row('cat-food').querySelector<HTMLButtonElement>('button.source')!.click();
+    await fixture.whenStable();
+    expect((await editor('cat-food')).value).toBe('3000');
+  });
+
+  // 「預設」點下去的意圖有歧義（改預設或只改本月），維持交給 ⋮
+  it('default_label_is_not_clickable', async () => {
+    const { row } = await setup(sheet({ ...FOOD, budget: 5000, source: 'Default', remaining: 4000 }, FUN));
+    expect(row('cat-food').querySelector('.source')!.textContent!.trim()).toBe('預設');
+    expect(row('cat-food').querySelector('button.source')).toBeNull();
+  });
+
+  it('editor_shows_default_target_when_editing_default', async () => {
+    const { menu, editor, row } = await setup();
+    await menu('cat-food', '設定預設預算');
+    await editor('cat-food');
+    expect(row('cat-food').querySelector('.editor .target')!.textContent!.trim()).toBe('預設');
+  });
+
   it('invalid_amount_disables_save', async () => {
     const { menu, editor, type, saveButton } = await setup();
     await menu('cat-fun', '設定本月預算');

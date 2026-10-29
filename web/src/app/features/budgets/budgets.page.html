@@ -17,6 +17,7 @@
         <td class="amount budget">
           @if (isEditing(view.row)) {
             <span class="editor">
+              <span class="source target">{{ editing()?.target === 'override' ? '本月' : '預設' }}</span>
               <input #amountInput class="amount-input figure" type="text" inputmode="decimal" [formControl]="amount"
                 [attr.aria-label]="view.name + (editing()?.target === 'override' ? ' 本月預算' : ' 預設預算')"
                 (keydown.enter)="save()" (keydown.escape)="cancelEdit()" />
@@ -27,7 +28,14 @@
             @if (view.row.budget !== null) {
               <span class="budget-amount">{{ formatAmount(view.row.budget) }}</span>
             }
-            <span class="source" [class.unset]="view.row.source === null">{{ sourceLabel(view.row.source) }}</span>
+            <!-- 「未設」「本月」點了直接編輯本月預算；「預設」點下去的意圖有歧義，交給 ⋮ -->
+            @if (view.row.source === 'Default') {
+              <span class="source">{{ sourceLabel(view.row.source) }}</span>
+            } @else {
+              <button type="button" class="source" [class.unset]="view.row.source === null"
+                [attr.aria-label]="view.name + ' ' + sourceLabel(view.row.source) + '，設定本月預算'"
+                (click)="startEdit(view.row, 'override')">{{ sourceLabel(view.row.source) }}</button>
+            }
           }
         </td>
         <td class="amount actual">{{ formatAmount(view.row.actual) }}</td>
