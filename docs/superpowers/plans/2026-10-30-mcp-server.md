@@ -314,6 +314,23 @@ public bool IsActive => RevokedAt is null;
 - Modify：`.env.example`（`Mcp__AllowedClientIdHosts__0=claude.ai` 註解範例）
 - [ ] Commit `docs: 連接 Claude 的步驟與 MCP 架構說明`
 
+## 執行結果與偏差（2026-10-30 回寫）
+
+> 以 committed code 為準，本節以上的 snippet 是歷史。
+
+| 項目 | 計畫 | 實際 | 原因 |
+|---|---|---|---|
+| 設定類別 | `McpOAuthOptions.cs` 獨立檔 | `McpOAuth.cs`（常數、issuer／resource 網址）；`McpOAuthOptions` 與參數驗證放在 `AuthorizeRequestValidator.cs` | GET 同意頁與 POST 發 code 前都要跑同一套驗證，抽成 scoped service；options 只有它用 |
+| token 端點 | 寫在 `OAuthEndpoints.cs` | 另開 `TokenEndpoint.cs` | 避免單一檔案過長，兩種 grant 的邏輯集中在一起 |
+| SDK metadata | event 內直接填 | `AddMcp` 的 `ResourceMetadata` 先設範本（scope、bearer methods），event 只填 issuer | `context.ResourceMetadata` 由 options 複製而來，options 沒有設定時是 null，會造成 NRE |
+| prompt 類別 | static class | `sealed class`，以 `WithPrompts<T>()` 註冊 | 用 `typeof` 註冊 static class 不會生效（prompts/list 不存在） |
+| tool 回傳的 null 欄位 | 以 null 輸出 | SDK 會省略 null 欄位 | SDK 預設序列化選項；測試改為接受「不存在或 null」 |
+| CLI 測試檔 | `RevokeMcpAccessTests.cs` | 寫在 `CliAppTests.cs` | 既有的 `RunAsync`／`Open` helper 是 private |
+| 額外測試 | — | `Card_payment_is_negative_on_paying_bank` | 變異檢查發現：把 amount 改成 `t.Amount` 時原本的測試抓不到（從卡片看繳卡費剛好也是 +500） |
+| TDD 紅燈 | 每個 Task 都先紅 | `RedirectUrisTests` 與實作同時寫成；`McpEndToEndTests` 是在串接已完成的功能，兩者都沒有先看到紅燈 | 已用變異檢查補足：host 白名單、antiforgery、PKCE、code 重放撤銷、policy scheme、帶號金額，拿掉任一個都會有測試失敗 |
+
+**最終測試數**：總計 770、成功 742、略過 28（與基準線相同的那 28 筆）、失敗 0。
+
 ## 完成後的驗證
 - [ ] `dotnet build SixJars.slnx`：warning 只剩基準線那一個。
 - [ ] `dotnet test --solution SixJars.slnx`：全部通過；Acceptance 一筆 skip（既有）。
