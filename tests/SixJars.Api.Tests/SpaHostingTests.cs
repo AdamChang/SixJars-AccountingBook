@@ -35,6 +35,9 @@ public class SpaHostingTests(PostgresFixture postgres)
     [InlineData("/API/nope")]
     [InlineData("/api")]
     [InlineData("/auth/nope")]
+    [InlineData("/oauth/nope")]
+    [InlineData("/.well-known/nope")]
+    [InlineData("/mcp/nope")]
     public async Task Unknown_api_and_auth_paths_are_404_not_html(string url)
     {
         var ct = TestContext.Current.CancellationToken;
