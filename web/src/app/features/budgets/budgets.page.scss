@@ -6,12 +6,17 @@ th {
   color: var(--ledger-heading); letter-spacing: 0.08em; border-bottom: 1px solid var(--ledger-rule-strong);
 }
 th.amount-head { text-align: right; }
-td.budget { width: 14em; }
+td.budget { width: 14em; position: relative; }
 .source {
   margin-left: 6px; padding: 0 6px; border: 1px solid var(--ledger-rule-strong); border-radius: 8px;
   font-family: var(--font-sans, inherit); font-size: 0.75rem; color: var(--ledger-heading);
 }
 .source.unset { color: var(--mat-sys-on-surface-variant); }
+.editor .target { margin-left: 0; flex-shrink: 0; white-space: nowrap; }
+// 可點的標籤：外觀同標籤，可點範圍以 ::after 撐滿整個預算格
+button.source { background: none; line-height: inherit; cursor: pointer; }
+button.source::after { content: ''; position: absolute; inset: 0; }
+td.budget:hover button.source, button.source:focus-visible { border-color: var(--ledger-heading); text-decoration: underline; }
 .editor { display: inline-flex; align-items: center; gap: 4px; }
 .amount-input { width: 6em; padding: 4px 6px; text-align: right; border: 1px solid var(--ledger-rule-strong); border-radius: 4px; }
 td.usage { width: 10em; }
