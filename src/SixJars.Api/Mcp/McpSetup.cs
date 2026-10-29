@@ -54,9 +54,15 @@ internal static class McpSetup
             .RequireAuthenticatedUser()
             .RequireClaim(McpOAuth.ScopeClaim, McpOAuth.Scope));
 
-        services.AddMcpServer(o => o.ServerInfo = new() { Name = "SixJars", Version = "1.0" })
+        services.AddMcpServer(o =>
+            {
+                o.ServerInfo = new() { Name = "SixJars", Version = "1.0" };
+                o.ServerInstructions = ReconcilePrompt.ServerInstructions;
+            })
             // stateless：Cloud Run 會換 instance，也不需要伺服器主動推送。
-            .WithHttpTransport(o => o.Stateless = true);
+            .WithHttpTransport(o => o.Stateless = true)
+            .WithTools<LedgerTools>()
+            .WithPrompts<ReconcilePrompt>();
         return services;
     }
 
