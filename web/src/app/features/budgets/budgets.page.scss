@@ -12,7 +12,7 @@ td.budget { width: 14em; position: relative; }
   font-family: var(--font-sans, inherit); font-size: 0.75rem; color: var(--ledger-heading);
 }
 .source.unset { color: var(--mat-sys-on-surface-variant); }
-.editor .target { margin-left: 0; }
+.editor .target { margin-left: 0; flex-shrink: 0; white-space: nowrap; }
 // 可點的標籤：外觀同標籤，可點範圍以 ::after 撐滿整個預算格
 button.source { background: none; line-height: inherit; cursor: pointer; }
 button.source::after { content: ''; position: absolute; inset: 0; }
