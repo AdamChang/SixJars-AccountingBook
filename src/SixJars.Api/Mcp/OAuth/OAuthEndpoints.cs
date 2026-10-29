@@ -33,6 +33,7 @@ internal static class OAuthEndpoints
 
         app.MapGet(AuthorizePath, AuthorizeAsync);
         app.MapPost(AuthorizePath, ConsentAsync);
+        app.MapPost(TokenPath, TokenEndpoint.HandleAsync);
     }
 
     /// <summary>
