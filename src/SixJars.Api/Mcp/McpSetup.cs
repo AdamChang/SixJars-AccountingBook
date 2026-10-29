@@ -21,6 +21,18 @@ internal static class McpSetup
     public static IServiceCollection AddSixJarsMcp(this IServiceCollection services)
     {
         services.AddSingleton<McpTokens>();
+        services.AddScoped<AuthorizeRequestValidator>();
+        services.AddOptions<McpOAuthOptions>().Configure<IConfiguration>((o, configuration) =>
+        {
+            // 組態有值就整個取代預設值（陣列繫結預設是附加，會把 claude.ai 留在清單裡）。
+            var hosts = configuration.GetSection("Mcp:AllowedClientIdHosts").Get<string[]>();
+            if (hosts is { Length: > 0 })
+            {
+                o.AllowedClientIdHosts = hosts;
+            }
+        });
+        services.AddHttpClient<IClientMetadataFetcher, ClientMetadataFetcher>(client => client.Timeout = TimeSpan.FromSeconds(5))
+            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });
 
         services.AddAuthentication()
             .AddScheme<AuthenticationSchemeOptions, McpBearerHandler>(McpBearerHandler.SchemeName,
