@@ -26,6 +26,7 @@
 10. [新增成員](#10-新增成員)
 11. [備份與還原](#11-備份與還原)
 12. [安全注意事項](#12-安全注意事項)
+13. [連接 Claude（遠端 MCP）](#13-連接-claude遠端-mcp)
 
 ---
 
@@ -605,7 +606,7 @@ dotnet run --project src/SixJars.Cli -- restore-backup --file <備份檔路徑>.
 ## 12. 安全注意事項
 
 - **不要啟用 Neon Data API**。DataProtection 金鑰（用來加密登入 cookie）以明文存在 `DataProtectionKeys` 表；任何能讀這張表的人都能偽造登入 cookie（段 E 安全審查 Medium）。同樣的理由，備份檔、Neon 連線字串與 DB 帳密都要妥善保管。
-- **DataProtection 金鑰存在 DB**（spec §8.4）：Cloud Run 更換 instance 時，使用者不會被登出。不要刪除 `DataProtectionKeys` 表的資料，否則所有人都會被登出。
+- **DataProtection 金鑰存在 DB**（spec §8.4）：Cloud Run 更換 instance 時，使用者不會被登出。不要刪除 `DataProtectionKeys` 表的資料，否則所有人都會被登出。MCP 的 authorization code 與 access token 也用同一組金鑰加密（ADR 0013）：清空這張表時，Claude 的 access token 一併失效；refresh token 只存 hash，不受影響，Claude 會自動換新的 access token。
 - **登入 cookie 無法從伺服器端撤銷**：cookie 有效 14 天，且會隨使用自動延長（sliding）。被偷的 cookie 只要對方仍是成員就有效。
   - 把成員從帳本移除後，該帳號立刻拿不到帳本資料：每個請求都會查成員表。
   - 懷疑 cookie 外洩時，最徹底的做法是清空 `DataProtectionKeys` 表，讓所有 cookie 失效（所有人都要重新登入）。
@@ -615,3 +616,59 @@ dotnet run --project src/SixJars.Cli -- restore-backup --file <備份檔路徑>.
 - **Forwarded headers**：app 信任任何來源的 `X-Forwarded-Proto`／`X-Forwarded-For`，因為 Cloud Run 的 container 只能經由 Google 前端連到。若改成其他可以直接連到 app 的部署方式，必須改回只信任該 proxy 的 IP（見 `ForwardedHeadersSetup`）。
 - **機密不進 repo**：`.env` 已列入 `.gitignore`，repo 只放 `.env.example`；`reference/`（舊 Excel，個資）永遠不可 commit，也不會進 image。
 - **個資**：舊 Excel 只在本機匯入時使用；匯入完成後不需要上傳到任何地方。
+
+---
+
+## 13. 連接 Claude（遠端 MCP）
+
+Api 的 `/mcp` 是唯讀的遠端 MCP server（ADR 0013），可以讓 Claude 讀取帳本，例如比對信用卡帳單。授權伺服器內建在同一個服務：使用者以原本的 Google 帳號登入，並在同意頁按下「允許」。
+
+**前提**
+
+- `AddMcpGrants` migration 已套用（第 4 節）。沒套用時 `/health/ready` 回 503，新版本不會上線。
+- 要連的人能登入 Web，也就是帳本成員或建立者。Claude 只看得到他本來就看得到的帳本。
+
+**在 Claude 加入 connector**
+
+1. claude.ai → **Customize → Connectors → Add custom connector**。
+2. URL 填 `https://<cloud-run-網址>/mcp`。OAuth Client ID 與 Secret 留空：Claude 會以 CIMD 自動辨識自己。
+3. 按 **Connect**。彈出視窗會轉到 Google 登入（已登入就略過），然後顯示同意頁，按「允許」。
+4. 網頁版、Desktop、手機版共用同一個 connector。
+
+Claude Code：
+
+```powershell
+claude mcp add --transport http sixjars https://<cloud-run-網址>/mcp
+```
+
+接著在 Claude Code 裡執行 `/mcp` 完成登入。Claude Code 使用 `localhost` 的 loopback redirect，伺服器比對時會忽略 port。
+
+**使用**
+
+附上信用卡 PDF 帳單，請 Claude「比對國泰 Combo 卡 8/14–9/15 的帳單」。Claude 會依 server 提供的比對規則（A–G 分組）列出差異。也可以直接選用 prompt `reconcile_credit_card_statement`。
+
+**可信任的 client**
+
+只接受 `client_id` host 在白名單裡的 client，預設只有 `claude.ai`。要加入其他 client（例如 MCP Inspector 的 CIMD 網址）時，設定環境變數：
+
+```powershell
+Mcp__AllowedClientIdHosts__0=claude.ai
+Mcp__AllowedClientIdHosts__1=<其他 host>
+```
+
+有設定時會整個取代預設值，所以 `claude.ai` 要自己列出來。
+
+**撤銷**
+
+```powershell
+$env:ConnectionStrings__SixJars = "<DML 角色的連線字串>"
+dotnet run --project src/SixJars.Cli -- revoke-mcp-access --email someone@example.com
+```
+
+撤銷立即生效：access token 每次請求都會檢查授權，refresh token 也換不到新的。之後要再用，在 Claude 重新 Connect 即可。
+
+**疑難排解**
+
+- Claude 顯示「Couldn't reach the MCP server」：用 `curl -i -X POST https://<網址>/mcp` 確認回 401，而且 `WWW-Authenticate` 含 `resource_metadata`。再確認 `https://<網址>/.well-known/oauth-protected-resource/mcp` 回得出 JSON。
+- 同意頁顯示「不受信任的應用程式」：Claude 送來的 `client_id` host 不在白名單。到 Cloud Run 的 log 找 CIMD 相關訊息，確認 host 後再加入白名單。
+- 冷啟動（`--min-instances 0`）可能讓第一次連線較慢；Claude 對 token 端點的逾時是 10 秒。
