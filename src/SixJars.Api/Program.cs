@@ -1,6 +1,7 @@
 using System.Text.Json.Serialization;
 using SixJars.Api.Endpoints;
 using SixJars.Api.Infrastructure;
+using SixJars.Api.Mcp;
 using SixJars.Application;
 using SixJars.Application.Common;
 using SixJars.Infrastructure;
@@ -25,6 +26,8 @@ builder.Services.AddAuthorization();
 // 非 GET 的請求一律驗證 XSRF token（ADR 0005），由 AntiforgeryFilter 掛在 /api 與 /auth/logout。
 builder.Services.AddAntiforgery(AntiforgeryFilter.ConfigureOptions);
 builder.Services.Configure<ForwardedHeadersOptions>(ForwardedHeadersSetup.Configure);
+// 遠端 MCP（唯讀）與保護它的內建 OAuth 授權伺服器（ADR 0013）。
+builder.Services.AddSixJarsMcp();
 
 var app = builder.Build();
 // 必須在 authentication 之前：OIDC 的 redirect_uri 與 Secure cookie 都依賴 Request.IsHttps。
@@ -41,6 +44,7 @@ api.MapAntiforgeryEndpoints().MapMeEndpoints();
 api.MapBooksEndpoints().MapTransactionsEndpoints().MapPlannedExpensesEndpoints().MapRecurringPlannedExpensesEndpoints().MapBudgetsEndpoints()
     .MapSummaryEndpoints().MapReportsEndpoints().MapAuditEndpoints()
     .MapExportsEndpoints();
+app.MapSixJarsMcp();
 app.Run();
 
 public partial class Program;
