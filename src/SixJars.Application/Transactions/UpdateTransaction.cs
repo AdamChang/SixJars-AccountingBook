@@ -20,7 +20,7 @@ internal sealed class UpdateTransactionValidator : AbstractValidator<UpdateTrans
     public UpdateTransactionValidator() => RuleFor(c => c.Input).NotNull().SetValidator(new TransactionInputValidator());
 }
 
-internal sealed class UpdateTransactionHandler(ISixJarsDbContext db, IAuditTrail audit) : IRequestHandler<UpdateTransaction, TransactionDto>
+internal sealed class UpdateTransactionHandler(ISixJarsDbContext db, IAuditTrail audit, IBookReader books) : IRequestHandler<UpdateTransaction, TransactionDto>
 {
     public async Task<TransactionDto> Handle(UpdateTransaction request, CancellationToken cancellationToken)
     {
@@ -32,7 +32,7 @@ internal sealed class UpdateTransactionHandler(ISixJarsDbContext db, IAuditTrail
             ?? throw new NotFoundException($"找不到交易 {request.TransactionId}。");
 
         // 帳本只用來驗證帳戶、分類、標籤與鎖帳日，不會被修改。
-        var book = await db.GetBookAsNoTrackingAsync(request.BookId, cancellationToken);
+        var book = await books.GetReadOnlyBookAsync(request.BookId, cancellationToken);
         // 原日期與新日期都要檢查：不能把交易搬進或搬出鎖定區間（spec §3.1）。
         book.EnsureUnlocked(transaction.Date);
         book.EnsureUnlocked(request.Input.Date);

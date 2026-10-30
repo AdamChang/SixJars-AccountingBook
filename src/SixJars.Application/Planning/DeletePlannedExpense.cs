@@ -13,7 +13,7 @@ namespace SixJars.Application.Planning;
 /// </summary>
 public sealed record DeletePlannedExpense(Guid BookId, Guid PlannedExpenseId, uint Version) : IRequest, IBookScoped;
 
-internal sealed class DeletePlannedExpenseHandler(ISixJarsDbContext db, TimeProvider clock, IAuditTrail audit) : IRequestHandler<DeletePlannedExpense>
+internal sealed class DeletePlannedExpenseHandler(ISixJarsDbContext db, TimeProvider clock, IAuditTrail audit, IBookReader books) : IRequestHandler<DeletePlannedExpense>
 {
     public async Task Handle(DeletePlannedExpense request, CancellationToken cancellationToken)
     {
@@ -21,7 +21,7 @@ internal sealed class DeletePlannedExpenseHandler(ISixJarsDbContext db, TimeProv
         var planned = await db.FindPlannedExpenseAsync(request.BookId, request.PlannedExpenseId, cancellationToken);
 
         // 帳本只用來檢查鎖帳日，不會被修改。
-        var book = await db.GetBookAsNoTrackingAsync(request.BookId, cancellationToken);
+        var book = await books.GetReadOnlyBookAsync(request.BookId, cancellationToken);
         book.EnsureUnlocked(planned.BudgetMonth);
 
         // 快照在 Delete 之前取得；DeletedAt 不在 DTO 裡，刪除時間就是稽核記錄的 At。

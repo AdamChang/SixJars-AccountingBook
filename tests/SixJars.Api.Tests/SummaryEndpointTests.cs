@@ -64,7 +64,7 @@ public class SummaryEndpointTests(PostgresFixture postgres)
     }
 
     [Fact]
-    public async Task Summary_uses_at_most_ten_database_round_trips()
+    public async Task Summary_uses_at_most_six_database_round_trips()
     {
         var counter = new CommandCounter();
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct, services => services.AddSingleton<IInterceptor>(counter));
@@ -75,9 +75,9 @@ public class SummaryEndpointTests(PostgresFixture postgres)
         counter.Reset();
         await GetSummaryAsync(client, book, "?budgetMonth=202602&asOf=2026-02-20");
 
-        // 成員授權 1 次（BookAccessBehavior）+ Book 5 次（SplitQuery）+ 分錄 1 次 + 財務規劃帳戶 1 次 + 交易 1 次 + 預定支出 1 次。
-        // spec §5 原本預期 ≤ 3，段 E 放寬為 ≤ 6；為了消除帳本載入的笛卡兒積改用 SplitQuery，使用者 2026-10-31 同意再放寬為 ≤ 10。
-        counter.Count.Should().BeLessThanOrEqualTo(10);
+        // 成員授權 1 次（BookAccessBehavior）+ 帳本 1 次（快取命中只讀版本；未命中時 5 次，SplitQuery）+ 分錄 1 次 + 財務規劃帳戶 1 次 + 交易 1 次 + 預定支出 1 次。
+        // spec §5 原本預期 ≤ 3，段 E 放寬為 ≤ 6；SplitQuery 曾讓它變 10，帳本快取後回到 ≤ 6（前面的記帳已載入過帳本，這次是命中）。
+        counter.Count.Should().BeLessThanOrEqualTo(6);
     }
 
     [Theory]

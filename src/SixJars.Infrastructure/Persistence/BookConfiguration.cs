@@ -12,6 +12,9 @@ internal sealed class BookConfiguration : IEntityTypeConfiguration<Book>
     {
         builder.HasKey(b => b.Id);
         builder.Property(b => b.Id).ValueGeneratedNever();
+        // 系統欄位 xmin（同 TransactionConfiguration，不建立欄位）：CachedBookReader 用它判斷快取是否過期。
+        // 設定變動時 SixJarsDbContext 會強制更新這一列，所以集合的異動也會改變 xmin；同時讓帳本的修改有樂觀並行（409）。
+        builder.Property<uint>("xmin").IsRowVersion();
         builder.Property(b => b.Name).HasMaxLength(NameMaxLength);
 
         builder.OwnsMany(b => b.Accounts, account =>

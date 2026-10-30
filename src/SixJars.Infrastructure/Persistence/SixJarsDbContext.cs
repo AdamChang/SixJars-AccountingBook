@@ -38,6 +38,41 @@ public sealed class SixJarsDbContext(DbContextOptions<SixJarsDbContext> options)
         entry.State = EntityState.Modified;
     }
 
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        TouchBooksWithChangedSettings();
+        return base.SaveChanges(acceptAllChangesOnSuccess);
+    }
+
+    public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+    {
+        TouchBooksWithChangedSettings();
+        return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+    }
+
+    /// <summary>
+    /// 只改帳本的 owned 設定（帳戶、分類…）時 EF 不會更新 Books 那一列（spike S2b），xmin 也就不變；
+    /// 強制整筆 UPDATE，CachedBookReader 的版本檢查才看得到這次異動（同 <see cref="ExpectVersion"/> 的 S2c 手法）。
+    /// </summary>
+    private void TouchBooksWithChangedSettings()
+    {
+        var changedBookIds = ChangeTracker.Entries()
+            .Where(e => e.State is EntityState.Added or EntityState.Modified or EntityState.Deleted
+                && e.Metadata.IsOwned()
+                && e.Metadata.FindOwnership()!.PrincipalEntityType.ClrType == typeof(Book))
+            .Select(e => (BookId)e.Property("BookId").CurrentValue!)
+            .ToHashSet();
+        if (changedBookIds.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var book in ChangeTracker.Entries<Book>().Where(b => b.State == EntityState.Unchanged && changedBookIds.Contains(b.Entity.Id)))
+        {
+            book.State = EntityState.Modified;
+        }
+    }
+
     public Task<IDbContextTransaction> BeginTransactionAsync(CancellationToken cancellationToken) =>
         Database.BeginTransactionAsync(cancellationToken);
 

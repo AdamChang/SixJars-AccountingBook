@@ -16,7 +16,7 @@ namespace SixJars.Application.Transactions;
 /// </summary>
 public sealed record DeleteTransaction(Guid BookId, Guid TransactionId, uint Version) : IRequest, IBookScoped;
 
-internal sealed class DeleteTransactionHandler(ISixJarsDbContext db, TimeProvider clock, IAuditTrail audit) : IRequestHandler<DeleteTransaction>
+internal sealed class DeleteTransactionHandler(ISixJarsDbContext db, TimeProvider clock, IAuditTrail audit, IBookReader books) : IRequestHandler<DeleteTransaction>
 {
     public async Task Handle(DeleteTransaction request, CancellationToken cancellationToken)
     {
@@ -34,7 +34,7 @@ internal sealed class DeleteTransactionHandler(ISixJarsDbContext db, TimeProvide
 
         // 鎖帳日在任何修改之前檢查。解除付款連結等於修改預定支出，所以預定支出的歸屬月份被鎖住時也不能刪除，
         // 即使交易本身的日期是開放的（例如 1 月的預定支出在 2/5 付款，之後鎖到 1/31）。
-        var book = await db.GetBookAsNoTrackingAsync(request.BookId, cancellationToken);
+        var book = await books.GetReadOnlyBookAsync(request.BookId, cancellationToken);
         book.EnsureUnlocked(transaction.Date);
         foreach (var planned in paidPlans)
         {

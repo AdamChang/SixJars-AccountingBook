@@ -43,13 +43,13 @@ internal sealed class ListRecurringPlannedExpensesHandler(ISixJarsDbContext db)
     }
 }
 
-internal sealed class CreateRecurringPlannedExpenseHandler(ISixJarsDbContext db, IAuditTrail audit)
+internal sealed class CreateRecurringPlannedExpenseHandler(ISixJarsDbContext db, IAuditTrail audit, IBookReader books)
     : IRequestHandler<CreateRecurringPlannedExpense, RecurringPlannedExpenseDto>
 {
     public async Task<RecurringPlannedExpenseDto> Handle(CreateRecurringPlannedExpense request, CancellationToken cancellationToken)
     {
         // 帳本只用來驗證分類與帳戶，不會被修改。週期項目本身不影響金額，所以不檢查鎖帳日。
-        var book = await db.GetBookAsNoTrackingAsync(request.BookId, cancellationToken);
+        var book = await books.GetReadOnlyBookAsync(request.BookId, cancellationToken);
         var input = request.Input;
         var item = RecurringPlannedExpense.Create(
             book, new CategoryId(input.CategoryId), input.AccountId is { } a ? new AccountId(a) : null, input.DefaultAmount, input.Note,
@@ -62,13 +62,13 @@ internal sealed class CreateRecurringPlannedExpenseHandler(ISixJarsDbContext db,
     }
 }
 
-internal sealed class UpdateRecurringPlannedExpenseHandler(ISixJarsDbContext db, IAuditTrail audit)
+internal sealed class UpdateRecurringPlannedExpenseHandler(ISixJarsDbContext db, IAuditTrail audit, IBookReader books)
     : IRequestHandler<UpdateRecurringPlannedExpense, RecurringPlannedExpenseDto>
 {
     public async Task<RecurringPlannedExpenseDto> Handle(UpdateRecurringPlannedExpense request, CancellationToken cancellationToken)
     {
         var item = await db.FindRecurringPlannedExpenseAsync(request.BookId, request.RecurringPlannedExpenseId, cancellationToken);
-        var book = await db.GetBookAsNoTrackingAsync(request.BookId, cancellationToken);
+        var book = await books.GetReadOnlyBookAsync(request.BookId, cancellationToken);
         var input = request.Input;
 
         var before = RecurringPlannedExpenseDto.From(item, db.GetVersion(item));

@@ -37,6 +37,7 @@ Clean Architecture：`Domain` ← `Application` ← `Infrastructure` ← `Api` /
   - 寫入操作的慣例（參考 `Transactions/DeleteTransaction.cs`）：查詢同時帶 `BookId` 條件、先檢查鎖帳日（`EnsureUnlocked`）、以 `ExpectVersion` 做樂觀並行（409）、用 `IAuditTrail.Record` 留前後快照（ADR 0006）、軟刪除，全部在同一次 `SaveChangesAsync`。
   - 例外對應：`NotFoundException` → 404、`ForbiddenException` → 403、`DomainException` → 422、`DbUpdateConcurrencyException` → 409、validation → 400（`Api/Infrastructure/ApiExceptionHandler.cs`）。`ForbiddenException` 只用在不屬於帳本範圍的權限拒絕（例如不在建立者名單，ADR 0011）；帳本範圍的拒絕仍一律 404。
   - 「今天」一律用注入的 `TimeProvider` 與 `TaipeiTime`，不要用 `DateTime.Now`。
+  - 唯讀的帳本一律用 `IBookReader`（`GetReadOnlyBookAsync`）：in-memory 快取、以 Books 的 xmin 判斷是否過期，回傳的實例會跨 request 共用，**不可修改**；要修改用 `GetBookForUpdateAsync`。DbContext 已設全域 SplitQuery。
 - **Infrastructure**：EF Core + Npgsql（PostgreSQL / Neon，ADR 0007），configuration 與 migration 在 `Persistence/`；月報彙總用 SQL（`Ledger/SqlLedgerSummaryQuery.cs`）；舊 Excel 讀取（ExcelDataReader）與 CSV/XLSX 匯出（ClosedXML）。
 - **Api**：Minimal API，endpoint 依資源分檔在 `Endpoints/`，`/api` group 一律需登入並掛 `AntiforgeryFilter`。BFF 模式：Cookie + Google OIDC，白名單即帳本成員表（ADR 0005）；cookie 用 `__Host-` 前綴，本機必須跑 https。
 - **測試共用**：`tests/Shared`（`PostgresFixture`、`ApiFactory`、`TestAuthHandler`、`ApiSeed` 等）以 linked file 方式被各測試專案引用。

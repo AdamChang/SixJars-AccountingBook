@@ -21,12 +21,12 @@ internal sealed class RefreshPlannedExpensesValidator : AbstractValidator<Refres
         RuleFor(c => c.BudgetMonth).Must(key => key % 100 is >= 1 and <= 12).WithMessage("歸屬月份必須是 yyyymm，月份介於 1 到 12。");
 }
 
-internal sealed class RefreshPlannedExpensesHandler(ISixJarsDbContext db, IAuditTrail audit)
+internal sealed class RefreshPlannedExpensesHandler(ISixJarsDbContext db, IAuditTrail audit, IBookReader books)
     : IRequestHandler<RefreshPlannedExpenses, RefreshPlannedExpensesResult>
 {
     public async Task<RefreshPlannedExpensesResult> Handle(RefreshPlannedExpenses request, CancellationToken cancellationToken)
     {
-        var book = await db.GetBookAsNoTrackingAsync(request.BookId, cancellationToken);
+        var book = await books.GetReadOnlyBookAsync(request.BookId, cancellationToken);
         var month = BudgetMonth.FromKey(request.BudgetMonth);
         book.EnsureUnlocked(month);
 

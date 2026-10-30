@@ -16,12 +16,12 @@ internal sealed class CreatePlannedExpenseValidator : AbstractValidator<CreatePl
     public CreatePlannedExpenseValidator() => RuleFor(c => c.Input).NotNull().SetValidator(new PlannedExpenseInputValidator());
 }
 
-internal sealed class CreatePlannedExpenseHandler(ISixJarsDbContext db, IAuditTrail audit) : IRequestHandler<CreatePlannedExpense, PlannedExpenseDto>
+internal sealed class CreatePlannedExpenseHandler(ISixJarsDbContext db, IAuditTrail audit, IBookReader books) : IRequestHandler<CreatePlannedExpense, PlannedExpenseDto>
 {
     public async Task<PlannedExpenseDto> Handle(CreatePlannedExpense request, CancellationToken cancellationToken)
     {
         // 帳本只用來驗證帳戶、分類與鎖帳日，不會被修改。
-        var book = await db.GetBookAsNoTrackingAsync(request.BookId, cancellationToken);
+        var book = await books.GetReadOnlyBookAsync(request.BookId, cancellationToken);
         var input = request.Input;
         var budgetMonth = BudgetMonth.FromKey(input.BudgetMonth);
         book.EnsureUnlocked(budgetMonth);

@@ -14,12 +14,12 @@ internal sealed class CreateTransactionValidator : AbstractValidator<CreateTrans
     public CreateTransactionValidator() => RuleFor(c => c.Input).NotNull().SetValidator(new TransactionInputValidator());
 }
 
-internal sealed class CreateTransactionHandler(ISixJarsDbContext db, IAuditTrail audit) : IRequestHandler<CreateTransaction, TransactionDto>
+internal sealed class CreateTransactionHandler(ISixJarsDbContext db, IAuditTrail audit, IBookReader books) : IRequestHandler<CreateTransaction, TransactionDto>
 {
     public async Task<TransactionDto> Handle(CreateTransaction request, CancellationToken cancellationToken)
     {
         // 帳本只用來驗證帳戶、分類、標籤與鎖帳日，不會被修改。
-        var book = await db.GetBookAsNoTrackingAsync(request.BookId, cancellationToken);
+        var book = await books.GetReadOnlyBookAsync(request.BookId, cancellationToken);
         book.EnsureUnlocked(request.Input.Date);
         var transaction = TransactionBuilder.Build(book, request.Input);
         TransactionBuilder.EnsureNoNewArchivedTags(book, [], transaction.TagIds);

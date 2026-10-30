@@ -220,7 +220,7 @@ public class BudgetsEndpointsTests(PostgresFixture postgres)
     }
 
     [Fact]
-    public async Task Budgets_use_at_most_nine_database_round_trips()
+    public async Task Budgets_use_at_most_five_database_round_trips()
     {
         var counter = new CommandCounter();
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct, services => services.AddSingleton<IInterceptor>(counter));
@@ -234,8 +234,8 @@ public class BudgetsEndpointsTests(PostgresFixture postgres)
         counter.Reset();
         await GetSheetAsync(client, book, 202602);
 
-        // 成員授權 1 次（BookAccessBehavior）+ 帳本 5 次（SplitQuery）+ 預算與覆寫值 2 次（SplitQuery） + 支出彙總 1 次（spec §5.2）。
-        counter.Count.Should().BeLessThanOrEqualTo(9);
+        // 成員授權 1 次（BookAccessBehavior）+ 帳本 1 次（快取命中只讀版本；未命中時 5 次，SplitQuery）+ 預算與覆寫值 2 次（SplitQuery） + 支出彙總 1 次（spec §5.2）。
+        counter.Count.Should().BeLessThanOrEqualTo(5);
     }
 
     [Theory]

@@ -15,12 +15,12 @@ namespace SixJars.Application.Backup;
 /// </summary>
 public sealed record ExportBackup(Guid BookId) : IRequest<BackupDocument>, IBookScoped;
 
-internal sealed class ExportBackupHandler(ISixJarsDbContext db, TimeProvider clock) : IRequestHandler<ExportBackup, BackupDocument>
+internal sealed class ExportBackupHandler(ISixJarsDbContext db, TimeProvider clock, IBookReader books) : IRequestHandler<ExportBackup, BackupDocument>
 {
     public async Task<BackupDocument> Handle(ExportBackup request, CancellationToken cancellationToken)
     {
         var bookId = new BookId(request.BookId);
-        var book = await db.GetBookAsNoTrackingAsync(request.BookId, cancellationToken);
+        var book = await books.GetReadOnlyBookAsync(request.BookId, cancellationToken);
 
         // IgnoreQueryFilters 才讀得到已刪除的資料；它會拿掉實體上的所有 filter，所以 BookId 條件一律寫在查詢裡，
         // 不可省略，否則別本帳的資料會混進備份。

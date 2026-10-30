@@ -19,11 +19,11 @@ internal sealed class DeleteBookValidator : AbstractValidator<DeleteBook>
     public DeleteBookValidator() => RuleFor(c => c.ConfirmName).NotEmpty();
 }
 
-internal sealed class DeleteBookHandler(ISixJarsDbContext db, IAuditTrail audit) : IRequestHandler<DeleteBook>
+internal sealed class DeleteBookHandler(ISixJarsDbContext db, IAuditTrail audit, IBookReader books) : IRequestHandler<DeleteBook>
 {
     public async Task Handle(DeleteBook request, CancellationToken cancellationToken)
     {
-        var book = await db.GetBookAsNoTrackingAsync(request.BookId, cancellationToken);
+        var book = await books.GetReadOnlyBookAsync(request.BookId, cancellationToken);
         if (!string.Equals(book.Name, request.ConfirmName, StringComparison.Ordinal))
         {
             throw new DomainException($"輸入的名稱與帳本名稱「{book.Name}」不同，沒有刪除。", DomainException.NameMismatchCode);

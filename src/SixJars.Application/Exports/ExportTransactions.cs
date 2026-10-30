@@ -30,13 +30,13 @@ internal sealed class ExportTransactionsValidator : AbstractValidator<ExportTran
             .WithMessage("起始日期不可晚於結束日期。");
 }
 
-internal sealed class ExportTransactionsHandler(ISixJarsDbContext db, IEnumerable<ITransactionSheetWriter> writers, TimeProvider clock)
+internal sealed class ExportTransactionsHandler(ISixJarsDbContext db, IEnumerable<ITransactionSheetWriter> writers, TimeProvider clock, IBookReader books)
     : IRequestHandler<ExportTransactions, ExportedFile>
 {
     public async Task<ExportedFile> Handle(ExportTransactions request, CancellationToken cancellationToken)
     {
         var writer = writers.Single(w => w.Format == request.Format);
-        var book = await db.GetBookAsNoTrackingAsync(request.BookId, cancellationToken);
+        var book = await books.GetReadOnlyBookAsync(request.BookId, cancellationToken);
         var bookId = new BookId(request.BookId);
 
         // 一般查詢：query filter 排除已軟刪除的交易（備份才用 IgnoreQueryFilters）。
