@@ -19,6 +19,9 @@ internal sealed class McpGrantConfiguration : IEntityTypeConfiguration<McpGrant>
         builder.Property(g => g.RefreshTokenHash).HasMaxLength(64);
         builder.Property(g => g.PreviousRefreshTokenHash).HasMaxLength(64);
         builder.Ignore(g => g.IsActive);
+        // 樂觀並行（同 PlannedExpenseConfiguration 的 xmin）：同一個 refresh token 同時被使用時，只有先寫入的輪替成功；
+        // 少了它兩邊都會 Rotated、後寫的覆蓋先寫的，重放偵測在競態下失效。
+        builder.Property<uint>("xmin").IsRowVersion();
         // authorization code 只能兌換一次：第二次兌換插入時撞到唯一性（ADR 0013）。
         builder.HasIndex(g => g.AuthorizationCodeId).IsUnique();
         // refresh 以 hash 查詢；上一個 hash 用來偵測重放。

@@ -91,8 +91,16 @@ internal static class TokenEndpoint
 
         var refreshToken = McpTokens.NewRefreshToken();
         var outcome = grant.Refresh(presentedHash, McpTokens.Hash(refreshToken), now, McpOAuth.RefreshTokenLifetime);
-        // 重放時 Refresh 已撤銷授權，同樣要寫入。
-        await db.SaveChangesAsync(cancellationToken);
+        try
+        {
+            // 重放時 Refresh 已撤銷授權，同樣要寫入。
+            await db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // 同一個 token 被另一個請求搶先輪替（xmin 已變）：只有先到的那個成功，這個不發新 token。
+            return InvalidGrant();
+        }
         return outcome == McpRefreshOutcome.Rotated
             ? Issued(tokens.CreateAccessToken(grant, McpOAuth.Resource(request), now), refreshToken, grant.Scope)
             : InvalidGrant();
