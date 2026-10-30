@@ -27,6 +27,12 @@
 11. [備份與還原](#11-備份與還原)
 12. [安全注意事項](#12-安全注意事項)
 13. [連接 Claude（遠端 MCP）](#13-連接-claude遠端-mcp)
+   - [13.1 首次上線檢查清單（v1.1.0）](#131-首次上線檢查清單v110)
+   - [13.2 在 Claude 加入 connector](#132-在-claude-加入-connector)
+   - [13.3 使用](#133-使用)
+   - [13.4 可信任的 client（CIMD host 白名單）](#134-可信任的-clientcimd-host-白名單)
+   - [13.5 撤銷](#135-撤銷)
+   - [13.6 疑難排解](#136-疑難排解)
 
 ---
 
@@ -625,10 +631,71 @@ Api 的 `/mcp` 是唯讀的遠端 MCP server（ADR 0013），可以讓 Claude �
 
 **前提**
 
-- `AddMcpGrants` migration 已套用（第 4 節）。沒套用時 `/health/ready` 回 503，新版本不會上線。
+- `AddMcpGrants` 與 `McpGrantConcurrency` 兩個 migration 已套用（第 4 節）。沒套用時 `/health/ready` 回 503，新版本不會上線。
 - 要連的人能登入 Web，也就是帳本成員或建立者。Claude 只看得到他本來就看得到的帳本。
 
-**在 Claude 加入 connector**
+### 13.1 首次上線檢查清單（v1.1.0）
+
+MCP 第一次上線（PR #21）時逐項執行。之後的版本只要有 MCP 相關改動，也可以挑其中的 smoke test 再跑一次。
+
+**部署前**
+
+- [ ] PR 的 CI（`backend`、`frontend`）全綠，合併到 `master` 後執行 `git switch master; git pull`。
+- [ ] 確認 migration 向前相容（先 migrate、再部署，中間仍是舊版在服務，第 7.3 節）：
+  - `AddMcpGrants` 只新增 `McpGrants` 表，舊版不會碰到。
+  - `McpGrantConcurrency` 只改 model：xmin 是 PostgreSQL 的系統欄位，DB 實際上不會變更（寫法和 `AddConcurrencyTokens` 一樣）。
+- [ ] 以 migrator 角色套用 bundle（第 4 節），預期最後兩行是 `AddMcpGrants` 與 `McpGrantConcurrency`。
+- [ ] **確認 app 角色對新表有 DML 權限**。第 3.3 節的 `ALTER DEFAULT PRIVILEGES` 理論上已涵蓋，但上線後才新增的表值得驗一次。在 Neon SQL Editor 執行：
+
+  ```sql
+  SELECT has_table_privilege('sixjars_app', '"McpGrants"', 'SELECT,INSERT,UPDATE');
+  ```
+
+  預期是 `true`。如果是 `false`，第一次以 code 換 token 時會 500：補跑第 3.3 節的 `GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO sixjars_app;`。
+- [ ] Google OAuth client **不需要**新增 redirect URI：`/oauth/authorize` 的登入沿用既有的 `/auth/callback`。
+
+**部署**
+
+- [ ] 打 tag：`git tag v1.1.0; git push origin v1.1.0`，再到 Actions 看 Deploy。startup probe 最多等約 130 秒。
+- [ ] Smoke test，確認 discovery 與保護正常：
+
+  ```powershell
+  $url = gcloud run services describe sixjars --region asia-east1 --format="value(status.url)"
+  curl.exe -i "$url/health/ready"                                     # 200
+  curl.exe -i -X POST "$url/mcp"                                      # 401，WWW-Authenticate 含 resource_metadata
+  curl.exe -s "$url/.well-known/oauth-protected-resource/mcp"         # resource = $url/mcp、authorization_servers = [$url]
+  curl.exe -s "$url/.well-known/oauth-authorization-server"           # client_id_metadata_document_supported: true，沒有 registration_endpoint
+  curl.exe -i "$url/oauth/authorize?client_id=https://evil.example/x" # 400 錯誤頁，沒有 Location
+  ```
+
+- [ ] 既有功能沒被影響：瀏覽器開 `$url`，Web 登入、記帳頁、預算頁正常；`/books/...` 的 deep link 仍回 SPA（SPA fallback 的前綴清單有改過）。
+
+**Claude 端到端**
+
+- [ ] 先開一次 `$url/health/ready` 暖機。Claude 對 token 端點只等 10 秒，Cloud Run 冷啟動加上 Neon 喚醒可能超過。
+- [ ] 依第 13.2 節加入 connector，按 **Connect**。同意頁應顯示 `claude.ai`、你的 email 與紅框的防釣魚提醒；按「允許」後 connector 顯示已連線。如果同意頁顯示「不受信任的應用程式」，見第 13.4 節。
+- [ ] 附上信用卡 PDF 帳單請 Claude 比對。確認它依序呼叫 `list_books` → `list_accounts` → `list_account_transactions`，輸出有 A–G 分組與差異分解，結果和舊 Excel 的比對 sheet 大致一致。
+- [ ] Claude 手機 app 開同一個 connector，問一個簡單的問題（例如「列出我的帳本」）。
+- [ ] 撤銷驗證（第 13.5 節）：撤銷後 Claude 呼叫 tool 會要求重新 Connect，重新 Connect 後恢復正常。
+
+**部署後**
+
+- [ ] 觀察 15 分鐘 Cloud Run log：沒有 500、沒有 `DbUpdateException`。
+- [ ] Neon 的 `McpGrants` 有剛才授權的資料列，撤銷過的那筆 `RevokedAt` 有值。
+- [ ] 把實際的 CIMD host，以及比對結果和 Excel 的差異，記到 `docs/superpowers/plans/2026-10-30-mcp-server.md` 的「手動驗證」一節，作為之後調整 prompt 的依據。
+
+**回滾**
+
+| 觸發條件 | 處理 |
+|---|---|
+| 新 revision 的 `/health/ready` 一直回 503，Deploy 失敗 | Cloud Run 不會切流量，舊版繼續服務。依第 7.3 節分辨是漏跑 migration 還是連線問題，修好後按 **Re-run all jobs** |
+| 上線後 **Web 既有功能**壞掉（登入、記帳、SPA deep link） | 依第 7.5 節切回上一個 revision |
+| 只有 **MCP／Claude connector** 有問題，Web 正常 | **不要回滾**：MCP 是獨立的新路徑，不影響現有使用者。直接修，發 `v1.1.x` |
+| 懷疑 token 外洩或授權被濫用 | 依第 13.5 節撤銷 |
+
+回滾不會回退 migration。切回舊版時 `McpGrants` 表留著也不影響舊版；Claude 那邊會因為 `/mcp` 不存在而連線失敗，這是預期的。
+
+### 13.2 在 Claude 加入 connector
 
 1. claude.ai → **Customize → Connectors → Add custom connector**。
 2. URL 填 `https://<cloud-run-網址>/mcp`。OAuth Client ID 與 Secret 留空：Claude 會以 CIMD 自動辨識自己。
@@ -643,22 +710,28 @@ claude mcp add --transport http sixjars https://<cloud-run-網址>/mcp
 
 接著在 Claude Code 裡執行 `/mcp` 完成登入。Claude Code 使用 `localhost` 的 loopback redirect，伺服器比對時會忽略 port。
 
-**使用**
+### 13.3 使用
 
 附上信用卡 PDF 帳單，請 Claude「比對國泰 Combo 卡 8/14–9/15 的帳單」。Claude 會依 server 提供的比對規則（A–G 分組）列出差異。也可以直接選用 prompt `reconcile_credit_card_statement`。
 
-**可信任的 client**
+### 13.4 可信任的 client（CIMD host 白名單）
 
-只接受 `client_id` host 在白名單裡的 client，預設只有 `claude.ai`。要加入其他 client（例如 MCP Inspector 的 CIMD 網址）時，設定環境變數：
+只接受 `client_id` host 在白名單裡的 client，預設只有 `claude.ai`。官方文件沒有寫明 Claude 網頁版的 CIMD 網址，所以第一次 Connect 時，同意頁可能顯示「不受信任的應用程式」。
 
-```powershell
-Mcp__AllowedClientIdHosts__0=claude.ai
-Mcp__AllowedClientIdHosts__1=<其他 host>
+**找出實際的 host**：host 不在白名單時，伺服器不會去抓文件，也不會寫 log。要從瀏覽器看：在 Connect 彈出的視窗裡，看網址列 `/oauth/authorize?...` 的 `client_id` 參數（URL 編碼過，`https%3A%2F%2F` 就是 `https://`），取出其中的 host。
+
+**加入白名單**：一定要改 `.github/workflows/deploy.yml`。`--set-env-vars` 每次部署都會整組覆寫，在 Cloud Run console 手動加的值，下次部署就會消失（第 7.4 節）。在既有的 `--set-env-vars` 字串最後接上：
+
+```text
+##Mcp__AllowedClientIdHosts__0=claude.ai##Mcp__AllowedClientIdHosts__1=<實際 host>
 ```
 
-有設定時會整個取代預設值，所以 `claude.ai` 要自己列出來。
+有設定時會整個取代預設值，所以 `claude.ai` 要自己列出來。改完後發一個 patch 版本（例如 `v1.1.1`），再重新 Connect。
 
-**撤銷**
+- 只加入你確認屬於 Anthropic 的 host：白名單決定了誰能拿到授權，也決定伺服器會對哪些 host 發出請求。
+- 本機用 MCP Inspector 測試時，把它的 host 寫進 `.env`（`.env.example` 有範例），不要放進正式環境的 workflow。
+
+### 13.5 撤銷
 
 ```powershell
 $env:ConnectionStrings__SixJars = "<DML 角色的連線字串>"
@@ -667,8 +740,16 @@ dotnet run --project src/SixJars.Cli -- revoke-mcp-access --email someone@exampl
 
 撤銷立即生效：access token 每次請求都會檢查授權，refresh token 也換不到新的。之後要再用，在 Claude 重新 Connect 即可。
 
-**疑難排解**
+要一次撤銷所有人的授權，在 Neon 執行：
 
-- Claude 顯示「Couldn't reach the MCP server」：用 `curl -i -X POST https://<網址>/mcp` 確認回 401，而且 `WWW-Authenticate` 含 `resource_metadata`。再確認 `https://<網址>/.well-known/oauth-protected-resource/mcp` 回得出 JSON。
-- 同意頁顯示「不受信任的應用程式」：Claude 送來的 `client_id` host 不在白名單。到 Cloud Run 的 log 找 CIMD 相關訊息，確認 host 後再加入白名單。
-- 冷啟動（`--min-instances 0`）可能讓第一次連線較慢；Claude 對 token 端點的逾時是 10 秒。
+```sql
+UPDATE "McpGrants" SET "RevokedAt" = now() WHERE "RevokedAt" IS NULL;
+```
+
+### 13.6 疑難排解
+
+- **Claude 顯示「Couldn't reach the MCP server」**：用 `curl -i -X POST https://<網址>/mcp` 確認回 401，而且 `WWW-Authenticate` 含 `resource_metadata`。再確認 `https://<網址>/.well-known/oauth-protected-resource/mcp` 回得出 JSON。
+- **同意頁顯示「不受信任的應用程式」**：Claude 送來的 `client_id` host 不在白名單，見第 13.4 節。
+- **同意頁顯示「無法確認應用程式的身分」**：host 在白名單，但抓不到 CIMD 文件，或文件中的 `client_id` 與網址不符。到 Cloud Run 的 log 找 `無法取得 CIMD 文件` 或 `CIMD 文件 ... 回應` 的 warning。
+- **按「允許」後 Claude 顯示授權失敗，log 有 500**：通常是 app 角色沒有 `McpGrants` 的權限，見第 13.1 節的 `has_table_privilege` 檢查。
+- **第一次 Connect 逾時**：冷啟動（`--min-instances 0`）加上 Neon 喚醒可能超過 Claude 對 token 端點的 10 秒限制。先開一次 `/health/ready` 暖機，再重新 Connect。
