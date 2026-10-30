@@ -32,15 +32,15 @@ internal sealed class GetBudgetsValidator : AbstractValidator<GetBudgets>
 }
 
 /// <summary>
-/// 資料庫往返 8 次（加上成員授權共 9 次，spec §5.2）：帳本 5 次（SplitQuery：Book 與四個 owned collection 各 1 次）、預算與覆寫值 2 次（SplitQuery）、支出彙總。
+/// 資料庫往返 4 次（加上成員授權共 5 次，spec §5.2）：帳本 1 次（IBookReader 快取命中只讀版本；未命中 5 次）、預算與覆寫值 2 次（SplitQuery）、支出彙總。
 /// </summary>
-internal sealed class GetBudgetsHandler(ISixJarsDbContext db, ILedgerSummaryQuery ledger) : IRequestHandler<GetBudgets, BudgetSheetDto>
+internal sealed class GetBudgetsHandler(ISixJarsDbContext db, ILedgerSummaryQuery ledger, IBookReader books) : IRequestHandler<GetBudgets, BudgetSheetDto>
 {
     public async Task<BudgetSheetDto> Handle(GetBudgets request, CancellationToken cancellationToken)
     {
         var bookId = new BookId(request.BookId);
         var month = BudgetMonth.FromKey(request.BudgetMonth);
-        var book = await db.GetBookAsNoTrackingAsync(request.BookId, cancellationToken);
+        var book = await books.GetReadOnlyBookAsync(request.BookId, cancellationToken);
         var budgets = await db.CategoryBudgets.AsNoTracking().Where(b => b.BookId == bookId).ToListAsync(cancellationToken);
         var expenseTotals = await ledger.ExpenseTotalsByCategoryAsync(bookId, month, cancellationToken);
         return BudgetSheetDto.From(BudgetSheet.Build(book, month, budgets, expenseTotals));

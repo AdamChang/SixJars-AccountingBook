@@ -16,11 +16,11 @@ public sealed record BookDeletionPreview(
     int Transactions, int PlannedExpenses, int RecurringPlannedExpenses,
     int CategoryBudgets, int Members, int AuditEntries);
 
-internal sealed class GetBookDeletionPreviewHandler(ISixJarsDbContext db)
+internal sealed class GetBookDeletionPreviewHandler(ISixJarsDbContext db, IBookReader books)
     : IRequestHandler<GetBookDeletionPreview, BookDeletionPreview>
 {
     public async Task<BookDeletionPreview> Handle(GetBookDeletionPreview request, CancellationToken cancellationToken) =>
-        await BookDeletionPreviews.CreateAsync(db, await db.GetBookAsNoTrackingAsync(request.BookId, cancellationToken), cancellationToken);
+        await BookDeletionPreviews.CreateAsync(db, await books.GetReadOnlyBookAsync(request.BookId, cancellationToken), cancellationToken);
 }
 
 internal static class BookDeletionPreviews

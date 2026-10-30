@@ -59,13 +59,13 @@ internal sealed class GetYearlyReportValidator : AbstractValidator<GetYearlyRepo
         RuleFor(q => q.Year).InclusiveBetween(1, 9999).WithMessage("年份必須介於 1 到 9999。");
 }
 
-/// <summary>資料庫往返 6 次（加上成員授權共 7 次，spec §6.2）：帳本 5 次（SplitQuery：Book 與四個 owned collection 各 1 次）、report flows（D4）。</summary>
-internal sealed class GetYearlyReportHandler(ISixJarsDbContext db, ILedgerSummaryQuery ledger, TimeProvider clock)
+/// <summary>資料庫往返 2 次（加上成員授權共 3 次，spec §6.2 上限 4）：帳本 1 次（IBookReader 快取命中只讀版本；未命中 5 次）、report flows（D4）。</summary>
+internal sealed class GetYearlyReportHandler(IBookReader books, ILedgerSummaryQuery ledger, TimeProvider clock)
     : IRequestHandler<GetYearlyReport, YearlyReportDto>
 {
     public async Task<YearlyReportDto> Handle(GetYearlyReport request, CancellationToken cancellationToken)
     {
-        var book = await db.GetBookAsNoTrackingAsync(request.BookId, cancellationToken);
+        var book = await books.GetReadOnlyBookAsync(request.BookId, cancellationToken);
         var flows = await ledger.ReportFlowsAsync(
             book.Id, new BudgetMonth(request.Year, 1), new BudgetMonth(request.Year, 12), cancellationToken);
         // 月平均的分母依台北時間的「今天」（spec Q10），不是伺服器（Cloud Run 為 UTC）的日期

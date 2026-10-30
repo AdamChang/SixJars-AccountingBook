@@ -41,10 +41,10 @@ internal sealed class RemoveBudgetOverrideValidator : AbstractValidator<RemoveBu
         RuleFor(c => c.BudgetMonth).Must(BudgetWrites.IsMonthKey).WithMessage(BudgetWrites.MonthKeyMessage);
 }
 
-internal sealed class SetDefaultBudgetHandler(ISixJarsDbContext db, IAuditTrail audit) : IRequestHandler<SetDefaultBudget, CategoryBudgetDto>
+internal sealed class SetDefaultBudgetHandler(ISixJarsDbContext db, IBookReader books, IAuditTrail audit) : IRequestHandler<SetDefaultBudget, CategoryBudgetDto>
 {
     public Task<CategoryBudgetDto> Handle(SetDefaultBudget request, CancellationToken cancellationToken) =>
-        db.SetBudgetAsync(audit, request.BookId, request.CategoryId, b => b.SetDefault(request.Amount), cancellationToken);
+        db.SetBudgetAsync(books, audit, request.BookId, request.CategoryId, b => b.SetDefault(request.Amount), cancellationToken);
 }
 
 internal sealed class RemoveDefaultBudgetHandler(ISixJarsDbContext db, IAuditTrail audit) : IRequestHandler<RemoveDefaultBudget>
@@ -54,10 +54,10 @@ internal sealed class RemoveDefaultBudgetHandler(ISixJarsDbContext db, IAuditTra
             $"分類 {request.CategoryId} 沒有預設預算。", cancellationToken);
 }
 
-internal sealed class SetBudgetOverrideHandler(ISixJarsDbContext db, IAuditTrail audit) : IRequestHandler<SetBudgetOverride, CategoryBudgetDto>
+internal sealed class SetBudgetOverrideHandler(ISixJarsDbContext db, IBookReader books, IAuditTrail audit) : IRequestHandler<SetBudgetOverride, CategoryBudgetDto>
 {
     public Task<CategoryBudgetDto> Handle(SetBudgetOverride request, CancellationToken cancellationToken) =>
-        db.SetBudgetAsync(audit, request.BookId, request.CategoryId,
+        db.SetBudgetAsync(books, audit, request.BookId, request.CategoryId,
             b => b.SetOverride(BudgetMonth.FromKey(request.BudgetMonth), request.Amount), cancellationToken);
 }
 
@@ -80,13 +80,13 @@ internal static class BudgetWrites
     /// 只有建立時需要帳本（驗證分類），已有預算時不載入帳本。
     /// </summary>
     public static async Task<CategoryBudgetDto> SetBudgetAsync(
-        this ISixJarsDbContext db, IAuditTrail audit, Guid bookId, Guid categoryId, Action<CategoryBudget> set, CancellationToken cancellationToken)
+        this ISixJarsDbContext db, IBookReader books, IAuditTrail audit, Guid bookId, Guid categoryId, Action<CategoryBudget> set, CancellationToken cancellationToken)
     {
         var budget = await db.FindCategoryBudgetAsync(bookId, categoryId, cancellationToken);
         var before = budget is null ? null : CategoryBudgetDto.From(budget);
         if (budget is null)
         {
-            var book = await db.GetBookAsNoTrackingAsync(bookId, cancellationToken);
+            var book = await books.GetReadOnlyBookAsync(bookId, cancellationToken);
             budget = CategoryBudget.Create(book, new CategoryId(categoryId));
             db.CategoryBudgets.Add(budget);
         }

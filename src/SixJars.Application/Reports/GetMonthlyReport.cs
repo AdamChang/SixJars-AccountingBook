@@ -54,15 +54,15 @@ internal sealed class GetMonthlyReportValidator : AbstractValidator<GetMonthlyRe
 }
 
 /// <summary>
-/// 資料庫往返 9 次（加上成員授權共 10 次，spec §6.2）：帳本 5 次（SplitQuery：Book 與四個 owned collection 各 1 次）、report flows、未付預定、月可用餘額 2 次（D3）。
+/// 資料庫往返 5 次（加上成員授權共 6 次，spec §6.2）：帳本 1 次（IBookReader 快取命中只讀版本；未命中 5 次）、report flows、未付預定、月可用餘額 2 次（D3）。
 /// </summary>
-internal sealed class GetMonthlyReportHandler(ISixJarsDbContext db, ILedgerSummaryQuery ledger)
+internal sealed class GetMonthlyReportHandler(IBookReader books, ILedgerSummaryQuery ledger)
     : IRequestHandler<GetMonthlyReport, MonthlyReportDto>
 {
     public async Task<MonthlyReportDto> Handle(GetMonthlyReport request, CancellationToken cancellationToken)
     {
         var month = BudgetMonth.FromKey(request.BudgetMonth);
-        var book = await db.GetBookAsNoTrackingAsync(request.BookId, cancellationToken);
+        var book = await books.GetReadOnlyBookAsync(request.BookId, cancellationToken);
         var flows = await ledger.ReportFlowsAsync(book.Id, month, month, cancellationToken);
         var unpaid = await ledger.UnpaidPlannedByCategoryAsync(book.Id, month, cancellationToken);
         var disposable = await ledger.MonthlyDisposableAsync(book, month, month, cancellationToken);

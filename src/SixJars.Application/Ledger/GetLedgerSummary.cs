@@ -1,6 +1,7 @@
 using FluentValidation;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using SixJars.Application.Books;
 using SixJars.Application.Common;
 using SixJars.Domain.Common;
 
@@ -20,17 +21,16 @@ internal sealed class GetLedgerSummaryValidator : AbstractValidator<GetLedgerSum
 }
 
 /// <summary>
-/// 一次回傳摘要的所有數字（spec §5）。資料庫往返共 9 次：帳本設定 5 次（SplitQuery）、分錄加總、財務規劃帳戶加總、
+/// 一次回傳摘要的所有數字（spec §5）。資料庫往返共 5 次：帳本設定 1 次（IBookReader 快取命中只讀版本；未命中 5 次）、分錄加總、財務規劃帳戶加總、
 /// 月可用餘額的交易與預定支出各 1 次；月可用餘額取年累計結果中的當月，不另外查詢。
 /// </summary>
-internal sealed class GetLedgerSummaryHandler(ISixJarsDbContext db, ILedgerSummaryQuery summary, TimeProvider clock)
+internal sealed class GetLedgerSummaryHandler(IBookReader books, ILedgerSummaryQuery summary, TimeProvider clock)
     : IRequestHandler<GetLedgerSummary, LedgerSummaryDto>
 {
     public async Task<LedgerSummaryDto> Handle(GetLedgerSummary request, CancellationToken cancellationToken)
     {
         var bookId = new BookId(request.BookId);
-        var book = await db.Books.AsNoTracking().SingleOrDefaultAsync(b => b.Id == bookId, cancellationToken)
-            ?? throw new NotFoundException($"找不到帳本 {request.BookId}。");
+        var book = await books.GetReadOnlyBookAsync(request.BookId, cancellationToken);
         var month = BudgetMonth.FromKey(request.BudgetMonth);
         // 使用者在台灣；「今天」以台北時間為準，不是伺服器（Cloud Run 為 UTC）的日期。
         var asOf = request.AsOf ?? TaipeiTime.DateOf(clock.GetUtcNow());

@@ -21,14 +21,14 @@ internal sealed class UpdatePlannedExpenseValidator : AbstractValidator<UpdatePl
     public UpdatePlannedExpenseValidator() => RuleFor(c => c.Input).NotNull().SetValidator(new PlannedExpenseInputValidator());
 }
 
-internal sealed class UpdatePlannedExpenseHandler(ISixJarsDbContext db, IAuditTrail audit) : IRequestHandler<UpdatePlannedExpense, PlannedExpenseDto>
+internal sealed class UpdatePlannedExpenseHandler(ISixJarsDbContext db, IAuditTrail audit, IBookReader books) : IRequestHandler<UpdatePlannedExpense, PlannedExpenseDto>
 {
     public async Task<PlannedExpenseDto> Handle(UpdatePlannedExpense request, CancellationToken cancellationToken)
     {
         var planned = await db.FindPlannedExpenseAsync(request.BookId, request.PlannedExpenseId, cancellationToken);
 
         // 帳本只用來驗證帳戶、分類與鎖帳日，不會被修改。
-        var book = await db.GetBookAsNoTrackingAsync(request.BookId, cancellationToken);
+        var book = await books.GetReadOnlyBookAsync(request.BookId, cancellationToken);
         var input = request.Input;
         var budgetMonth = BudgetMonth.FromKey(input.BudgetMonth);
         // 原本的月份與新的月份都要檢查：不能把預定支出搬進或搬出鎖定的月份（spec §3.1）。
