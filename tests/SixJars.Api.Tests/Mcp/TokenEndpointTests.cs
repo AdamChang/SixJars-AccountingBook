@@ -127,6 +127,36 @@ public class TokenEndpointTests(PostgresFixture postgres)
         (await InitializeAsync(factory, second.Access)).Should().Be(HttpStatusCode.Unauthorized);
     }
 
+    /// <summary>
+    /// 同一個 refresh token 同時被兩方使用（例如偷到 token 的人與合法 client 同時刷新）：最多只有一方換到新 token。
+    /// 沒有並行版本時兩方都會 Rotated，後寫的覆蓋先寫的，重放偵測在這個時間窗內失效。
+    /// </summary>
+    [Fact]
+    public async Task Concurrent_refresh_with_same_token_succeeds_at_most_once()
+    {
+        var (factory, _) = await CreateAsync();
+        await using var _f = factory;
+        var client = OAuthTestClient.CreateClient(factory);
+        var first = await IssueAsync(client);
+
+        // 多試幾輪提高撞到競態的機率；每輪都用上一輪唯一成功的 token。
+        var refresh = first.Refresh;
+        for (var round = 0; round < 5; round++)
+        {
+            var responses = await Task.WhenAll(Enumerable.Range(0, 4).Select(_ =>
+                OAuthTestClient.TokenAsync(OAuthTestClient.CreateClient(factory, null), OAuthTestClient.RefreshRequest(refresh), Ct)));
+
+            var succeeded = responses.Where(r => r.StatusCode == HttpStatusCode.OK).ToList();
+            succeeded.Should().HaveCountLessThanOrEqualTo(1, $"第 {round + 1} 輪：同一個 refresh token 只能換一次");
+            if (succeeded.Count == 0)
+            {
+                return;
+            }
+
+            refresh = (await ReadTokensAsync(succeeded[0])).Refresh;
+        }
+    }
+
     [Fact]
     public async Task Unknown_refresh_token_is_invalid_grant()
     {
