@@ -20,7 +20,7 @@ internal sealed class GetLedgerSummaryValidator : AbstractValidator<GetLedgerSum
 }
 
 /// <summary>
-/// 一次回傳摘要的所有數字（spec §5）。資料庫往返共 5 次：帳本設定、分錄加總、財務規劃帳戶加總、
+/// 一次回傳摘要的所有數字（spec §5）。資料庫往返共 9 次：帳本設定 5 次（SplitQuery）、分錄加總、財務規劃帳戶加總、
 /// 月可用餘額的交易與預定支出各 1 次；月可用餘額取年累計結果中的當月，不另外查詢。
 /// </summary>
 internal sealed class GetLedgerSummaryHandler(ISixJarsDbContext db, ILedgerSummaryQuery summary, TimeProvider clock)

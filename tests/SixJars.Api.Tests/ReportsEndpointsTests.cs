@@ -63,7 +63,7 @@ public class ReportsEndpointsTests(PostgresFixture postgres)
     }
 
     [Fact]
-    public async Task Monthly_report_uses_at_most_six_database_round_trips()
+    public async Task Monthly_report_uses_at_most_ten_database_round_trips()
     {
         var counter = new CommandCounter();
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct, services => services.AddSingleton<IInterceptor>(counter));
@@ -74,8 +74,8 @@ public class ReportsEndpointsTests(PostgresFixture postgres)
         counter.Reset();
         await GetMonthlyAsync(client, book, 202602);
 
-        // 成員授權 1 + 帳本 1 + report flows 1 + 未付預定 1 + 月可用餘額 2（交易與預定支出）（D3）
-        counter.Count.Should().BeLessThanOrEqualTo(6);
+        // 成員授權 1 + 帳本 5（SplitQuery）+ report flows 1 + 未付預定 1 + 月可用餘額 2（交易與預定支出）（D3）
+        counter.Count.Should().BeLessThanOrEqualTo(10);
     }
 
     [Theory]
@@ -118,7 +118,7 @@ public class ReportsEndpointsTests(PostgresFixture postgres)
     }
 
     [Fact]
-    public async Task Yearly_report_uses_at_most_four_database_round_trips()
+    public async Task Yearly_report_uses_at_most_seven_database_round_trips()
     {
         var counter = new CommandCounter();
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct, services => services.AddSingleton<IInterceptor>(counter));
@@ -129,8 +129,8 @@ public class ReportsEndpointsTests(PostgresFixture postgres)
         counter.Reset();
         await GetYearlyAsync(client, book, 2026);
 
-        // 成員授權 1 + 帳本 1 + report flows 1（D4）
-        counter.Count.Should().BeLessThanOrEqualTo(4);
+        // 成員授權 1 + 帳本 5（SplitQuery）+ report flows 1（D4）
+        counter.Count.Should().BeLessThanOrEqualTo(7);
     }
 
     [Theory]

@@ -31,7 +31,9 @@ internal sealed class GetBudgetsValidator : AbstractValidator<GetBudgets>
         RuleFor(q => q.BudgetMonth).Must(BudgetWrites.IsMonthKey).WithMessage(BudgetWrites.MonthKeyMessage);
 }
 
-/// <summary>資料庫往返 3 次（加上成員授權共 4 次，spec §5.2）：帳本、預算（覆寫值同一條 query JOIN）、支出彙總。</summary>
+/// <summary>
+/// 資料庫往返 8 次（加上成員授權共 9 次，spec §5.2）：帳本 5 次（SplitQuery：Book 與四個 owned collection 各 1 次）、預算與覆寫值 2 次（SplitQuery）、支出彙總。
+/// </summary>
 internal sealed class GetBudgetsHandler(ISixJarsDbContext db, ILedgerSummaryQuery ledger) : IRequestHandler<GetBudgets, BudgetSheetDto>
 {
     public async Task<BudgetSheetDto> Handle(GetBudgets request, CancellationToken cancellationToken)
