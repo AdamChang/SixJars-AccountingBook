@@ -47,6 +47,24 @@ public class AuthorizeEndpointTests(PostgresFixture postgres)
         html.Should().Contain("claude.ai").And.Contain("__RequestVerificationToken").And.Contain(TestAuthHandler.EmailOf(ApiFactory.DefaultSubject));
     }
 
+    /// <summary>
+    /// 授權釣魚：攻擊者在自己的 Claude 按 Connect，把授權連結傳給受害者；同意頁只寫 claude.ai，受害者分不出是誰的 Claude。
+    /// public client 的 OAuth 無法從技術上擋下，所以同意頁必須明確提醒「別人傳來的連結不要按允許」。
+    /// </summary>
+    [Fact]
+    public async Task Consent_page_warns_against_links_from_others()
+    {
+        var (factory, _) = await OAuthTestClient.CreateFactoryAsync(postgres, Ct);
+        await using var _f = factory;
+
+        var response = await OAuthTestClient.CreateClient(factory)
+            .GetAsync(OAuthTestClient.AuthorizeUrl(OAuthTestClient.AuthorizeParameters("challenge")), Ct);
+
+        var text = WebUtility.HtmlDecode(await response.Content.ReadAsStringAsync(Ct));
+        text.Should().Contain("只有在你剛剛自己從 Claude 按下「Connect」時才允許")
+            .And.Contain("別人傳給你的連結");
+    }
+
     [Fact]
     public async Task Client_id_outside_allowed_hosts_is_rejected_without_fetching()
     {

@@ -22,6 +22,9 @@ internal static class ConsentPage
             .Append("<p><strong>").Append(Encode(request.ClientHost)).Append("</strong> 要求以你的身分（")
             .Append(Encode(email ?? "目前登入的帳號")).Append("）<strong>唯讀</strong>存取你可以看到的帳本、帳戶與交易。</p>")
             .Append("<p>同意後會轉回 <code>").Append(Encode(redirectHost)).Append("</code>。它不能新增、修改或刪除任何資料；之後可由管理者撤銷。</p>")
+            // 授權釣魚：攻擊者可以把自己 Claude 產生的授權連結傳給你，同意後就是「他的」Claude 讀你的帳本；技術上無法分辨，只能提醒。
+            .Append("<p style=\"border:2px solid #c62828;padding:.75rem;background:#ffebee\"><strong>只有在你剛剛自己從 Claude 按下「Connect」時才允許。</strong>")
+            .Append("別人傳給你的連結請按「拒絕」：同意後，存取權會交給發起這個連結的人的 Claude，對方就能讀你的帳本。</p>")
             .Append("<form method=\"post\" action=\"").Append(OAuthEndpoints.AuthorizePath).Append("\">")
             .Append(Hidden(tokens.FormFieldName, tokens.RequestToken!))
             .Append(Hidden("response_type", "code"))
