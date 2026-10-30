@@ -59,7 +59,7 @@ internal sealed class GetYearlyReportValidator : AbstractValidator<GetYearlyRepo
         RuleFor(q => q.Year).InclusiveBetween(1, 9999).WithMessage("年份必須介於 1 到 9999。");
 }
 
-/// <summary>資料庫往返 2 次（加上成員授權共 3 次，spec §6.2 上限 4）：帳本、report flows（D4）。</summary>
+/// <summary>資料庫往返 6 次（加上成員授權共 7 次，spec §6.2）：帳本 5 次（SplitQuery：Book 與四個 owned collection 各 1 次）、report flows（D4）。</summary>
 internal sealed class GetYearlyReportHandler(ISixJarsDbContext db, ILedgerSummaryQuery ledger, TimeProvider clock)
     : IRequestHandler<GetYearlyReport, YearlyReportDto>
 {

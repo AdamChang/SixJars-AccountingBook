@@ -53,7 +53,9 @@ internal sealed class GetMonthlyReportValidator : AbstractValidator<GetMonthlyRe
         RuleFor(q => q.BudgetMonth).Must(BudgetWrites.IsMonthKey).WithMessage(BudgetWrites.MonthKeyMessage);
 }
 
-/// <summary>資料庫往返 5 次（加上成員授權共 6 次，spec §6.2）：帳本、report flows、未付預定、月可用餘額 2 次（D3）。</summary>
+/// <summary>
+/// 資料庫往返 9 次（加上成員授權共 10 次，spec §6.2）：帳本 5 次（SplitQuery：Book 與四個 owned collection 各 1 次）、report flows、未付預定、月可用餘額 2 次（D3）。
+/// </summary>
 internal sealed class GetMonthlyReportHandler(ISixJarsDbContext db, ILedgerSummaryQuery ledger)
     : IRequestHandler<GetMonthlyReport, MonthlyReportDto>
 {
