@@ -22,5 +22,8 @@
     <PackageVersion Include="Microsoft.AspNetCore.DataProtection.EntityFrameworkCore" Version="10.0.13" />
     <PackageVersion Include="System.CommandLine" Version="2.0.12" />
     <PackageVersion Include="ClosedXML" Version="0.105.1" />
+    <!-- 遠端 MCP（ADR 0013）；Api 用 AspNetCore，測試以 Core 的 McpClient 走真的 protocol。兩者一起升版。 -->
+    <PackageVersion Include="ModelContextProtocol.AspNetCore" Version="2.3.0" />
+    <PackageVersion Include="ModelContextProtocol.Core" Version="2.3.0" />
   </ItemGroup>
 </Project>

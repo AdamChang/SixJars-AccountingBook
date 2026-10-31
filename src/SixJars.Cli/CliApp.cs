@@ -46,6 +46,7 @@ public static class CliApp
             AddMemberCommand(host),
             AddCreatorCommand(host),
             RemoveCreatorCommand(host),
+            RevokeMcpAccessCommand(host),
             RestoreBackupCommand(host),
         };
 
@@ -145,6 +146,20 @@ public static class CliApp
         {
             await sender.Send(new RemoveBookCreator(parseResult.GetValue(email)!), ct);
             await output.WriteLineAsync("已從建立者名單移除。");
+            return 0;
+        }, ct));
+        return command;
+    }
+
+    /// <summary>撤銷某人所有的 MCP 授權（ADR 0013）；沒有有效的授權不算錯誤。</summary>
+    private static Command RevokeMcpAccessCommand(Host host)
+    {
+        var email = new Option<string>("--email") { Description = "授權者的 Google email", Required = true };
+        var command = new Command("revoke-mcp-access", "撤銷這個 email 的所有 MCP 授權（Claude 等 AI client 的唯讀存取）；立即生效。") { email };
+        command.SetAction((parseResult, ct) => host.RunAsync(async (sender, output) =>
+        {
+            var revoked = await sender.Send(new RevokeMcpAccess(parseResult.GetValue(email)!), ct);
+            await output.WriteLineAsync(revoked == 0 ? "沒有有效的授權。" : $"已撤銷 {revoked} 筆授權。");
             return 0;
         }, ct));
         return command;

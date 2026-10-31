@@ -4,7 +4,9 @@ using FluentAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.Authorization;
 using SixJars.Api.Infrastructure;
+using SixJars.Api.Mcp;
 using SixJars.Tests.Shared;
 using Xunit;
 
@@ -19,7 +21,8 @@ public class SecurityConventionTests(PostgresFixture postgres)
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
     /// <summary>
-    /// 不在 <c>/api</c> 底下、不要求登入的只有 <c>/health</c>、<c>/health/ready</c> 與 <c>/auth/**</c>；
+    /// 不在 <c>/api</c> 底下的只有 <c>/health</c>、<c>/health/ready</c>、<c>/auth/**</c>，加上遠端 MCP 的
+    /// <c>/oauth/**</c>、<c>/.well-known/**</c>（OAuth 端點本身就給外部 client 匿名呼叫）與 <c>/mcp</c>（只接受 bearer，見下一個測試；ADR 0013）。
     /// 其他路徑一律要掛在 <c>/api</c> 群組，才會套到 <c>RequireAuthorization()</c>。
     /// </summary>
     [Fact]
@@ -31,7 +34,9 @@ public class SecurityConventionTests(PostgresFixture postgres)
         var endpoints = ApiEndpoints.Under(factory, "/api/");
         endpoints.Should().HaveCountGreaterThanOrEqualTo(18, "帳本範圍至少 15 個，加上 /api/me、/api/books 與 /api/antiforgery/token");
         ApiEndpoints.All(factory).Select(e => e.RoutePattern.RawText!).Except(endpoints.Select(e => e.RoutePattern.RawText!))
-            .Should().OnlyContain(path => path == "/health" || path == "/health/ready" || path.StartsWith("/auth/", StringComparison.Ordinal));
+            .Should().OnlyContain(path => path == "/health" || path == "/health/ready" || path.StartsWith("/auth/", StringComparison.Ordinal)
+                || path.StartsWith("/oauth/", StringComparison.Ordinal) || path.StartsWith("/.well-known/", StringComparison.Ordinal)
+                || path.StartsWith(McpSetup.Path, StringComparison.Ordinal));
 
         List<string> leaks = [];
         foreach (var (method, url) in ApiEndpoints.Calls(endpoints, book.Id.Value))
@@ -45,6 +50,20 @@ public class SecurityConventionTests(PostgresFixture postgres)
         }
 
         leaks.Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// /mcp 的每個 endpoint 都要套用只認 MCP bearer 的 policy：預設 scheme 是 cookie，少了它瀏覽器帶著 cookie 就能打 MCP（ADR 0013）。
+    /// </summary>
+    [Fact]
+    public async Task Every_mcp_endpoint_requires_mcp_bearer_policy()
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+
+        var endpoints = ApiEndpoints.Under(factory, McpSetup.Path);
+
+        endpoints.Should().NotBeEmpty();
+        endpoints.Should().OnlyContain(e => e.Metadata.GetOrderedMetadata<IAuthorizeData>().Any(a => a.Policy == McpSetup.PolicyName));
     }
 
     /// <summary>

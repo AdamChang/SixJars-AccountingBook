@@ -29,6 +29,9 @@ public interface ISixJarsDbContext
     /// <summary>建立者名單（ADR 0011）；由 CLI 維護，異動不留稽核記錄。</summary>
     DbSet<BookCreator> BookCreators { get; }
 
+    /// <summary>MCP 授權（ADR 0013）；撤銷只記時間，異動不留稽核記錄。</summary>
+    DbSet<McpGrant> McpGrants { get; }
+
     /// <summary>樂觀並行版本（PostgreSQL xmin）；回應給前端，修改時帶回來。</summary>
     uint GetVersion(object entity);
 

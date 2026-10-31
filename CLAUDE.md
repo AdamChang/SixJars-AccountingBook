@@ -18,7 +18,7 @@ dotnet test --project tests/SixJars.Api.Tests --filter-method "*Delete*"
 # 新增 migration（DesignTimeDbContextFactory 不實際連線）
 dotnet ef migrations add <Name> --project src/SixJars.Infrastructure --startup-project src/SixJars.Infrastructure --output-dir Persistence/Migrations
 
-# CLI（管理工具：import-legacy / add-member / add-creator / remove-creator / restore-backup），連線字串只讀環境變數 ConnectionStrings__SixJars
+# CLI（管理工具：import-legacy / add-member / add-creator / remove-creator / revoke-mcp-access / restore-backup），連線字串只讀環境變數 ConnectionStrings__SixJars
 dotnet run --project src/SixJars.Cli -- --help
 ```
 
@@ -40,6 +40,11 @@ Clean Architecture：`Domain` ← `Application` ← `Infrastructure` ← `Api` /
   - 唯讀的帳本一律用 `IBookReader`（`GetReadOnlyBookAsync`）：in-memory 快取、以 Books 的 xmin 判斷是否過期，回傳的實例會跨 request 共用，**不可修改**；要修改用 `GetBookForUpdateAsync`。DbContext 已設全域 SplitQuery。
 - **Infrastructure**：EF Core + Npgsql（PostgreSQL / Neon，ADR 0007），configuration 與 migration 在 `Persistence/`；月報彙總用 SQL（`Ledger/SqlLedgerSummaryQuery.cs`）；舊 Excel 讀取（ExcelDataReader）與 CSV/XLSX 匯出（ClosedXML）。
 - **Api**：Minimal API，endpoint 依資源分檔在 `Endpoints/`，`/api` group 一律需登入並掛 `AntiforgeryFilter`。BFF 模式：Cookie + Google OIDC，白名單即帳本成員表（ADR 0005）；cookie 用 `__Host-` 前綴，本機必須跑 https。
+- **遠端 MCP**（ADR 0013）：`Api/Mcp`。
+  - `/mcp` 是唯讀的 Streamable HTTP（stateless），tool 在 `LedgerTools`，透過 `ISender` 呼叫既有 query。
+  - 保護 `/mcp` 的是同一個 Api 內建的最小 OAuth 授權伺服器（`Api/Mcp/OAuth`）：只支援 CIMD、S256 PKCE 與 public client，`client_id` 必須在 `Mcp:AllowedClientIdHosts` 白名單內。
+  - `/mcp` 只接受 `McpBearer` scheme，`/api` 只接受 cookie，兩者不互通。
+  - 授權記錄在 `McpGrant`，可以撤銷，refresh token 每次使用都會輪替。
 - **測試共用**：`tests/Shared`（`PostgresFixture`、`ApiFactory`、`TestAuthHandler`、`ApiSeed` 等）以 linked file 方式被各測試專案引用。
 
 ## Agent skills
