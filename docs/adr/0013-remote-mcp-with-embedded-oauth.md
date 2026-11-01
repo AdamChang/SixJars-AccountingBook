@@ -1,5 +1,7 @@
 # 遠端 MCP 由 Api 內建的最小 OAuth 授權伺服器保護，client 以 CIMD 辨識
 
+> 部分被 [ADR 0014](0014-mcp-bookkeeping-write-scope.md) 取代：寫入。MCP 不再只開唯讀 tool，使用者可在同意頁勾選 `ledger:write` 允許新增交易；授權伺服器的其餘決定不變。
+
 信用卡對帳想讓使用者已付費的 Claude app 讀取帳本，而不是讓系統自己去串 LLM API（那樣有持續費用）。Claude 的網頁版、Desktop、手機版與 Claude Code 都可以連遠端 MCP server，但前提是 server 走 MCP 規範的 OAuth：401 回應帶 `resource_metadata`、RFC 8414 metadata、S256 PKCE，client 以 CIMD 或 DCR 註冊。
 
 做法如下：
