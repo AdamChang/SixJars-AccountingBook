@@ -135,6 +135,26 @@ T1 (ADR+用語) ─▶ T2 (Domain origin) ─▶ T3 (persistence+DTO+Via) ─┬
 - 變異檢查（controller）：拿掉 `SetOrigin` 的防重複 → `Set_origin_twice_throws` 失敗；拿掉 index filter 的 `DeletedAt` → `Same_external_ref_is_allowed_after_soft_delete` 失敗。
 - 對 T4 的影響：T3 已讓 `TransactionDto`／`AuditEntryDto` 帶新欄位，所以匯出已包含它們；還原時仍會遺失，正是 T4 要補的。
 
+### C2（2026-11-02，T4–T7：9da12ba、c7eaf34＋c65e3b5、743b818、f65c160＋b7ca48e）
+- **T4 多改 `tests/SixJars.Api.Tests/BackupExportTests.cs`**：既有測試寫死格式版本 5，改為 `..._is_6`。
+- **T5 新增 `BookkeepingInputRules.cs`**：審查指出 Kind 與 ExternalRef 的驗證規則在 Record／Preview 兩個 validator 中逐字重複，修正第 1 輪抽成 internal extension `AddBookkeepingInputRules(input, externalRef)`。因為 selector 是 delegate，用 `OverridePropertyName` 保持錯誤欄位名稱（`Input`、`Input.Kind`、`ExternalRef`）。
+- **T5 的 Preview 查詢是追蹤查詢**，不是 `AsNoTracking`：`db.GetVersion` 需要追蹤。Preview 從不 `SaveChanges`，也不把試算出的交易加進 context，已審查確認不會外洩。
+- **T6 改了既有 `AuthorizeEndpointTests` 的一列 theory**：`scope=ledger:write` 現在是合法 scope，改成 `ledger:admin`，仍測 `invalid_scope` 分支。
+- **T6 給 T8 的介面**：
+  - `McpOAuth.ReadScope`／`WriteScope`／`SupportedScopes`。
+  - `McpSetup.WritePolicyName = "McpWrite"`（已定義、尚未使用）。
+  - `McpOAuthOptions.MaxWritesPerDay`（定義在 `AuthorizeRequestValidator.cs`）。**T8 的 `McpWriteQuota` 必須讀同一個值**，同意頁顯示的數字才會與實際上限一致。
+  - `McpTestTokens.IssueAsync(..., scope)`、`OAuthTestClient.ConsentAsync(..., allowWrite)`。
+- **T7 新增 `McpBooks.cs`**，內含 `GetBookAsync(sender, …)`、`CategoryNames`、`EnsureValidPeriod(from, to)` 與 `MaxPeriodDays`；`LedgerTools.MaxPeriodDays` 已移除。期間驗證在修正第 1 輪才集中。
+- **T7 新增測試 helper `tests/SixJars.Api.Tests/Mcp/McpToolClient.cs`**（`ConnectAsync(factory, subject, scope)`、`CallAsync`、`Text`），`LedgerToolsTests` 改用它。T8 的寫入測試請用 `scope: "ledger:read ledger:write"` 連線。
+- **T7 改了既有 `LedgerToolsTests` 對 tool 清單的斷言**：原本寫死 3 個 tool，現在多了 3 個。T8 加入寫入 tool 後，要再更新這個斷言。
+- **MCP tool 的選填參數必須有 C# 預設值**（`= null`，最後的 `CancellationToken = default`），否則 SDK binding 會失敗並回傳一般性的 tool error。T8 的 `add_transaction`／`validate_transaction` 也適用。
+- 測試數與計畫一致：C2 後 **總計 819、成功 791、略過 28、失敗 0**（controller 親自重跑）。
+- 變異檢查（controller）：
+  - scope 改回單一 claim → `Read_write_token_still_passes_read_policy` 失敗。
+  - 授予的 scope 改取自請求 → `Requesting_write_scope_without_checkbox_grants_read_only` 等 2 個測試失敗。
+  - 冪等查詢弄壞 → `Record_with_same_external_ref_returns_existing_as_duplicate` 失敗。
+
 ---
 
 ## Task 1：ADR 0014 與領域用語
