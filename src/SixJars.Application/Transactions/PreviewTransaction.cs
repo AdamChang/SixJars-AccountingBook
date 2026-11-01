@@ -26,15 +26,7 @@ public sealed record TransactionPreview(
 
 internal sealed class PreviewTransactionValidator : AbstractValidator<PreviewTransaction>
 {
-    public PreviewTransactionValidator()
-    {
-        RuleFor(c => c.Input).NotNull().SetValidator(new TransactionInputValidator());
-        RuleFor(c => c.Input.Kind).Must(RecordTransaction.SupportedKinds.Contains)
-            .When(c => c.Input is not null)
-            .WithMessage($"不支援的交易種類，只能記 {string.Join("、", RecordTransaction.SupportedKinds)}。");
-        RuleFor(c => c.ExternalRef).NotEmpty().MaximumLength(RecordTransaction.ExternalRefMaxLength)
-            .When(c => c.ExternalRef is not null);
-    }
+    public PreviewTransactionValidator() => this.AddBookkeepingInputRules(c => c.Input, c => c.ExternalRef);
 }
 
 internal sealed class PreviewTransactionHandler(ISixJarsDbContext db, IBookReader books)
