@@ -30,15 +30,7 @@ public sealed record RecordedTransaction(TransactionDto Transaction, bool Duplic
 
 internal sealed class RecordTransactionValidator : AbstractValidator<RecordTransaction>
 {
-    public RecordTransactionValidator()
-    {
-        RuleFor(c => c.Input).NotNull().SetValidator(new TransactionInputValidator());
-        RuleFor(c => c.Input.Kind).Must(RecordTransaction.SupportedKinds.Contains)
-            .When(c => c.Input is not null)
-            .WithMessage($"不支援的交易種類，只能記 {string.Join("、", RecordTransaction.SupportedKinds)}。");
-        RuleFor(c => c.ExternalRef).NotEmpty().MaximumLength(RecordTransaction.ExternalRefMaxLength)
-            .When(c => c.ExternalRef is not null);
-    }
+    public RecordTransactionValidator() => this.AddBookkeepingInputRules(c => c.Input, c => c.ExternalRef);
 }
 
 internal sealed class RecordTransactionHandler(ISixJarsDbContext db, IAuditTrail audit, IBookReader books, ICurrentUser user)
