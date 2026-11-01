@@ -20,9 +20,7 @@ internal sealed class CreateTransactionHandler(ISixJarsDbContext db, IAuditTrail
     {
         // 帳本只用來驗證帳戶、分類、標籤與鎖帳日，不會被修改。
         var book = await books.GetReadOnlyBookAsync(request.BookId, cancellationToken);
-        book.EnsureUnlocked(request.Input.Date);
-        var transaction = TransactionBuilder.Build(book, request.Input);
-        TransactionBuilder.EnsureNoNewArchivedTags(book, [], transaction.TagIds);
+        var transaction = TransactionCreation.Create(book, request.Input);
         db.Transactions.Add(transaction);
         audit.Record(request.BookId, AuditAction.Create, AuditEntityTypes.Transaction, transaction.Id.Value,
             null, TransactionDto.From(transaction, AuditSnapshots.UnknownVersion));
