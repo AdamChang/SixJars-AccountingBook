@@ -98,6 +98,7 @@ internal sealed class RestoreBackupHandler(ISixJarsDbContext db, IAuditTrail aud
             Action = e.Action,
             EntityType = e.EntityType,
             EntityId = e.EntityId,
+            Via = e.Via,
             Before = e.Before?.GetRawText(),
             After = e.After?.GetRawText(),
         }));
@@ -191,6 +192,8 @@ internal sealed class RestoreBackupHandler(ISixJarsDbContext db, IAuditTrail aud
     {
         var input = backup.Transaction.ToInput();
         var transaction = TransactionBuilder.Build(book, input, new TransactionId(backup.Transaction.Id));
+        // 來源識別碼與經由不屬於 TransactionInput（只能在建立時設定一次），重建後另外寫回；v5 以前的備份兩者皆 null。
+        transaction.SetOrigin(backup.Transaction.CreatedVia, backup.Transaction.ExternalRef);
         if (!SameInput(TransactionDto.From(transaction, backup.Transaction.Version).ToInput(), input))
         {
             throw new DomainException($"交易 {backup.Transaction.Id} 經 Domain 重建後與備份不一致，備份可能已損毀。");

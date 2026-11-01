@@ -83,7 +83,7 @@ public class BackupExportTests(PostgresFixture postgres)
 
     /// <summary>格式版本為 5（標籤起）；檔案縮排、中文不跳脫，方便人工檢視。同一份資料匯出兩次，內容完全相同。</summary>
     [Fact]
-    public async Task Backup_format_version_is_5()
+    public async Task Backup_format_version_is_6()
     {
         await using var factory = await CreateFactoryAsync();
         var book = await factory.SeedBookAsync(Ct);
@@ -94,9 +94,9 @@ public class BackupExportTests(PostgresFixture postgres)
         var json = await client.GetStringAsync(url, Ct);
 
         using var document = JsonDocument.Parse(json);
-        document.RootElement.GetProperty("formatVersion").GetInt32().Should().Be(5);
-        BackupDocument.CurrentFormatVersion.Should().Be(5);
-        json.Should().Contain("\n  \"formatVersion\": 5").And.Contain("測試帳本").And.Contain("\"kind\": \"Expense\"");
+        document.RootElement.GetProperty("formatVersion").GetInt32().Should().Be(6);
+        BackupDocument.CurrentFormatVersion.Should().Be(6);
+        json.Should().Contain("\n  \"formatVersion\": 6").And.Contain("測試帳本").And.Contain("\"kind\": \"Expense\"");
         (await client.GetStringAsync(url, Ct)).Should().Be(json);
     }
 
