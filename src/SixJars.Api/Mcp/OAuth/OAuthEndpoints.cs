@@ -1,6 +1,7 @@
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.WebUtilities;
+using Microsoft.Extensions.Options;
 
 namespace SixJars.Api.Mcp.OAuth;
 
@@ -22,7 +23,7 @@ internal static class OAuthEndpoints
                 issuer,
                 issuer + AuthorizePath,
                 issuer + TokenPath,
-                [McpOAuth.Scope],
+                McpOAuth.SupportedScopes,
                 ["code"],
                 ["authorization_code", "refresh_token"],
                 ["none"],
@@ -41,7 +42,8 @@ internal static class OAuthEndpoints
     /// （<c>ReturnUrl</c> 接受站內相對路徑）。是否登入看預設 scheme（cookie）；能讀哪些帳本之後由 BookAccessBehavior 決定。
     /// </summary>
     private static async Task<IResult> AuthorizeAsync(
-        HttpContext context, AuthorizeRequestValidator validator, IAntiforgery antiforgery, CancellationToken cancellationToken)
+        HttpContext context, AuthorizeRequestValidator validator, IAntiforgery antiforgery, IOptions<McpOAuthOptions> options,
+        CancellationToken cancellationToken)
     {
         var parameters = AuthorizeParameters.From(name => context.Request.Query[name].FirstOrDefault());
         var validation = await validator.ValidateAsync(parameters, context.Request, cancellationToken);
@@ -56,7 +58,7 @@ internal static class OAuthEndpoints
             return Results.Redirect($"/auth/login?returnUrl={Uri.EscapeDataString(returnUrl)}");
         }
 
-        return ConsentPage.Render(context, antiforgery, valid, context.User.FindFirst("email")?.Value);
+        return ConsentPage.Render(context, antiforgery, valid, context.User.FindFirst("email")?.Value, options.Value.MaxWritesPerDay);
     }
 
     /// <summary>同意頁送出：驗 antiforgery（防止別的網站替使用者按下「允許」），重新驗證全部參數，同意才發 code。</summary>
@@ -82,8 +84,11 @@ internal static class OAuthEndpoints
             return RedirectToClient(context, valid.RedirectUri, new() { ["error"] = "access_denied", ["state"] = valid.State });
         }
 
+        // 授予的 scope 只看核取方塊：valid.Scope 來自 hidden 欄位（使用者可改、也可能是別人拼好的授權連結），只代表「請求」。
+        // 預設只有唯讀；寫入必須是使用者在這一頁親手勾選才有。
+        var granted = form["allow_write"] == "1" ? $"{McpOAuth.ReadScope} {McpOAuth.WriteScope}" : McpOAuth.ReadScope;
         var code = tokens.CreateAuthorizationCode(new AuthorizationCode(Guid.NewGuid(), subject, context.User.FindFirst("email")?.Value,
-            valid.ClientId, valid.RedirectUri, valid.CodeChallenge, valid.Scope, valid.Resource,
+            valid.ClientId, valid.RedirectUri, valid.CodeChallenge, granted, valid.Resource,
             clock.GetUtcNow() + McpOAuth.AuthorizationCodeLifetime));
         return RedirectToClient(context, valid.RedirectUri, new() { ["code"] = code, ["state"] = valid.State });
     }

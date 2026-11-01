@@ -127,7 +127,7 @@ public class AuthorizeEndpointTests(PostgresFixture postgres)
     [InlineData("code_challenge_method", "plain", "invalid_request")]
     [InlineData("code_challenge", "", "invalid_request")]
     [InlineData("response_type", "token", "unsupported_response_type")]
-    [InlineData("scope", "ledger:write", "invalid_scope")]
+    [InlineData("scope", "ledger:admin", "invalid_scope")]
     [InlineData("resource", "https://evil.example/mcp", "invalid_target")]
     public async Task Invalid_parameters_redirect_back_with_error(string name, string value, string error)
     {
