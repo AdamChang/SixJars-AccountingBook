@@ -16,15 +16,16 @@ internal static class McpTestTokens
     public const string Resource = "https://localhost/mcp";
 
     public static async Task<(McpGrant Grant, string AccessToken)> IssueAsync(
-        ApiFactory factory, CancellationToken cancellationToken, string subject = ApiFactory.DefaultSubject, string audience = Resource)
+        ApiFactory factory, CancellationToken cancellationToken, string subject = ApiFactory.DefaultSubject, string audience = Resource,
+        string scope = "ledger:read")
     {
         var tokens = factory.Services.GetRequiredService<McpTokens>();
         var now = factory.Services.GetRequiredService<TimeProvider>().GetUtcNow();
         var grant = McpGrant.Issue(subject, TestAuthHandler.EmailOf(subject), "https://claude.ai/oauth/mcp-oauth-client-metadata",
-            McpOAuth.Scope, Guid.NewGuid(), McpTokens.Hash(McpTokens.NewRefreshToken()), now, McpOAuth.RefreshTokenLifetime);
-        await using (var scope = factory.Services.CreateAsyncScope())
+            scope, Guid.NewGuid(), McpTokens.Hash(McpTokens.NewRefreshToken()), now, McpOAuth.RefreshTokenLifetime);
+        await using (var serviceScope = factory.Services.CreateAsyncScope())
         {
-            var db = scope.ServiceProvider.GetRequiredService<SixJarsDbContext>();
+            var db = serviceScope.ServiceProvider.GetRequiredService<SixJarsDbContext>();
             db.McpGrants.Add(grant);
             await db.SaveChangesAsync(cancellationToken);
         }

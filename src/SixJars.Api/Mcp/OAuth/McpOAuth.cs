@@ -3,8 +3,14 @@ namespace SixJars.Api.Mcp.OAuth;
 /// <summary>內建 OAuth 授權伺服器的固定值與網址（ADR 0013）。</summary>
 internal static class McpOAuth
 {
-    /// <summary>唯一的 scope：唯讀。MCP server 也只註冊查詢 tool，兩邊同時保證唯讀。</summary>
-    public const string Scope = "ledger:read";
+    /// <summary>唯讀：查詢帳本。每個授權都有；同意頁不勾選寫入時只有它。</summary>
+    public const string ReadScope = "ledger:read";
+
+    /// <summary>新增交易（記帳），不含修改與刪除。只能由同意頁的核取方塊授予，不能靠請求參數取得。</summary>
+    public const string WriteScope = "ledger:write";
+
+    /// <summary>授權伺服器接受的 scope（請求必須是它的非空子集）；同時是兩份 discovery metadata 的 <c>scopes_supported</c>。</summary>
+    public static readonly string[] SupportedScopes = [ReadScope, WriteScope];
 
     public const string ScopeClaim = "scope";
 

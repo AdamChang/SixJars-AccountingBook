@@ -109,7 +109,7 @@ public class McpDiscoveryTests(PostgresFixture postgres)
 
         metadata.GetProperty("resource").GetString().Should().Be("https://localhost/mcp");
         metadata.GetProperty("authorization_servers").EnumerateArray().Select(e => e.GetString()).Should().Equal("https://localhost");
-        metadata.GetProperty("scopes_supported").EnumerateArray().Select(e => e.GetString()).Should().Equal("ledger:read");
+        metadata.GetProperty("scopes_supported").EnumerateArray().Select(e => e.GetString()).Should().Equal("ledger:read", "ledger:write");
     }
 
     [Fact]
@@ -128,7 +128,7 @@ public class McpDiscoveryTests(PostgresFixture postgres)
         Strings(metadata, "code_challenge_methods_supported").Should().Equal("S256");
         Strings(metadata, "grant_types_supported").Should().BeEquivalentTo("authorization_code", "refresh_token");
         Strings(metadata, "response_types_supported").Should().Equal("code");
-        Strings(metadata, "scopes_supported").Should().Equal("ledger:read");
+        Strings(metadata, "scopes_supported").Should().Equal("ledger:read", "ledger:write");
         metadata.TryGetProperty("registration_endpoint", out _).Should().BeFalse("只支援 CIMD，不開放動態註冊（ADR 0013）");
     }
 
