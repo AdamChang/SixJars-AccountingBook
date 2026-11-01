@@ -20,6 +20,9 @@ public sealed class AuditEntry
 
     public required Guid EntityId { get; init; }
 
+    /// <summary>經由哪個 AI client（例如 mcp:claude.ai）；網頁與 CLI 的寫入為 null。</summary>
+    public string? Via { get; init; }
+
     /// <summary>修改前的快照；新增時為 null。</summary>
     public string? Before { get; init; }
 

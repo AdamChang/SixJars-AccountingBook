@@ -23,7 +23,9 @@ public sealed record TransactionDto(
     string? Note,
     IReadOnlyList<PostingDto> Postings,
     uint Version,
-    IReadOnlyList<Guid>? TagIds = null)
+    IReadOnlyList<Guid>? TagIds = null,
+    string? CreatedVia = null,
+    string? ExternalRef = null)
 {
     public static TransactionDto From(Transaction t, uint version) => new(
         t.Id.Value,
@@ -40,7 +42,9 @@ public sealed record TransactionDto(
         t.Note,
         [.. t.Postings.Select(p => new PostingDto(p.AccountId.Value, p.Amount))],
         version,
-        [.. t.TagIds.Select(id => id.Value).Order()]);
+        [.. t.TagIds.Select(id => id.Value).Order()],
+        t.CreatedVia,
+        t.ExternalRef);
 
     /// <summary>轉回輸入模型，供備份還原（T42）重建交易。</summary>
     public TransactionInput ToInput() =>

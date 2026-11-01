@@ -11,6 +11,7 @@ internal sealed class AuditEntryConfiguration : IEntityTypeConfiguration<AuditEn
         builder.HasKey(e => e.Id);
         builder.Property(e => e.Id).ValueGeneratedNever();
         builder.Property(e => e.ActorSubject).HasMaxLength(255);
+        builder.Property(e => e.Via).HasMaxLength(100);
         builder.Property(e => e.Action).HasConversion<string>().HasMaxLength(32);
         builder.Property(e => e.EntityType).HasMaxLength(64);
         // 快照存成 jsonb（spike S5），日後可以直接在 SQL 裡查欄位。

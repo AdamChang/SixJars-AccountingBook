@@ -154,6 +154,22 @@ public class AuditTrailTests(PostgresFixture postgres)
     }
 
     [Fact]
+    public async Task Web_write_has_no_via()
+    {
+        // 「經由」只有 MCP 會設定；網頁寫入的稽核記錄不帶（ADR 0014）。
+        await using var factory = await CreateFactoryAsync();
+        var book = await factory.SeedBookAsync(Ct);
+        var client = await factory.CreateMemberClientAsync();
+
+        var created = await CreateTransactionAsync(client, book, LunchInput(book, -100m, "午餐"));
+
+        (await EntriesAsync(factory)).Single(e => e.EntityId == created.Id).Via.Should().BeNull();
+        var history = await client.GetFromJsonAsync<JsonElement>($"/api/books/{book.Id.Value}/audit?entityId={created.Id}", ApiJson.Options, Ct);
+        var entry = history.EnumerateArray().Single();
+        (!entry.TryGetProperty("via", out var via) || via.ValueKind == JsonValueKind.Null).Should().BeTrue();
+    }
+
+    [Fact]
     public async Task History_lists_entries_oldest_first()
     {
         // 用系統時鐘：每次請求的 At 不同，才看得出排序（固定時鐘下只剩 Id 排序）。
