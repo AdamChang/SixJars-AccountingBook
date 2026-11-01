@@ -61,15 +61,7 @@ internal sealed class BookkeepingTools(ISender sender)
         [Description("選填：帳戶 id（list_accounts 取得）")] Guid? accountId = null,
         CancellationToken cancellationToken = default)
     {
-        if (from > to)
-        {
-            throw new McpException("from 不可晚於 to。");
-        }
-
-        if (to.DayNumber - from.DayNumber + 1 > LedgerTools.MaxPeriodDays)
-        {
-            throw new McpException($"期間最多 {LedgerTools.MaxPeriodDays} 天，請分段查詢。");
-        }
+        McpBooks.EnsureValidPeriod(from, to);
 
         var book = await McpBooks.GetBookAsync(sender, bookId, cancellationToken);
         var transactions = await sender.Send(new ListTransactions(bookId, from, to, null, accountId), cancellationToken);
