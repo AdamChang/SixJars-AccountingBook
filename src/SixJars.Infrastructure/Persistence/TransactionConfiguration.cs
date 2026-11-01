@@ -39,5 +39,8 @@ internal sealed class TransactionConfiguration : IEntityTypeConfiguration<Transa
         builder.Navigation(t => t.Postings).UsePropertyAccessMode(PropertyAccessMode.Field);
         builder.Navigation(t => t.Tags).UsePropertyAccessMode(PropertyAccessMode.Field);
         builder.Ignore(t => t.TagIds);
+        // 來源欄位在 Task 3（migration McpBookkeeping）才由 EF 對應；先排除，避免沒有 migration 的模型變更。
+        builder.Ignore(t => t.ExternalRef);
+        builder.Ignore(t => t.CreatedVia);
     }
 }

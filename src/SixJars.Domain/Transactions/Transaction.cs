@@ -72,6 +72,10 @@ public sealed class Transaction
     public PlanningFundId? PlanningFundId { get; private set; }
     public decimal? LoanPrincipal { get; private set; }
     public string? Note { get; private set; }
+    /// <summary>經由哪個 AI client 建立（例如 <c>mcp:claude.ai</c>）；網頁與 CLI 建立的交易為 null。</summary>
+    public string? CreatedVia { get; private set; }
+    /// <summary>來源識別碼（例如郵件的 Message-ID），用來防止同一來源重複記帳；無來源時為 null。</summary>
+    public string? ExternalRef { get; private set; }
     public IReadOnlyList<Posting> Postings => _postings;
     public IReadOnlyList<TransactionTag> Tags => _tags;
     public IReadOnlyCollection<TagId> TagIds => [.. _tags.Select(t => t.TagId)];
@@ -148,6 +152,26 @@ public sealed class Transaction
     {
         EnsureNotDeleted();
         DeletedAt = at;
+    }
+
+    /// <summary>
+    /// 記下這筆交易是經由哪個 AI client、依據哪個來源建立的（spec D5、D10）。只在建立時設定一次：
+    /// 記帳 command 與還原備份會呼叫；修改交易（<see cref="ReplaceWith"/>）不改變來源。
+    /// </summary>
+    public void SetOrigin(string? createdVia, string? externalRef)
+    {
+        if (createdVia is null && externalRef is null)
+        {
+            return;
+        }
+
+        if (CreatedVia is not null || ExternalRef is not null)
+        {
+            throw new DomainException("交易的來源只能設定一次。");
+        }
+
+        CreatedVia = createdVia;
+        ExternalRef = externalRef;
     }
 
     private void EnsureNotDeleted()
