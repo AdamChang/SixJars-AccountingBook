@@ -142,12 +142,15 @@ public class BookkeepingToolsTests(PostgresFixture postgres)
             var input = new TransactionInput(TransactionKind.Expense, new DateOnly(2026, 1, 5), null, -120m, book.FindAccount("現金")!.Id.Value,
                 null, book.FindCategory("主食", "午餐")!.Id.Value, null, null, "Subway");
             await scope.ServiceProvider.GetRequiredService<ISender>().Send(new RecordTransaction(book.Id.Value, input, "<a@m>"), Ct);
+            await scope.ServiceProvider.GetRequiredService<ISender>().Send(new RecordTransaction(book.Id.Value, input, "<other@m>"), Ct);
+            await scope.ServiceProvider.GetRequiredService<ISender>().Send(new RecordTransaction(book.Id.Value, input with { Note = "無來源" }, null), Ct);
         }
 
         await using var client = await ConnectAsync(factory);
 
         var result = await CallAsync(client, "search_transactions", Search(book, new() { ["sourceId"] = "<a@m>" }));
 
+        result.GetProperty("count").GetInt32().Should().Be(1, "另外兩筆（不同 sourceId、無 sourceId）要被排除");
         var row = result.GetProperty("transactions").EnumerateArray().Single();
         row.GetProperty("createdVia").GetString().Should().Be(Via);
         row.GetProperty("sourceId").GetString().Should().Be("<a@m>");
