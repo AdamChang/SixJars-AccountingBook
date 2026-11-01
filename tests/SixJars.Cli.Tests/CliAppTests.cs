@@ -149,6 +149,50 @@ public class CliAppTests(PostgresFixture postgres)
         (await db.BookCreators.CountAsync(Ct)).Should().Be(0);
     }
 
+    /// <summary>
+    /// 以 email 撤銷 MCP 授權（ADR 0013）：比對授權當下的 email，也比對該 email 已綁定的成員或建立者的 sub
+    /// （授權可能沒有 email claim）；別人的授權不受影響。
+    /// </summary>
+    [Fact]
+    public async Task Revoke_mcp_access_revokes_all_active_grants_of_email()
+    {
+        var connectionString = await postgres.CreateConnectionStringAsync(Ct);
+        await using (var seed = Open(connectionString))
+        {
+            var creator = BookCreator.Create("adam@example.com", Now);
+            creator.BindSubject("sub-a");
+            seed.BookCreators.Add(creator);
+            seed.McpGrants.AddRange(
+                McpGrant.Issue("sub-a", "Adam@Example.com", "https://claude.ai/c", "ledger:read", Guid.NewGuid(), "h1", Now, TimeSpan.FromDays(30)),
+                McpGrant.Issue("sub-a", null, "https://claude.ai/c", "ledger:read", Guid.NewGuid(), "h2", Now, TimeSpan.FromDays(30)),
+                McpGrant.Issue("sub-b", "other@example.com", "https://claude.ai/c", "ledger:read", Guid.NewGuid(), "h3", Now, TimeSpan.FromDays(30)));
+            await seed.SaveChangesAsync(Ct);
+        }
+
+        var output = new StringWriter();
+
+        var exitCode = await RunAsync(connectionString, output, "revoke-mcp-access", "--email", " ADAM@example.com ");
+
+        exitCode.Should().Be(0, output.ToString());
+        output.ToString().Should().Contain("2");
+        await using var db = Open(connectionString);
+        var grants = await db.McpGrants.ToListAsync(Ct);
+        grants.Where(g => g.Subject == "sub-a").Should().OnlyContain(g => g.RevokedAt != null);
+        grants.Single(g => g.Subject == "sub-b").RevokedAt.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Revoke_mcp_access_without_grants_says_so()
+    {
+        var connectionString = await postgres.CreateConnectionStringAsync(Ct);
+        var output = new StringWriter();
+
+        var exitCode = await RunAsync(connectionString, output, "revoke-mcp-access", "--email", "nobody@example.com");
+
+        exitCode.Should().Be(0);
+        output.ToString().Should().Contain("沒有有效的授權");
+    }
+
     [Fact]
     public async Task Remove_unknown_creator_fails_with_clear_message()
     {

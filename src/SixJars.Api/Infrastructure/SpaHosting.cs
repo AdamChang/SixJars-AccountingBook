@@ -18,7 +18,9 @@ public static class SpaHosting
     // Angular 的 lazy chunk 用大小寫混合的 8 字元雜湊，只對 chunk- 前綴放寬，避免 logo-20261004.png 這類自訂檔名被當成雜湊檔。
     private static readonly Regex ChunkAssetPattern = new(@"^chunk-[A-Za-z0-9_-]{8}\.js$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
-    private static readonly string[] BackendPrefixes = ["api", "auth", "health"];
+    // mcp、oauth、.well-known 是遠端 MCP 與 OAuth（ADR 0013）：.well-known 的 metadata 由 authentication 階段的 handler 提供，
+    // 這個 middleware 在它之前，不排除的話 GET 會先被改寫成 index.html。
+    private static readonly string[] BackendPrefixes = ["api", "auth", "health", "mcp", "oauth", ".well-known"];
 
     public static WebApplication UseSpaHosting(this WebApplication app)
     {
@@ -64,7 +66,7 @@ public static class SpaHosting
     }
 
     /// <summary>
-    /// 是否為前端（Angular router）的路徑：第一段不是 api／auth／health，且最後一段沒有副檔名。
+    /// 是否為前端（Angular router）的路徑：第一段不是後端的路徑（<see cref="BackendPrefixes"/>），且最後一段沒有副檔名。
     /// </summary>
     /// <remarks>
     /// 比對的是「整段」：/apix 屬於前端，/api/nope 與 /api 不是，打錯的 API 路徑必須維持 404 而不是 200 的 HTML。

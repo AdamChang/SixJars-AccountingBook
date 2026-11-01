@@ -23,6 +23,7 @@ public sealed class SixJarsDbContext(DbContextOptions<SixJarsDbContext> options)
     public DbSet<AuditEntry> AuditEntries => Set<AuditEntry>();
     public DbSet<BookMember> BookMembers => Set<BookMember>();
     public DbSet<BookCreator> BookCreators => Set<BookCreator>();
+    public DbSet<McpGrant> McpGrants => Set<McpGrant>();
 
     /// <summary>cookie 加密用的 Data Protection key；存在 DB，Cloud Run 換 instance 時登入狀態才不會失效（ADR 0005）。</summary>
     public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
