@@ -125,6 +125,16 @@ T1 (ADR+用語) ─▶ T2 (Domain origin) ─▶ T3 (persistence+DTO+Via) ─┬
 | AuditEntry 的 configuration 檔 | ✅ | `src/SixJars.Infrastructure/Persistence/AuditEntryConfiguration.cs` | 修改清單改為明確路徑 |
 | T6、T8 的測試數 | ⚠️ | 初稿算錯 | 已重算：T5 是 15、T6 是 8、T8 是 13，後續預期總數一併修正 |
 
+## 執行偏差（回寫，committed code 才是權威）
+
+### C1（2026-11-02，T1–T3：8e27d45、c09b9c9、d753176）
+- **T2 多改一個檔：`TransactionConfiguration.cs` 暫時 `Ignore` 兩個來源屬性。** 原因：EF 依慣例會把 public 屬性納入 model，T2 沒有 migration，整套測試因 `PendingModelChangesWarning` 失敗（398 個紅燈）。計畫原本沒料到這點。這樣做讓每個 commit 都維持全綠，也守住 spec「只有一個 migration」與「每個 Task 一個 commit」。T3 已移除 `Ignore`，改為真正對應欄位。
+- **T3 多改 `IAuditTrail.cs`**：`RecordAs` 的 `string? via = null` 參數必須同時加在介面上才能編譯；計畫的修改清單漏列。唯一的外部呼叫端 `GoogleSignInValidator.cs:64` 不傳 via。
+- Migration 實際名稱 `20261101161200_McpBookkeeping`；`Up` 只有三個 `AddColumn` 和一個帶 filter 的 `CreateIndex`（已審查）。
+- 測試數與計畫一致：C1 後 **總計 787、成功 759、略過 28、失敗 0**（controller 親自重跑）。
+- 變異檢查（controller）：拿掉 `SetOrigin` 的防重複 → `Set_origin_twice_throws` 失敗；拿掉 index filter 的 `DeletedAt` → `Same_external_ref_is_allowed_after_soft_delete` 失敗。
+- 對 T4 的影響：T3 已讓 `TransactionDto`／`AuditEntryDto` 帶新欄位，所以匯出已包含它們；還原時仍會遺失，正是 T4 要補的。
+
 ---
 
 ## Task 1：ADR 0014 與領域用語
