@@ -5,14 +5,15 @@ namespace SixJars.Application.Auditing;
 internal sealed class AuditTrail(ISixJarsDbContext db, ICurrentUser user, TimeProvider clock) : IAuditTrail
 {
     public void Record<T>(Guid bookId, AuditAction action, string entityType, Guid entityId, T? before, T? after) =>
-        RecordAs(user.Subject, bookId, action, entityType, entityId, before, after);
+        RecordAs(user.Subject, bookId, action, entityType, entityId, before, after, user.Via);
 
-    public void RecordAs<T>(string actorSubject, Guid bookId, AuditAction action, string entityType, Guid entityId, T? before, T? after) =>
+    public void RecordAs<T>(string actorSubject, Guid bookId, AuditAction action, string entityType, Guid entityId, T? before, T? after, string? via = null) =>
         db.AuditEntries.Add(new AuditEntry
         {
             BookId = bookId,
             At = clock.GetUtcNow(),
             ActorSubject = actorSubject,
+            Via = via,
             Action = action,
             EntityType = entityType,
             EntityId = entityId,

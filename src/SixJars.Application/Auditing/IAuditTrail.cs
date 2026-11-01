@@ -13,5 +13,5 @@ public interface IAuditTrail
     /// 同 <see cref="Record{T}"/>，但操作者由呼叫端指定。只給「還沒有登入身分」的寫入使用：
     /// 第一次登入時綁定 Google sub，OIDC callback 當下 cookie 尚未發出，操作者就是被綁定的 sub。
     /// </summary>
-    void RecordAs<T>(string actorSubject, Guid bookId, AuditAction action, string entityType, Guid entityId, T? before, T? after);
+    void RecordAs<T>(string actorSubject, Guid bookId, AuditAction action, string entityType, Guid entityId, T? before, T? after, string? via = null);
 }
