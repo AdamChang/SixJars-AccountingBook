@@ -74,6 +74,7 @@ internal static class McpSetup
             // stateless：Cloud Run 會換 instance，也不需要伺服器主動推送。
             .WithHttpTransport(o => o.Stateless = true)
             .WithTools<LedgerTools>()
+            .WithTools<BookkeepingTools>()
             .WithPrompts<ReconcilePrompt>();
         return services;
     }
