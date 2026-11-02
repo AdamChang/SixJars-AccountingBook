@@ -18,6 +18,7 @@ import { TransactionApi } from '../../core/api/transaction-api';
 import { ApiError } from '../../core/errors/api-error';
 import { CONFLICT_MESSAGE, LOCKED_MESSAGE, NOT_FOUND_MESSAGE } from '../../core/errors/messages';
 import { Notifier } from '../../core/errors/notifier';
+import { recordedByAgent } from '../../shared/agent-origin';
 import { budgetMonthOf, parseBudgetMonth } from '../../shared/dates';
 import { formatAmount } from '../../shared/money';
 import { TagChip } from '../../shared/tag-chip';
@@ -145,6 +146,13 @@ export class TransactionForm implements OnInit {
   private readonly categoryText = toSignal(this.controls.categoryId.valueChanges, { initialValue: '' });
   private readonly selectedTagIds = toSignal(this.controls.tagIds.valueChanges, { initialValue: this.controls.tagIds.value });
 
+  // 唯讀的來源資訊；後端 ReplaceWith 不動 origin，所以編輯時只顯示、不送出
+  protected readonly origin = computed(() => {
+    const e = this.editing();
+    return e && (e.createdVia || e.externalRef)
+      ? { via: e.createdVia ?? null, byAgent: recordedByAgent(e), ref: e.externalRef ?? null }
+      : null;
+  });
   protected readonly rule = computed(() => KIND_RULES[this.kind()]);
   protected readonly moreLabel = computed(() => (MORE_KINDS.includes(this.kind()) ? this.rule().label : '更多'));
   // 編輯中交易用到的已封存項目仍要出現在選項中
