@@ -178,6 +178,29 @@ public class RecordTransactionTests(PostgresFixture postgres)
     }
 
     [Fact]
+    public async Task Preview_rejects_archived_tag_like_record()
+    {
+        await using var factory = await CreateFactoryAsync();
+        var book = await factory.SeedBookAsync(Ct);
+        TagId archivedTag;
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<SixJarsDbContext>();
+            var tracked = await db.Books.SingleAsync(b => b.Id == book.Id, Ct);
+            var tag = tracked.AddTag("舊專案", TagColor.Red);
+            tracked.ArchiveTag(tag.Id, DateTimeOffset.UtcNow);
+            await db.SaveChangesAsync(Ct);
+            archivedTag = tag.Id;
+        }
+
+        var input = Lunch(book) with { TagIds = [archivedTag.Value] };
+
+        var act = () => SendAsync(factory, new PreviewTransaction(book.Id.Value, input, Ref));
+
+        await act.Should().ThrowAsync<DomainException>("試算要拒絕與正式記帳相同的輸入");
+    }
+
+    [Fact]
     public async Task Preview_reports_locked_instead_of_throwing()
     {
         await using var factory = await CreateFactoryAsync();

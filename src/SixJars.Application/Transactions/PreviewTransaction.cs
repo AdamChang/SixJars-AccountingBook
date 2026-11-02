@@ -40,6 +40,9 @@ internal sealed class PreviewTransactionHandler(ISixJarsDbContext db, IBookReade
 
         // 只 Build，不經過 TransactionCreation：鎖帳日要回報而不是擲例外。判斷與 Book.EnsureUnlocked 一致。
         var transaction = TransactionBuilder.Build(book, input);
+
+        // 封存標籤與記帳（TransactionCreation）一樣擲 DomainException：試算要拒絕與正式記帳相同的輸入。
+        TransactionBuilder.EnsureNoNewArchivedTags(book, [], transaction.TagIds);
         var locked = book.LockDate is { } lockDate && input.Date <= lockDate;
 
         // 這裡的查詢不會被存檔（沒有 SaveChanges）；保持追蹤只是為了讓 db.GetVersion 讀得到版本。

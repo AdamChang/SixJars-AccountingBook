@@ -68,7 +68,7 @@ internal static partial class OAuthTestClient
 
     /// <summary>
     /// GET 同意頁，取出表單的 hidden 欄位與 antiforgery cookie，再以 <paramref name="decision"/> POST 回去。
-    /// <paramref name="allowWrite"/> 模擬勾選「也允許新增交易」核取方塊（它不是 hidden 欄位，要自己補）。
+    /// <paramref name="allowWrite"/> 模擬勾選「也允許新增交易」核取方塊（它不是 hidden 欄位，要自己補，且必須真的在 form 內）。
     /// </summary>
     public static async Task<HttpResponseMessage> ConsentAsync(
         HttpClient client, IDictionary<string, string?> parameters, CancellationToken cancellationToken, string decision = "allow",
@@ -81,10 +81,23 @@ internal static partial class OAuthTestClient
         }
 
         var html = await page.Content.ReadAsStringAsync(cancellationToken);
-        var fields = HiddenField().Matches(html).ToDictionary(m => WebUtility.HtmlDecode(m.Groups["name"].Value), m => WebUtility.HtmlDecode(m.Groups["value"].Value));
+        // 像瀏覽器一樣：只有 <form> 裡面的欄位才會送出，表單外的 input 不算。
+        var form = FormSection().Match(html);
+        if (!form.Success)
+        {
+            throw new InvalidOperationException("同意頁沒有 <form>");
+        }
+
+        var formHtml = form.Value;
+        var fields = HiddenField().Matches(formHtml).ToDictionary(m => WebUtility.HtmlDecode(m.Groups["name"].Value), m => WebUtility.HtmlDecode(m.Groups["value"].Value));
         fields["decision"] = decision;
         if (allowWrite)
         {
+            if (!AllowWriteCheckbox().IsMatch(formHtml))
+            {
+                throw new InvalidOperationException("同意頁的 <form> 內沒有 allow_write 核取方塊，瀏覽器不會送出它");
+            }
+
             fields["allow_write"] = "1";
         }
 
@@ -124,6 +137,12 @@ internal static partial class OAuthTestClient
         ["refresh_token"] = refreshToken,
         ["client_id"] = ClaudeClientId,
     };
+
+    [GeneratedRegex("""<form.*?</form>""", RegexOptions.Singleline)]
+    private static partial Regex FormSection();
+
+    [GeneratedRegex("""<input[^>]*name="allow_write"[^>]*>""")]
+    private static partial Regex AllowWriteCheckbox();
 
     [GeneratedRegex("""<input type="hidden" name="(?<name>[^"]+)" value="(?<value>[^"]*)">""")]
     private static partial Regex HiddenField();

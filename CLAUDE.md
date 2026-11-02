@@ -42,7 +42,7 @@ Clean Architecture：`Domain` ← `Application` ← `Infrastructure` ← `Api` /
 - **Api**：Minimal API，endpoint 依資源分檔在 `Endpoints/`，`/api` group 一律需登入並掛 `AntiforgeryFilter`。BFF 模式：Cookie + Google OIDC，白名單即帳本成員表（ADR 0005）；cookie 用 `__Host-` 前綴，本機必須跑 https。
 - **遠端 MCP**（ADR 0013）：`Api/Mcp`。
   - `/mcp` 是 Streamable HTTP（stateless），預設唯讀：tool 在 `LedgerTools`，透過 `ISender` 呼叫既有 query。授權時勾選「也允許新增交易」才會有 `ledger:write`，才看得到記帳 tool（ADR 0014）。
-  - 記帳 tool 在 `BookkeepingTools`（`add_transaction`、`validate_transaction`），寫入一律經 Application 的 `RecordTransaction`（以 ExternalRef 冪等），不另寫寫入邏輯；每日上限 `Mcp:MaxWritesPerDay`（預設 15）。
+  - 記帳 tool 在 `BookkeepingTools`（`list_categories`、`list_tags`、`search_transactions`、`validate_transaction`、`add_transaction`，另有 `record_transactions` prompt 固定「試算 → 確認 → 新增」流程），寫入一律經 Application 的 `RecordTransaction`（以 ExternalRef 冪等），不另寫寫入邏輯；每日上限 `Mcp:MaxWritesPerDay`（預設 15）。
   - 保護 `/mcp` 的是同一個 Api 內建的最小 OAuth 授權伺服器（`Api/Mcp/OAuth`）：只支援 CIMD、S256 PKCE 與 public client，`client_id` 必須在 `Mcp:AllowedClientIdHosts` 白名單內。
   - `/mcp` 只接受 `McpBearer` scheme，`/api` 只接受 cookie，兩者不互通。
   - 授權記錄在 `McpGrant`，可以撤銷，refresh token 每次使用都會輪替。
