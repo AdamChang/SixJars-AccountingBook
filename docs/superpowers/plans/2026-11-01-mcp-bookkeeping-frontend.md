@@ -152,3 +152,26 @@ export function recordedByAgent(dto: Pick<TransactionDto, 'createdVia'>): boolea
 ## 後續（不在本計畫內）
 - 「只看 Claude 記的交易」篩選。
 - 稽核歷史畫面。
+
+## 執行偏差（回寫，2026-11-03）
+
+committed code 才是權威，上面的 snippet 是歷史。
+
+- **測試數**：最終 Test Files 50、Tests **444**（計畫預測 439）。
+  - T3 多了「非 `mcp:` 的經由」測試，最終審查又補了 4 條。
+  - 每一步的數字：T1 434、T2 436、T3 440、修正 444。
+- **T1**：spec 沿用 vitest globals，沒有 `import ... from 'vitest'`，照 `shared/*.spec.ts` 的慣例。
+- **T3 的經由文字**：計畫只定義了 `mcp:` 開頭的情況。
+  - 改用 `recordedByAgent` 判斷：是 Agent 時顯示「由 Claude 記錄（…）」，其他 client 顯示「經由：…」。
+  - 理由：不要把日後非 Claude 的 client 標成 Claude。
+- **最終審查修正（f3c0039）**：
+  - 補上「編輯沒有來源的交易時不顯示」的測試（含空字串情況）。原本把條件改成只剩 `e` 的 mutation 會存活。
+  - 拆開一個驗兩件事的測試。
+  - 標記的 span 加上 `role="img"`，`aria-label` 才有效。
+  - `overflow-wrap` 改套在 `.origin` 上。
+  - 補上回歸測試：送出 Agent 交易時，PUT body 不帶 `createdVia`／`externalRef`。
+- **暫緩**：
+  - `title` 在觸控裝置看不到。編輯頁已經顯示完整的經由，所以不修。
+  - `it.each` 的 `%s` 對 null 或空字串的標題可讀性差。
+  - 手機排版只能手動驗證，見「手動驗證」第 3 條。
+- **測試環境**：這台機器負載高時，與本計畫無關的 dialog harness 測試偶爾會 5 秒逾時，每次失敗的測試不同，單獨重跑都會通過。
