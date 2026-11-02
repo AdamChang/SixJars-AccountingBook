@@ -12,7 +12,7 @@ namespace SixJars.Api.Mcp;
 internal sealed class ReconcilePrompt
 {
     public const string ServerInstructions = """
-        這是「六罐子記帳本」的唯讀帳本資料。最常見的用途是信用卡帳單對帳：使用者提供信用卡 PDF 帳單，你讀出帳單明細後，
+        這是「六罐子記帳本」的帳本資料。最常見的用途是信用卡帳單對帳：使用者提供信用卡 PDF 帳單，你讀出帳單明細後，
         用 list_books → list_accounts（找 type 為 CreditCard 的帳戶）→ list_account_transactions 取得記帳，逐筆比對。
 
         比對規則：
@@ -27,7 +27,8 @@ internal sealed class ReconcilePrompt
         A 日期與金額完全吻合；B 金額吻合、日期差 1 日；C 合併／拆分後吻合；D 帳單有、記帳沒有；
         E 國外交易手續費；F 記帳有、本期帳單沒有；G 其他疑點（金額不同、記帳缺金額等）。
         最後做差異分解：帳單本期消費總額、記帳淨額、差額，以及差額中「可解釋」（D、E、F）與「未解釋」的部分。
-        你只能讀取，不能修改帳本；需要補記的項目請列出讓使用者自己處理。
+        只有在工具清單裡看得到 add_transaction 時才能記帳，而且記帳前一律先讓使用者確認（可用 record_transactions prompt 走固定流程）；
+        沒有 add_transaction 就只能讀取，不能修改帳本，需要補記的項目請列出讓使用者自己處理。
         """;
 
     [McpServerPrompt(Name = "reconcile_credit_card_statement")]
