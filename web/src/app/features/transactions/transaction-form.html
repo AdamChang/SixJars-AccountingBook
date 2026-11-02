@@ -183,6 +183,17 @@
     </mat-form-field>
   </mat-expansion-panel>
 
+  @if (origin(); as o) {
+    <p class="origin">
+      @if (o.via) {
+        <span>{{ o.byAgent ? '由 Claude 記錄（' + o.via + '）' : '經由：' + o.via }}</span>
+      }
+      @if (o.ref) {
+        <span>來源識別碼：<code>{{ o.ref }}</code></span>
+      }
+    </p>
+  }
+
   <div class="actions">
     <button mat-flat-button type="submit" class="submit" [disabled]="pending()">儲存</button>
     @if (editing()) {
