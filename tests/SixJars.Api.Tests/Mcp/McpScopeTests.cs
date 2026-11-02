@@ -1,6 +1,7 @@
 using System.Net;
 using System.Security.Claims;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.WebUtilities;
@@ -38,7 +39,13 @@ public class McpScopeTests(PostgresFixture postgres)
 
         page.StatusCode.Should().Be(HttpStatusCode.OK);
         html.Should().Contain("name=\"allow_write\"");
-        html.Should().NotContain("checked", "寫入權限必須由使用者主動勾選，不能預設勾選");
+        var checkbox = Regex.Match(html, "<input[^>]*name=\"allow_write\"[^>]*>").Value;
+        checkbox.Should().NotBeEmpty().And.NotContain("checked", "寫入權限必須由使用者主動勾選，不能預設勾選");
+        var formStart = html.IndexOf("<form", StringComparison.Ordinal);
+        var formEnd = html.IndexOf("</form>", StringComparison.Ordinal);
+        var checkboxAt = html.IndexOf(checkbox, StringComparison.Ordinal);
+        formStart.Should().BeGreaterThanOrEqualTo(0);
+        checkboxAt.Should().BeInRange(formStart, formEnd, "核取方塊必須在 <form> 內，瀏覽器才會送出 allow_write");
         html.Should().Contain("不能修改或刪除").And.Contain("每天最多 15 筆").And.Contain("claude.ai");
     }
 

@@ -57,6 +57,8 @@ internal sealed class RestoreBackupHandler(ISixJarsDbContext db, IAuditTrail aud
         var plannedExpenses = RestorePlannedExpenses(
             book, backup.PlannedExpenses, transactions.ToDictionary(t => t.Transaction.Id), recurring.Select(r => r.Id).ToHashSet());
 
+        // 順序也是 (BookId, ExternalRef) partial unique index 的需求：備份可能同時有「已刪除」與「有效」兩筆相同 ExternalRef，
+        // index 只涵蓋未刪除的列，所以必須在 AddRange 之前先 Delete，兩筆才能一起寫入。
         // 交易的刪除放在付款連結（MarkPaid）之後：已刪除的預定支出可以連結到之後才被刪除的付款交易（spec §9 O2），
         // 照實際發生的順序重建，日後 MarkPaid 若加上「交易不可已刪除」的檢查也不受影響。
         foreach (var (transaction, deletedAt) in transactions)
