@@ -6,14 +6,14 @@ import { BookDto, TransactionDto, TransactionInput } from '../../core/api/dto';
 import { BOOK, transactionDtoFrom } from './testing/book-fixture';
 import { TransactionList } from './transaction-list';
 
-function tx(overrides: Partial<TransactionInput> & { id?: string }): TransactionDto {
-  const { id, ...input } = overrides;
+function tx(overrides: Partial<TransactionInput> & { id?: string; createdVia?: string }): TransactionDto {
+  const { id, createdVia, ...input } = overrides;
   return transactionDtoFrom(
     {
       kind: 'Expense', date: '2026-03-15', budgetMonth: null, amount: -100, accountId: 'acc-cash',
       counterAccountId: null, categoryId: null, planningFundId: null, loanPrincipal: null, note: null, tagIds: [], ...input,
     },
-    { id: id ?? 'tx-1' },
+    { id: id ?? 'tx-1', ...(createdVia === undefined ? {} : { createdVia }) },
   );
 }
 
@@ -41,6 +41,23 @@ describe('TransactionList', () => {
     const cell = element.querySelector('td.mat-column-note')!;
     expect([...cell.querySelectorAll('.tag-chip')].map(chip => chip.textContent!.trim())).toEqual(['工作', '旅遊', '舊專案']);
     expect(cell.textContent!.replace(/\s+/g, '')).toBe('工作旅遊舊專案機票');
+  });
+
+  it('Agent 記的交易顯示 Claude 標記', async () => {
+    const { element } = await setup([
+      tx({ id: 'a', createdVia: 'mcp:claude.ai' }),
+      tx({ id: 'b' }),
+    ]);
+    const [first, second] = [...element.querySelectorAll('tr.mat-mdc-row')];
+    const badge = first.querySelector('[aria-label="由 Claude 記錄"]');
+    expect(badge).not.toBeNull();
+    expect(badge!.getAttribute('title')).toBe('mcp:claude.ai');
+    expect(second.querySelector('[aria-label="由 Claude 記錄"]')).toBeNull();
+  });
+
+  it('一般交易沒有標記', async () => {
+    const { element } = await setup([tx({})]);
+    expect(element.querySelector('[aria-label="由 Claude 記錄"]')).toBeNull();
   });
 
   it('empty_message_mentions_filters_only_when_filtered', async () => {

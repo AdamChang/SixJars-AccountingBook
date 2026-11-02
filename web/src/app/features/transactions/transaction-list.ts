@@ -3,6 +3,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTableModule } from '@angular/material/table';
 import { BookDto, TagDto, TransactionDto } from '../../core/api/dto';
+import { recordedByAgent } from '../../shared/agent-origin';
 import { formatAmount } from '../../shared/money';
 import { TagChip } from '../../shared/tag-chip';
 import { sortTags } from '../../shared/tags';
@@ -19,6 +20,8 @@ interface TransactionRow {
   tags: TagDto[];
   negative: boolean;
   locked: boolean;
+  byAgent: boolean;
+  createdVia: string | null;
 }
 
 @Component({
@@ -66,6 +69,8 @@ export class TransactionList {
         tags: sortTags(book.tags, dto.tagIds),
         negative: dto.amount < 0,
         locked: isLocked(dto.date, book.lockDate),
+        byAgent: recordedByAgent(dto),
+        createdVia: dto.createdVia ?? null,
       };
     });
   });
