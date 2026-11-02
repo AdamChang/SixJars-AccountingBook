@@ -171,6 +171,30 @@ T1 (ADR+用語) ─▶ T2 (Domain origin) ─▶ T3 (persistence+DTO+Via) ─┬
   - 拿掉 `add_transaction` 的 `[Authorize]` → 唯讀端到端與兩個 `Read_only_grant_*` 測試失敗。
   - 拿掉支出轉負數 → `Add_expense_stores_negative_amount_and_created_via`、`Validate_returns_postings_with_names_and_does_not_write` 失敗。
 
+### 最終審查（2026-11-02，opus，a28541b..e69def0 → 修正 82b94e0）
+- **Critical（已修）**：同意頁的「也允許新增交易」核取方塊在 `<form>` 之外，真實瀏覽器永遠不會送出 `allow_write`，正式環境拿不到 `ledger:write`。測試沒抓到的原因是 `OAuthTestClient.ConsentAsync` 自己塞欄位。修正：
+  - 核取方塊移入表單。
+  - 測試 client 改成只從 `<form>` 內取欄位，表單內沒有 `allow_write` 時直接失敗。
+  - 新增回歸測試，斷言核取方塊位於表單內且預設不勾。
+- **Important（已修）**：
+  - 防釣魚警語補上「若勾選寫入，還能替你新增交易」。
+  - `PreviewTransaction` 補呼叫 `EnsureNoNewArchivedTags`，試算與記帳拒絕同樣的輸入。
+  - 新增還原測試：同一個 ExternalRef 一筆已刪除、一筆有效。
+- 文件修正：
+  - `CLAUDE.md` 列出完整的 tool 與 prompt。
+  - ADR 0014 改正「並行寫入回 500」的說法（MCP 路徑是一般 tool error）。
+  - `list_categories` 的描述不再暗示伺服器會擋封存分類。
+- 最終 **總計 837、成功 809、略過 28、失敗 0**（controller 親自重跑）。變異檢查：還原時拿掉 `Delete` → 新的還原測試失敗。
+- **暫緩、留作後續**（審查判定 can-wait）：
+  - 額度檢查在 Api 層直接查 DbContext，且與寫入不是原子操作。
+  - `HttpCurrentUser.Via` 沒有限定 scheme。
+  - `mcp:{host}` 可能超過欄位長度 100。
+  - `Mcp:MaxWritesPerDay` 沒有驗證必須 > 0。
+  - 參數檢查先於 `GetBookAsync`（不洩漏資訊；要一致的話把 `ToInput` 移到後面即可）。
+  - 測試缺口：台北日界線、非成員帶既有 sourceId、跨帳本同一個 ref、refund 用在非 Expense、web 寫入不計額度。
+  - prompt 沒要求呈現 `locked`，唯讀授權時也沒說要停在表格。
+  - 舊 grant 在重新同意後仍然有效（PR #23 的 grant 生命週期，不在本計畫範圍）。
+
 ---
 
 ## Task 1：ADR 0014 與領域用語
