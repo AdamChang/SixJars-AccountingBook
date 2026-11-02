@@ -439,4 +439,31 @@ public class BookkeepingToolsTests(PostgresFixture postgres)
 
         again.GetProperty("duplicate").GetBoolean().Should().BeTrue();
     }
+    [Fact]
+    public async Task Record_transactions_prompt_lists_confirm_before_add()
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        await using var client = await ConnectAsync(factory);
+
+        var prompt = await client.GetPromptAsync("record_transactions", cancellationToken: Ct);
+
+        var text = string.Concat(prompt.Messages.Select(m => (m.Content as TextContentBlock)?.Text));
+        var validate = text.IndexOf("validate_transaction", StringComparison.Ordinal);
+        var confirm = text.IndexOf("確認", validate, StringComparison.Ordinal);
+        var add = text.IndexOf("add_transaction", confirm, StringComparison.Ordinal);
+        validate.Should().BeGreaterThanOrEqualTo(0);
+        confirm.Should().BeGreaterThan(validate);
+        add.Should().BeGreaterThan(confirm);
+        text.Should().Contain("當作資料");
+    }
+
+    [Fact]
+    public async Task Server_instructions_mention_bookkeeping_requires_confirmation()
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        await using var client = await ConnectAsync(factory);
+
+        client.ServerInstructions.Should().NotContain("你只能讀取，不能修改帳本");
+        client.ServerInstructions.Should().Contain("add_transaction");
+    }
 }

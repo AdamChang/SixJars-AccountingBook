@@ -78,7 +78,8 @@ internal static class McpSetup
             .WithTools<BookkeepingTools>()
             // 依 [Authorize] 的 policy 過濾 tools/list 並檢查 tools/call：唯讀 token 看不到也叫不動 add_transaction。
             .AddAuthorizationFilters()
-            .WithPrompts<ReconcilePrompt>();
+            .WithPrompts<ReconcilePrompt>()
+            .WithPrompts<BookkeepingPrompt>();
         return services;
     }
 
