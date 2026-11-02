@@ -38,5 +38,5 @@ ADR 0013 的翻轉條件是「需要寫入類 scope 的細緻授權時，改用�
 - `McpGrant` 授予的 scope 不再等於 client 請求的 scope，同意頁必須明確說明寫入的範圍、每日上限與撤銷方式。
 - 單日上限以「使用者＋client host」計數（稽核記錄沒有 grant id），重新連線不會讓計數歸零。
 - 資料庫多一個 migration（`ExternalRef`、`CreatedVia`、`Via` 與 partial unique index）；備份格式版本 5 升為 6，舊備份照樣能還原。
-- 同一個 `ExternalRef` 並行寫入會撞上 unique index 而回 500，不額外處理：Claude 逐筆呼叫，實際不會發生。
+- 同一個 `ExternalRef` 並行寫入會撞上 unique index 而失敗（MCP 路徑上是 SDK 的一般 tool error，HTTP 仍為 200），不額外處理：Claude 逐筆呼叫，實際不會發生。
 - 結論翻轉的條件：需要依帳本或操作分別授權，或要開放修改與刪除時，改用成熟的授權伺服器套件較划算。

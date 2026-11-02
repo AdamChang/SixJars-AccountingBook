@@ -176,6 +176,37 @@ public class RestoreBackupTests(PostgresFixture postgres)
     }
 
     [Fact]
+    public async Task Restores_deleted_and_active_transactions_sharing_the_same_external_ref()
+    {
+        var source = await Scenario.BuildAsync(postgres);
+        await using var _ = source;
+        Guid deletedId, activeId;
+        await using (var db = Open(source.ConnectionString))
+        {
+            // (BookId, ExternalRef) 的 partial unique index 只涵蓋未刪除的列：先刪除其中一筆，另一筆才能用同一個 ExternalRef。
+            var two = await db.Transactions.Where(t => t.BookId == new BookId(source.BookId) && t.DeletedAt == null).Take(2).ToListAsync(Ct);
+            two.Should().HaveCount(2);
+            (deletedId, activeId) = (two[0].Id.Value, two[1].Id.Value);
+            two[0].Delete(BuiltAt);
+            await db.SaveChangesAsync(Ct);
+            two[0].SetOrigin("mcp:claude.ai", "<dup@m>");
+            two[1].SetOrigin("mcp:claude.ai", "<dup@m>");
+            await db.SaveChangesAsync(Ct);
+        }
+
+        var a = await source.ExportAsync();
+        var target = await postgres.CreateConnectionStringAsync(Ct);
+
+        await RestoreAsync(target, a);
+
+        await using var restored = new ApiFactory(target, Clock(ExportedAgainAt));
+        var b = await ExportAsync(await restored.CreateMemberClientAsync(), a.Book.Id);
+        b.Transactions.Single(t => t.Transaction.Id == deletedId).DeletedAt.Should().NotBeNull();
+        b.Transactions.Single(t => t.Transaction.Id == activeId).DeletedAt.Should().BeNull();
+        b.Transactions.Where(t => t.Transaction.ExternalRef == "<dup@m>").Should().HaveCount(2);
+    }
+
+    [Fact]
     public async Task Restores_v5_backup_without_origin()
     {
         var source = await Scenario.BuildAsync(postgres);

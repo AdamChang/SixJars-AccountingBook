@@ -27,7 +27,7 @@ internal sealed class BookkeepingTools(ISender sender, ISixJarsDbContext db, Mcp
     [Description("""
         列出帳本的分類樹（含已封存），記帳時的 categoryId 從這裡取得。
         每個元素是大類：kind 為 Income（收入）或 Expense（支出）；nature 是支出的性質（收入為空）；children 是子分類。
-        categoryId 可以填子分類或大類的 id；已封存（archived 為 true）的分類不能用來新增交易。
+        categoryId 可以填子分類或大類的 id；已封存（archived 為 true）的分類請不要用於新交易。
         """)]
     public async Task<IReadOnlyList<CategoryItem>> ListCategoriesAsync(
         [Description("帳本 id（list_books 取得）")] Guid bookId, CancellationToken cancellationToken)
