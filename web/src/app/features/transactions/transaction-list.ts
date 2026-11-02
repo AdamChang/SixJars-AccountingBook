@@ -3,6 +3,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTableModule } from '@angular/material/table';
 import { BookDto, TagDto, TransactionDto } from '../../core/api/dto';
+import { recordedByAgent } from '../../shared/agent-origin';
 import { formatAmount } from '../../shared/money';
 import { TagChip } from '../../shared/tag-chip';
 import { sortTags } from '../../shared/tags';
@@ -21,6 +22,8 @@ interface TransactionRow {
   locked: boolean;
   // 不是鎖帳、而是這個類型不能在 Web 編輯時的說明；可編輯時為 null
   notEditableReason: string | null;
+  byAgent: boolean;
+  createdVia: string | null;
 }
 
 @Component({
@@ -73,6 +76,8 @@ export class TransactionList {
         negative: dto.amount < 0,
         locked: isLocked(dto.date, book.lockDate),
         notEditableReason: rule.webEditable ? null : NOT_EDITABLE_MESSAGE,
+        byAgent: recordedByAgent(dto),
+        createdVia: dto.createdVia ?? null,
       };
     });
   });
