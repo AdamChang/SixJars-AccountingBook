@@ -155,6 +155,22 @@ T1 (ADR+用語) ─▶ T2 (Domain origin) ─▶ T3 (persistence+DTO+Via) ─┬
   - 授予的 scope 改取自請求 → `Requesting_write_scope_without_checkbox_grants_read_only` 等 2 個測試失敗。
   - 冪等查詢弄壞 → `Record_with_same_external_ref_returns_existing_as_duplicate` 失敗。
 
+### C3（2026-11-02，T8–T10：9172e3d、8ed1f0e、f43689d）
+- **事實查核表的 ⚠️ 推定已證實**：單靠 `AddAuthorizationFilters()`，就會把沒有權限的 `[Authorize]` tool 從 `tools/list` 隱藏，並在呼叫時擋下，不需要自訂 `AddListToolsFilter`。只掛 `[Authorize]` 而沒有註冊 filters 時，`tools/list` 會擲 `InvalidOperationException`（fail-closed）。
+- **T8 新增共用 helper**：
+  - `TransactionRows`：search／validate／add 三個 tool 回傳同一種交易列的形狀。
+  - `McpBooks.SendAsync`：例外轉成 `McpException`，NotFound／Validation／Domain 三種。
+- **T8 更新既有 `LedgerToolsTests` 的 tool 清單**：唯讀 token 看得到 `validate_transaction`、看不到 `add_transaction`；`ReadOnlyHint == true` 的斷言不變，因此兼作過濾行為的第二個查證點。
+- **T8 的已知取捨**（審查列為 Minor，留待最終審查判斷）：
+  - 額度檢查與寫入不是原子操作，並行時可能超出幾筆。
+  - 參數檢查（kind、amount）先於 `GetBookAsync`，所以非成員帶錯參數時會先看到參數錯誤。這和「非成員一律 404」的慣例有出入，但不洩漏任何資訊。
+- **T9 改了 server instructions 開頭**：「唯讀帳本資料」改為「帳本資料」。寫入授權下已經不是唯讀。
+- **T10 在 `McpEndToEndTests` 內抽出 `ConnectAsync`**；沒有改產品程式。
+- 測試數與計畫一致：C3 後 **總計 835、成功 807、略過 28、失敗 0**（controller 親自重跑）。
+- 變異檢查（controller）：
+  - 拿掉 `add_transaction` 的 `[Authorize]` → 唯讀端到端與兩個 `Read_only_grant_*` 測試失敗。
+  - 拿掉支出轉負數 → `Add_expense_stores_negative_amount_and_created_via`、`Validate_returns_postings_with_names_and_does_not_write` 失敗。
+
 ---
 
 ## Task 1：ADR 0014 與領域用語
