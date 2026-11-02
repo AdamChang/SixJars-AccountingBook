@@ -22,6 +22,7 @@ internal static class McpSetup
     public static IServiceCollection AddSixJarsMcp(this IServiceCollection services)
     {
         services.AddSingleton<McpTokens>();
+        services.AddScoped<McpWriteQuota>();
         services.AddScoped<AuthorizeRequestValidator>();
         services.AddOptions<McpOAuthOptions>().Configure<IConfiguration>((o, configuration) =>
         {
@@ -75,6 +76,8 @@ internal static class McpSetup
             .WithHttpTransport(o => o.Stateless = true)
             .WithTools<LedgerTools>()
             .WithTools<BookkeepingTools>()
+            // 依 [Authorize] 的 policy 過濾 tools/list 並檢查 tools/call：唯讀 token 看不到也叫不動 add_transaction。
+            .AddAuthorizationFilters()
             .WithPrompts<ReconcilePrompt>();
         return services;
     }

@@ -7,4 +7,8 @@ public static class TaipeiTime
 
     /// <summary><paramref name="instant"/> 在台北的日期；現在時間一律取自注入的 <see cref="TimeProvider"/>，測試才能固定。</summary>
     public static DateOnly DateOf(DateTimeOffset instant) => DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(instant, Taipei).DateTime);
+
+    /// <summary>台北 <paramref name="date"/> 當日 00:00 對應的 UTC 時間點：「今天」的稽核記錄計數用它當下限。</summary>
+    public static DateTimeOffset StartOfDayUtc(DateOnly date) =>
+        new(TimeZoneInfo.ConvertTimeToUtc(date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Unspecified), Taipei), TimeSpan.Zero);
 }
