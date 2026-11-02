@@ -58,6 +58,8 @@ export interface TransactionDto {
   planningFundId: string | null; loanPrincipal: number | null; loanInterest: number | null;
   note: string | null; postings: PostingDto[]; version: number;
   tagIds: string[];   // 依 Guid 排序；顯示時依標籤的 sortOrder（後端 D5）
+  createdVia?: string | null;  // 經由（例如 mcp:claude.ai），只有 Agent 記帳才有
+  externalRef?: string | null;  // 來源識別碼，唯讀
 }
 export interface TransactionInput {
   kind: TransactionKind; date: string; budgetMonth: number | null; amount: number;
