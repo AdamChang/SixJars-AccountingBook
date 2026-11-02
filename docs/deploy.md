@@ -677,7 +677,7 @@ MCP 第一次上線（PR #21）時逐項執行。之後的版本只要有 MCP �
 - [ ] 附上信用卡 PDF 帳單請 Claude 比對。確認它依序呼叫 `list_books` → `list_accounts` → `list_account_transactions`，輸出有 A–G 分組與差異分解，結果和舊 Excel 的比對 sheet 大致一致。
 - [ ] Claude 手機 app 開同一個 connector，問一個簡單的問題（例如「列出我的帳本」）。
 - [ ] 撤銷驗證（第 13.5 節）：撤銷後 Claude 呼叫 tool 會要求重新 Connect，重新 Connect 後恢復正常。
-- [ ] 記帳驗證（第 13.3 節）：重新 Connect 並勾選「也允許新增交易」，用一封真實信件請 Claude 試記一筆，再到網頁確認該筆交易有「Claude」標記。
+- [ ] 記帳驗證（第 13.3 節）：重新 Connect 並勾選「也允許新增交易」，用一封真實信件請 Claude 試記一筆，再確認來源：交易 API 回傳的該筆 `createdVia` 為 `mcp:claude.ai`、`externalRef` 有值（網頁的「Claude」標記待前端計畫 `2026-11-01-mcp-bookkeeping-frontend` 完成後才有，在此之前看不到標記不代表部署失敗）。
 
 **部署後**
 
