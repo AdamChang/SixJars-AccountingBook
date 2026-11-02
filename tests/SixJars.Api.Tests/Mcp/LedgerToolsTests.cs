@@ -156,7 +156,7 @@ public class LedgerToolsTests(PostgresFixture postgres)
         var prompts = await client.ListPromptsAsync(cancellationToken: Ct);
 
         tools.Select(t => t.Name).Should().BeEquivalentTo("list_books", "list_accounts", "list_account_transactions",
-            "list_categories", "list_tags", "search_transactions");
+            "list_categories", "list_tags", "search_transactions", "validate_transaction");
         tools.Should().OnlyContain(t => t.ProtocolTool.Annotations!.ReadOnlyHint == true);
         prompts.Select(p => p.Name).Should().Contain("reconcile_credit_card_statement");
         client.ServerInstructions.Should().Contain("消費日");

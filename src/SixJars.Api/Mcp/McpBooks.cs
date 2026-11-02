@@ -1,7 +1,9 @@
+using FluentValidation;
 using MediatR;
 using ModelContextProtocol;
 using SixJars.Application.Books;
 using SixJars.Application.Common;
+using SixJars.Domain.Common;
 
 namespace SixJars.Api.Mcp;
 
@@ -34,6 +36,30 @@ internal static class McpBooks
         catch (NotFoundException)
         {
             throw new McpException("找不到帳本。");
+        }
+    }
+
+    /// <summary>
+    /// 送出記帳用的 command，並把例外轉成 tool error（spec §6.1）：找不到帳本、驗證錯誤（合併所有訊息）、業務規則（原訊息）。
+    /// 其他例外（含並行衝突）不轉換，交給 SDK 回通用錯誤，免得把內部細節吐給 client。
+    /// </summary>
+    public static async Task<T> SendAsync<T>(ISender sender, IRequest<T> request, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await sender.Send(request, cancellationToken);
+        }
+        catch (NotFoundException)
+        {
+            throw new McpException("找不到帳本。");
+        }
+        catch (ValidationException exception)
+        {
+            throw new McpException(string.Join("；", exception.Errors.Select(e => e.ErrorMessage).Distinct()));
+        }
+        catch (DomainException exception)
+        {
+            throw new McpException(exception.Message);
         }
     }
 
