@@ -57,6 +57,8 @@ internal sealed class RestoreBackupHandler(ISixJarsDbContext db, IAuditTrail aud
         var plannedExpenses = RestorePlannedExpenses(
             book, backup.PlannedExpenses, transactions.ToDictionary(t => t.Transaction.Id), recurring.Select(r => r.Id).ToHashSet());
 
+        // 順序也是 (BookId, ExternalRef) partial unique index 的需求：備份可能同時有「已刪除」與「有效」兩筆相同 ExternalRef，
+        // index 只涵蓋未刪除的列，所以必須在 AddRange 之前先 Delete，兩筆才能一起寫入。
         // 交易的刪除放在付款連結（MarkPaid）之後：已刪除的預定支出可以連結到之後才被刪除的付款交易（spec §9 O2），
         // 照實際發生的順序重建，日後 MarkPaid 若加上「交易不可已刪除」的檢查也不受影響。
         foreach (var (transaction, deletedAt) in transactions)
@@ -98,6 +100,7 @@ internal sealed class RestoreBackupHandler(ISixJarsDbContext db, IAuditTrail aud
             Action = e.Action,
             EntityType = e.EntityType,
             EntityId = e.EntityId,
+            Via = e.Via,
             Before = e.Before?.GetRawText(),
             After = e.After?.GetRawText(),
         }));
@@ -191,6 +194,8 @@ internal sealed class RestoreBackupHandler(ISixJarsDbContext db, IAuditTrail aud
     {
         var input = backup.Transaction.ToInput();
         var transaction = TransactionBuilder.Build(book, input, new TransactionId(backup.Transaction.Id));
+        // 來源識別碼與經由不屬於 TransactionInput（只能在建立時設定一次），重建後另外寫回；v5 以前的備份兩者皆 null。
+        transaction.SetOrigin(backup.Transaction.CreatedVia, backup.Transaction.ExternalRef);
         if (!SameInput(TransactionDto.From(transaction, backup.Transaction.Version).ToInput(), input))
         {
             throw new DomainException($"交易 {backup.Transaction.Id} 經 Domain 重建後與備份不一致，備份可能已損毀。");

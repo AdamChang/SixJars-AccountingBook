@@ -37,6 +37,15 @@ tr.mat-mdc-row.locked { cursor: default; }
 .negative { color: var(--red-ink); }
 .actions { white-space: nowrap; text-align: right; }
 .lock { vertical-align: middle; color: var(--mat-sys-on-surface-variant); }
+.agent {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-right: 6px;
+  font-size: 0.75rem;
+  vertical-align: middle;
+  color: var(--mat-sys-on-surface-variant);
+}
 app-tag-chip { margin-right: 4px; vertical-align: middle; }
 
 // 窄螢幕：同一個 table 改排成兩行清單（不另寫一份 DOM，點擊、刪除、鎖帳行為共用）

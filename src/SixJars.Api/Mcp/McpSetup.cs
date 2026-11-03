@@ -17,10 +17,12 @@ internal static class McpSetup
 {
     public const string Path = "/mcp";
     public const string PolicyName = "Mcp";
+    public const string WritePolicyName = "McpWrite";
 
     public static IServiceCollection AddSixJarsMcp(this IServiceCollection services)
     {
         services.AddSingleton<McpTokens>();
+        services.AddScoped<McpWriteQuota>();
         services.AddScoped<AuthorizeRequestValidator>();
         services.AddOptions<McpOAuthOptions>().Configure<IConfiguration>((o, configuration) =>
         {
@@ -29,6 +31,11 @@ internal static class McpSetup
             if (hosts is { Length: > 0 })
             {
                 o.AllowedClientIdHosts = hosts;
+            }
+
+            if (configuration.GetValue<int?>("Mcp:MaxWritesPerDay") is { } maxWritesPerDay)
+            {
+                o.MaxWritesPerDay = maxWritesPerDay;
             }
         });
         services.AddHttpClient<IClientMetadataFetcher, ClientMetadataFetcher>(client => client.Timeout = TimeSpan.FromSeconds(5))
@@ -40,7 +47,7 @@ internal static class McpSetup
             .AddMcp(o =>
             {
                 // 每個請求由這份範本複製；Resource 留空，由 SDK 依請求路徑推得（.../oauth-protected-resource/mcp → {issuer}/mcp）。
-                o.ResourceMetadata = new() { ScopesSupported = [McpOAuth.Scope], BearerMethodsSupported = ["header"] };
+                o.ResourceMetadata = new() { ScopesSupported = McpOAuth.SupportedScopes, BearerMethodsSupported = ["header"] };
                 // 授權伺服器就是本服務，網址依請求而定（與 McpOAuth.Issuer 同一個來源）。
                 o.Events.OnResourceMetadataRequest = context =>
                 {
@@ -52,7 +59,13 @@ internal static class McpSetup
         services.AddAuthorizationBuilder().AddPolicy(PolicyName, policy => policy
             .AddAuthenticationSchemes(McpBearerHandler.SchemeName)
             .RequireAuthenticatedUser()
-            .RequireClaim(McpOAuth.ScopeClaim, McpOAuth.Scope));
+            .RequireClaim(McpOAuth.ScopeClaim, McpOAuth.ReadScope));
+
+        // 寫入 tool 專用。同樣只認 McpBearer：cookie 身分不能寫 /mcp，唯讀 token 也沒有這個 claim。
+        services.AddAuthorizationBuilder().AddPolicy(WritePolicyName, policy => policy
+            .AddAuthenticationSchemes(McpBearerHandler.SchemeName)
+            .RequireAuthenticatedUser()
+            .RequireClaim(McpOAuth.ScopeClaim, McpOAuth.WriteScope));
 
         services.AddMcpServer(o =>
             {
@@ -62,7 +75,11 @@ internal static class McpSetup
             // stateless：Cloud Run 會換 instance，也不需要伺服器主動推送。
             .WithHttpTransport(o => o.Stateless = true)
             .WithTools<LedgerTools>()
-            .WithPrompts<ReconcilePrompt>();
+            .WithTools<BookkeepingTools>()
+            // 依 [Authorize] 的 policy 過濾 tools/list 並檢查 tools/call：唯讀 token 看不到也叫不動 add_transaction。
+            .AddAuthorizationFilters()
+            .WithPrompts<ReconcilePrompt>()
+            .WithPrompts<BookkeepingPrompt>();
         return services;
     }
 

@@ -13,7 +13,8 @@ namespace SixJars.Api.Mcp.OAuth;
 /// </summary>
 /// <remarks>
 /// 每次請求以主鍵查一次授權，換到撤銷立即生效（ADR 0013）。產生的 claim 名稱與 Google cookie 相同（sub、email），
-/// 所以 <c>HttpCurrentUser</c> 與 <c>BookAccessBehavior</c> 不用改。
+/// 所以 <c>HttpCurrentUser</c> 與 <c>BookAccessBehavior</c> 不用改；另外多一個 <c>via</c>（<c>mcp:&lt;client host&gt;</c>），
+/// 讓寫入的交易與稽核記錄能標示是經由哪個 client。
 /// </remarks>
 internal sealed class McpBearerHandler(
     IOptionsMonitor<AuthenticationSchemeOptions> options, ILoggerFactory logger, UrlEncoder encoder, McpTokens tokens, ISixJarsDbContext db)
@@ -36,13 +37,21 @@ internal sealed class McpBearerHandler(
             return AuthenticateResult.Fail("invalid_token");
         }
 
-        var active = await db.McpGrants.AsNoTracking().AnyAsync(g => g.Id == token.GrantId && g.RevokedAt == null, Context.RequestAborted);
-        if (!active)
+        var grant = await db.McpGrants.AsNoTracking()
+            .Where(g => g.Id == token.GrantId && g.RevokedAt == null)
+            .Select(g => new { g.ClientId })
+            .FirstOrDefaultAsync(Context.RequestAborted);
+        if (grant is null)
         {
             return AuthenticateResult.Fail("invalid_token");
         }
 
-        List<Claim> claims = [new("sub", token.Subject), new(McpOAuth.ScopeClaim, token.Scope)];
+        // via 取自授權記錄的 client_id（發 code 前已驗證在白名單內的 https URL），不取自 token 內容或請求。
+        List<Claim> claims = [new("sub", token.Subject), new("via", $"mcp:{new Uri(grant.ClientId).Host}")];
+
+        // 每個 scope 一個 claim：token.Scope 是以空白分隔的字串，policy 的 RequireClaim 是整值比對，
+        // 整串放進單一 claim 的話，授予讀寫時 "ledger:read ledger:write" 不等於 "ledger:read"，唯讀 tool 反而全被擋。
+        claims.AddRange(token.Scope.Split(' ', StringSplitOptions.RemoveEmptyEntries).Select(scope => new Claim(McpOAuth.ScopeClaim, scope)));
         if (token.Email is not null)
         {
             claims.Add(new Claim("email", token.Email));

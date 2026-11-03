@@ -379,6 +379,69 @@ describe('TransactionForm', () => {
   });
 
   describe('editing', () => {
+    it('shows_via_and_external_ref_when_editing_agent_transaction', async () => {
+      const form = await setup();
+      await form.edit({ ...EDITING, createdVia: 'mcp:claude.ai', externalRef: '<a@m>' });
+      const text = form.el.querySelector('.origin')?.textContent ?? '';
+      expect(text).toContain('由 Claude 記錄（mcp:claude.ai）');
+      expect(text).toContain('來源識別碼：<a@m>');
+    });
+
+    it('shows_only_via_when_no_external_ref', async () => {
+      const form = await setup();
+      await form.edit({ ...EDITING, createdVia: 'mcp:claude.ai', externalRef: null });
+      const text = form.el.querySelector('.origin')?.textContent ?? '';
+      expect(text).toContain('由 Claude 記錄（mcp:claude.ai）');
+      expect(text).not.toContain('來源識別碼');
+    });
+
+    it('shows_non_agent_via_without_claude_label', async () => {
+      const form = await setup();
+      await form.edit({ ...EDITING, createdVia: 'cli', externalRef: null });
+      const text = form.el.querySelector('.origin')?.textContent ?? '';
+      expect(text).toContain('經由：cli');
+      expect(text).not.toContain('Claude');
+    });
+
+    it('shows_only_ref_when_no_via', async () => {
+      const form = await setup();
+      await form.edit({ ...EDITING, createdVia: null, externalRef: 'x1' });
+      const text = form.el.querySelector('.origin')?.textContent ?? '';
+      expect(text).toContain('來源識別碼：x1');
+      expect(text).not.toContain('經由');
+    });
+
+    it('hides_origin_when_editing_transaction_without_origin', async () => {
+      const form = await setup();
+      await form.edit(EDITING);
+      expect(form.el.querySelector('.origin')).toBeNull();
+    });
+
+    it('hides_origin_when_via_and_ref_are_empty_strings', async () => {
+      const form = await setup();
+      await form.edit({ ...EDITING, createdVia: '', externalRef: '' });
+      expect(form.el.querySelector('.origin')).toBeNull();
+    });
+
+    it('does_not_send_origin_fields_when_editing_agent_transaction', async () => {
+      const form = await setup();
+      await form.edit({ ...EDITING, createdVia: 'mcp:claude.ai', externalRef: 'x' });
+      await form.submit();
+      const request = form.httpTesting.expectOne(PUT);
+      const body = request.request.body as { input: object };
+      expect(body).not.toHaveProperty('createdVia');
+      expect(body).not.toHaveProperty('externalRef');
+      expect(body.input).not.toHaveProperty('createdVia');
+      expect(body.input).not.toHaveProperty('externalRef');
+      request.flush({ ...EDITING, version: 8 });
+      await form.fixture.whenStable();
+    });
+
+    it('hides_origin_in_create_mode', async () => {
+      const form = await setup();
+      expect(form.el.querySelector('.origin')).toBeNull();
+    });
+
     it('loads_editing_transaction_into_form', async () => {
       const form = await setup();
       await form.edit(EDITING);

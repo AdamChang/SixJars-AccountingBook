@@ -18,9 +18,6 @@ namespace SixJars.Api.Mcp;
 [McpServerToolType]
 internal sealed class LedgerTools(ISender sender)
 {
-    /// <summary>單次查詢的期間上限：一期信用卡帳單約 30 天，120 天足夠跨期比對，也不會讓回應大到吃掉 Claude 的 context。</summary>
-    public const int MaxPeriodDays = 120;
-
     [McpServerTool(Name = "list_books", ReadOnly = true, Destructive = false)]
     [Description("列出目前使用者可以存取的帳本（id 與名稱）。其他 tool 都需要帳本 id。")]
     public async Task<IReadOnlyList<BookItem>> ListBooksAsync(CancellationToken cancellationToken)
@@ -34,7 +31,7 @@ internal sealed class LedgerTools(ISender sender)
     public async Task<IReadOnlyList<AccountItem>> ListAccountsAsync(
         [Description("帳本 id（list_books 取得）")] Guid bookId, CancellationToken cancellationToken)
     {
-        var book = await GetBookAsync(bookId, cancellationToken);
+        var book = await McpBooks.GetBookAsync(sender, bookId, cancellationToken);
         return [.. book.Accounts.Select(a => new AccountItem(a.Id, a.Name, a.Type.ToString(), a.ArchivedAt is not null))];
     }
 
@@ -52,17 +49,9 @@ internal sealed class LedgerTools(ISender sender)
         [Description("迄日（含），yyyy-MM-dd")] DateOnly to,
         CancellationToken cancellationToken)
     {
-        if (from > to)
-        {
-            throw new McpException("from 不可晚於 to。");
-        }
+        McpBooks.EnsureValidPeriod(from, to);
 
-        if (to.DayNumber - from.DayNumber + 1 > MaxPeriodDays)
-        {
-            throw new McpException($"期間最多 {MaxPeriodDays} 天，請分段查詢。");
-        }
-
-        var book = await GetBookAsync(bookId, cancellationToken);
+        var book = await McpBooks.GetBookAsync(sender, bookId, cancellationToken);
         var account = book.Accounts.FirstOrDefault(a => a.Id == accountId) ?? throw new McpException("找不到帳戶。");
         var transactions = await sender.Send(new ListTransactions(bookId, from, to, null, accountId), cancellationToken);
 
@@ -71,7 +60,7 @@ internal sealed class LedgerTools(ISender sender)
         var tagNames = (book.Tags ?? []).ToDictionary(t => t.Id, t => t.Name);
         var items = transactions.Select(t =>
         {
-            var (main, sub) = CategoryNames(t.CategoryId, categories);
+            var (main, sub) = McpBooks.CategoryNames(t.CategoryId, categories);
             // 帳戶是交易的主帳戶時，另一端是對方帳戶；反之（例如看卡片上的繳卡費）另一端是主帳戶。
             var counterId = t.AccountId == accountId ? t.CounterAccountId : t.AccountId;
             return new AccountTransactionItem(
@@ -85,31 +74,6 @@ internal sealed class LedgerTools(ISender sender)
                 [.. (t.TagIds ?? []).Select(id => tagNames.GetValueOrDefault(id, "?"))]);
         }).ToList();
         return new AccountTransactions(account.Name, from, to, items.Count, items.Sum(i => i.Amount), items);
-    }
-
-    /// <summary>非成員與不存在的帳本都是同一句話（BookAccessBehavior 一律擲 NotFoundException）。</summary>
-    private async Task<BookDto> GetBookAsync(Guid bookId, CancellationToken cancellationToken)
-    {
-        try
-        {
-            return await sender.Send(new GetBook(bookId), cancellationToken);
-        }
-        catch (NotFoundException)
-        {
-            throw new McpException("找不到帳本。");
-        }
-    }
-
-    private static (string? Main, string? Sub) CategoryNames(Guid? categoryId, Dictionary<Guid, CategoryDto> categories)
-    {
-        if (categoryId is not { } id || !categories.TryGetValue(id, out var category))
-        {
-            return (null, null);
-        }
-
-        return category.ParentId is { } parentId && categories.TryGetValue(parentId, out var parent)
-            ? (parent.Name, category.Name)
-            : (category.Name, null);
     }
 }
 

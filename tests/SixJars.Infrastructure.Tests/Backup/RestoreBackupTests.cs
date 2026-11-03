@@ -137,6 +137,107 @@ public class RestoreBackupTests(PostgresFixture postgres)
     }
 
     [Fact]
+    public async Task Restores_transaction_origin_and_audit_via()
+    {
+        var source = await Scenario.BuildAsync(postgres);
+        await using var _ = source;
+        Guid transactionId;
+        await using (var db = Open(source.ConnectionString))
+        {
+            // 來源識別碼只能由 MCP 寫入路徑設定；這裡直接在來源資料庫上設定，模擬一筆經由 MCP 記下的交易。
+            var transaction = await db.Transactions.Where(t => t.BookId == new BookId(source.BookId)).FirstAsync(Ct);
+            transactionId = transaction.Id.Value;
+            transaction.SetOrigin("mcp:claude.ai", "<a@m>");
+            db.AuditEntries.Add(new AuditEntry
+            {
+                BookId = source.BookId,
+                At = BuiltAt,
+                ActorSubject = ApiFactory.DefaultSubject,
+                Action = AuditAction.Create,
+                EntityType = AuditEntityTypes.Transaction,
+                EntityId = transactionId,
+                Via = "mcp:claude.ai",
+            });
+            await db.SaveChangesAsync(Ct);
+        }
+
+        var a = await source.ExportAsync();
+        a.Transactions.Single(t => t.Transaction.Id == transactionId).Transaction.ExternalRef.Should().Be("<a@m>");
+        var target = await postgres.CreateConnectionStringAsync(Ct);
+
+        await RestoreAsync(target, a);
+
+        await using var restored = new ApiFactory(target, Clock(ExportedAgainAt));
+        var b = await ExportAsync(await restored.CreateMemberClientAsync(), a.Book.Id);
+        var origin = b.Transactions.Single(t => t.Transaction.Id == transactionId).Transaction;
+        origin.CreatedVia.Should().Be("mcp:claude.ai");
+        origin.ExternalRef.Should().Be("<a@m>");
+        b.AuditEntries.Should().Contain(e => e.EntityId == transactionId && e.Via == "mcp:claude.ai");
+    }
+
+    [Fact]
+    public async Task Restores_deleted_and_active_transactions_sharing_the_same_external_ref()
+    {
+        var source = await Scenario.BuildAsync(postgres);
+        await using var _ = source;
+        Guid deletedId, activeId;
+        await using (var db = Open(source.ConnectionString))
+        {
+            // (BookId, ExternalRef) 的 partial unique index 只涵蓋未刪除的列：先刪除其中一筆，另一筆才能用同一個 ExternalRef。
+            var two = await db.Transactions.Where(t => t.BookId == new BookId(source.BookId) && t.DeletedAt == null).Take(2).ToListAsync(Ct);
+            two.Should().HaveCount(2);
+            (deletedId, activeId) = (two[0].Id.Value, two[1].Id.Value);
+            two[0].Delete(BuiltAt);
+            await db.SaveChangesAsync(Ct);
+            two[0].SetOrigin("mcp:claude.ai", "<dup@m>");
+            two[1].SetOrigin("mcp:claude.ai", "<dup@m>");
+            await db.SaveChangesAsync(Ct);
+        }
+
+        var a = await source.ExportAsync();
+        var target = await postgres.CreateConnectionStringAsync(Ct);
+
+        await RestoreAsync(target, a);
+
+        await using var restored = new ApiFactory(target, Clock(ExportedAgainAt));
+        var b = await ExportAsync(await restored.CreateMemberClientAsync(), a.Book.Id);
+        b.Transactions.Single(t => t.Transaction.Id == deletedId).DeletedAt.Should().NotBeNull();
+        b.Transactions.Single(t => t.Transaction.Id == activeId).DeletedAt.Should().BeNull();
+        b.Transactions.Where(t => t.Transaction.ExternalRef == "<dup@m>").Should().HaveCount(2);
+    }
+
+    [Fact]
+    public async Task Restores_v5_backup_without_origin()
+    {
+        var source = await Scenario.BuildAsync(postgres);
+        await using var _ = source;
+        var a = await source.ExportAsync();
+        // 模擬來源識別碼之前的 v5 備份：交易沒有 createdVia、externalRef，稽核記錄沒有 via。
+        var json = JsonNode.Parse(BackupJson.SerializeToUtf8Bytes(a))!;
+        json["formatVersion"] = 5;
+        foreach (var item in json["transactions"]!.AsArray())
+        {
+            item!["transaction"]!.AsObject().Remove("createdVia");
+            item["transaction"]!.AsObject().Remove("externalRef");
+        }
+
+        foreach (var item in json["auditEntries"]!.AsArray())
+        {
+            item!.AsObject().Remove("via");
+        }
+
+        var v5 = json.Deserialize<BackupDocument>(BackupJson.Options)!;
+        var target = await postgres.CreateConnectionStringAsync(Ct);
+
+        (await RestoreAsync(target, v5)).Should().Be(a.Book.Id);
+
+        await using var restored = new ApiFactory(target, Clock(ExportedAgainAt));
+        var b = await ExportAsync(await restored.CreateMemberClientAsync(), a.Book.Id);
+        b.Transactions.Should().OnlyContain(t => t.Transaction.CreatedVia == null && t.Transaction.ExternalRef == null);
+        b.AuditEntries.Should().OnlyContain(e => e.Via == null);
+    }
+
+    [Fact]
     public async Task Restores_v4_backup_without_tags()
     {
         var source = await Scenario.BuildAsync(postgres);

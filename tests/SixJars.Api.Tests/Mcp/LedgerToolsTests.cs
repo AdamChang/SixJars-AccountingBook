@@ -27,9 +27,9 @@ public class LedgerToolsTests(PostgresFixture postgres)
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         var mine = await factory.SeedBookAsync(Ct);
         await factory.SeedBookAsync(Ct, ownerSubject: "someone-else");
-        await using var client = await ConnectAsync(factory);
+        await using var client = await McpToolClient.ConnectAsync(factory);
 
-        var books = await CallAsync(client, "list_books", []);
+        var books = await McpToolClient.CallAsync(client, "list_books", []);
 
         books.EnumerateArray().Select(b => b.GetProperty("id").GetGuid()).Should().Equal(mine.Id.Value);
     }
@@ -39,9 +39,9 @@ public class LedgerToolsTests(PostgresFixture postgres)
     {
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         var book = await factory.SeedBookAsync(Ct);
-        await using var client = await ConnectAsync(factory);
+        await using var client = await McpToolClient.ConnectAsync(factory);
 
-        var accounts = await CallAsync(client, "list_accounts", new() { ["bookId"] = book.Id.Value });
+        var accounts = await McpToolClient.CallAsync(client, "list_accounts", new() { ["bookId"] = book.Id.Value });
 
         accounts.EnumerateArray().Should().ContainSingle(a => a.GetProperty("name").GetString() == "國泰Combo卡"
             && a.GetProperty("type").GetString() == "CreditCard" && !a.GetProperty("archived").GetBoolean());
@@ -53,9 +53,9 @@ public class LedgerToolsTests(PostgresFixture postgres)
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         var book = await factory.SeedBookAsync(Ct);
         var card = await SeedCardTransactionsAsync(factory, book.Id);
-        await using var client = await ConnectAsync(factory);
+        await using var client = await McpToolClient.ConnectAsync(factory);
 
-        var result = await CallAsync(client, "list_account_transactions", new()
+        var result = await McpToolClient.CallAsync(client, "list_account_transactions", new()
         {
             ["bookId"] = book.Id.Value, ["accountId"] = card, ["from"] = "2026-01-01", ["to"] = "2026-01-31",
         });
@@ -87,9 +87,9 @@ public class LedgerToolsTests(PostgresFixture postgres)
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         var book = await factory.SeedBookAsync(Ct);
         await SeedCardTransactionsAsync(factory, book.Id);
-        await using var client = await ConnectAsync(factory);
+        await using var client = await McpToolClient.ConnectAsync(factory);
 
-        var result = await CallAsync(client, "list_account_transactions", new()
+        var result = await McpToolClient.CallAsync(client, "list_account_transactions", new()
         {
             ["bookId"] = book.Id.Value, ["accountId"] = book.FindAccount("國泰世華銀行")!.Id.Value, ["from"] = "2026-01-01", ["to"] = "2026-01-31",
         });
@@ -106,7 +106,7 @@ public class LedgerToolsTests(PostgresFixture postgres)
     {
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         var book = await factory.SeedBookAsync(Ct);
-        await using var client = await ConnectAsync(factory);
+        await using var client = await McpToolClient.ConnectAsync(factory);
 
         var result = await client.CallToolAsync("list_account_transactions", new Dictionary<string, object?>
         {
@@ -114,7 +114,7 @@ public class LedgerToolsTests(PostgresFixture postgres)
         }, cancellationToken: Ct);
 
         result.IsError.Should().BeTrue();
-        Text(result).Should().Contain(messageFragment);
+        McpToolClient.Text(result).Should().Contain(messageFragment);
     }
 
     [Fact]
@@ -122,12 +122,12 @@ public class LedgerToolsTests(PostgresFixture postgres)
     {
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         var other = await factory.SeedBookAsync(Ct, ownerSubject: "someone-else");
-        await using var client = await ConnectAsync(factory);
+        await using var client = await McpToolClient.ConnectAsync(factory);
 
         var result = await client.CallToolAsync("list_accounts", new Dictionary<string, object?> { ["bookId"] = other.Id.Value }, cancellationToken: Ct);
 
         result.IsError.Should().BeTrue();
-        Text(result).Should().Contain("找不到帳本");
+        McpToolClient.Text(result).Should().Contain("找不到帳本");
     }
 
     [Fact]
@@ -135,7 +135,7 @@ public class LedgerToolsTests(PostgresFixture postgres)
     {
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         var book = await factory.SeedBookAsync(Ct);
-        await using var client = await ConnectAsync(factory);
+        await using var client = await McpToolClient.ConnectAsync(factory);
 
         var result = await client.CallToolAsync("list_account_transactions", new Dictionary<string, object?>
         {
@@ -143,19 +143,20 @@ public class LedgerToolsTests(PostgresFixture postgres)
         }, cancellationToken: Ct);
 
         result.IsError.Should().BeTrue();
-        Text(result).Should().Contain("找不到帳戶");
+        McpToolClient.Text(result).Should().Contain("找不到帳戶");
     }
 
     [Fact]
     public async Task Tools_are_read_only_and_reconcile_guidance_is_published()
     {
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
-        await using var client = await ConnectAsync(factory);
+        await using var client = await McpToolClient.ConnectAsync(factory);
 
         var tools = await client.ListToolsAsync(cancellationToken: Ct);
         var prompts = await client.ListPromptsAsync(cancellationToken: Ct);
 
-        tools.Select(t => t.Name).Should().BeEquivalentTo("list_books", "list_accounts", "list_account_transactions");
+        tools.Select(t => t.Name).Should().BeEquivalentTo("list_books", "list_accounts", "list_account_transactions",
+            "list_categories", "list_tags", "search_transactions", "validate_transaction");
         tools.Should().OnlyContain(t => t.ProtocolTool.Annotations!.ReadOnlyHint == true);
         prompts.Select(p => p.Name).Should().Contain("reconcile_credit_card_statement");
         client.ServerInstructions.Should().Contain("消費日");
@@ -177,23 +178,4 @@ public class LedgerToolsTests(PostgresFixture postgres)
         await db.SaveChangesAsync(Ct);
         return card.Value;
     }
-
-    private static async Task<McpClient> ConnectAsync(ApiFactory factory, string subject = ApiFactory.DefaultSubject)
-    {
-        var (_, token) = await McpTestTokens.IssueAsync(factory, Ct, subject);
-        var http = McpTestTokens.CreateBearerClient(factory, token);
-        var transport = new HttpClientTransport(
-            new HttpClientTransportOptions { Endpoint = new Uri("https://localhost/mcp"), TransportMode = HttpTransportMode.StreamableHttp },
-            http, NullLoggerFactory.Instance, ownsHttpClient: true);
-        return await McpClient.CreateAsync(transport, cancellationToken: Ct);
-    }
-
-    private static async Task<JsonElement> CallAsync(McpClient client, string tool, Dictionary<string, object?> arguments)
-    {
-        var result = await client.CallToolAsync(tool, arguments, cancellationToken: Ct);
-        result.IsError.Should().NotBe(true, Text(result));
-        return JsonDocument.Parse(Text(result)).RootElement;
-    }
-
-    private static string Text(CallToolResult result) => string.Concat(result.Content.OfType<TextContentBlock>().Select(c => c.Text));
 }
