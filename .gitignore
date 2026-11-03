@@ -15,3 +15,4 @@ TestResults/
 .env
 .env.*
 !.env.example
+efbundle.exe

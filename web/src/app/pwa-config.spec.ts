@@ -4,7 +4,7 @@ describe('ngsw-config', () => {
   it('navigation_excludes_backend_paths', () => {
     const urls = (config as { navigationUrls?: string[] }).navigationUrls ?? [];
     expect(urls).toEqual(expect.arrayContaining([
-      '!/auth/**', '!/api/**', '!/health', '/**', '!/**/*.*', '!/**/*__*', '!/**/*__*/**',
+      '!/auth/**', '!/api/**', '!/health', '!/oauth/**', '/**', '!/**/*.*', '!/**/*__*', '!/**/*__*/**',
     ]));
   });
 
