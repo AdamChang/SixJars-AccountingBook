@@ -50,6 +50,12 @@
               <td class="amount" [class.red-ink]="account.balance < 0">{{ format(account.balance) }}</td>
             </tr>
           }
+          <tfoot>
+            <tr class="total">
+              <td>合計</td>
+              <td class="amount" [class.red-ink]="group.total < 0">{{ format(group.total) }}</td>
+            </tr>
+          </tfoot>
         </table>
       </section>
     }
@@ -64,6 +70,12 @@
               <td class="amount" [class.red-ink]="fund.balance < 0">{{ format(fund.balance) }}</td>
             </tr>
           }
+          <tfoot>
+            <tr class="total">
+              <td>合計</td>
+              <td class="amount" [class.red-ink]="planningFundsTotal() < 0">{{ format(planningFundsTotal()) }}</td>
+            </tr>
+          </tfoot>
         </table>
       </section>
     }

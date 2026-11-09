@@ -11,7 +11,12 @@ import { budgetMonthOf, parseBudgetMonth } from '../../shared/dates';
 import { formatAmount } from '../../shared/money';
 import { MonthNav } from '../../shared/month-nav';
 
-interface AccountGroup { title: string; accounts: BalanceDto[] }
+interface AccountGroup { title: string; accounts: BalanceDto[]; total: number }
+
+// 金額最多兩位小數，四捨五入到分避免浮點加總誤差
+function sumBalances(items: { balance: number }[]): number {
+  return Math.round(items.reduce((sum, item) => sum + item.balance, 0) * 100) / 100;
+}
 
 // 組的順序即畫面順序
 const GROUPS: { type: AccountType; title: string }[] = [
@@ -68,13 +73,17 @@ export class SummaryPage {
       return [];
     }
     const typeById = new Map(this.currentBook.book()?.accounts.map(account => [account.id, account.type]));
-    const groups: AccountGroup[] = GROUPS.map(({ type, title }) => ({
+    const groups = GROUPS.map(({ type, title }) => ({
       title,
       accounts: summary.accounts.filter(account => typeById.get(account.id) === type),
-    })).filter(group => group.accounts.length > 0);
-    const others = summary.accounts.filter(account => !typeById.has(account.id));
-    return others.length > 0 ? [...groups, { title: '其他', accounts: others }] : groups;
+    }));
+    groups.push({ title: '其他', accounts: summary.accounts.filter(account => !typeById.has(account.id)) });
+    return groups
+      .filter(group => group.accounts.length > 0)
+      .map(group => ({ ...group, total: sumBalances(group.accounts) }));
   });
+
+  protected readonly planningFundsTotal = computed(() => sumBalances(this.summary()?.planningFunds ?? []));
 
   protected readonly format = formatAmount;
 

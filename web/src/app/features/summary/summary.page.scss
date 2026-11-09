@@ -65,6 +65,9 @@ h3 {
 // table 預設 border-collapse 會吃掉圓角，帳簿表格改 separate 才能保留紙張外框
 table.ledger { border-collapse: separate; border-spacing: 0; overflow: hidden; }
 
+// 合計列：上方實線分隔、粗體
+tr.total td { border-top: 1px solid var(--ink); font-weight: 700; }
+
 @media (max-width: 599px) {
   .metrics { grid-template-columns: minmax(0, 1fr); }
 }

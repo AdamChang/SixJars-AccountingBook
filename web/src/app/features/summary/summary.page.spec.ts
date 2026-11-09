@@ -80,6 +80,23 @@ describe('SummaryPage', () => {
     expect(credit).toContain('-3,200');
   });
 
+  it('shows_total_per_account_group', async () => {
+    const { el } = await setup('/books/book-1/summary?month=202603', {
+      ...SUMMARY,
+      // 帳本裡找不到的帳戶都歸「其他」，用來驗證多筆加總與浮點誤差
+      accounts: [
+        ...SUMMARY.accounts,
+        { id: 'acc-gone-1', name: '已刪帳戶一', balance: 0.1 },
+        { id: 'acc-gone-2', name: '已刪帳戶二', balance: 0.2 },
+        { id: 'acc-gone-3', name: '已刪帳戶三', balance: -1000 },
+      ],
+    });
+    const totals = [...el.querySelectorAll('.account-group tr.total .amount')];
+    expect(totals.map(td => td.textContent?.trim())).toEqual(['1,000', '49,000', '500', '-3,200', '-800,000', '-999.7']);
+    expect(totals[3].classList).toContain('red-ink');
+    expect(totals[0].classList).not.toContain('red-ink');
+  });
+
   it('puts_unknown_accounts_in_other_group', async () => {
     const { el } = await setup('/books/book-1/summary?month=202603', {
       ...SUMMARY, accounts: [{ id: 'acc-gone', name: '已刪帳戶', balance: 7 }, ...SUMMARY.accounts],
@@ -96,6 +113,14 @@ describe('SummaryPage', () => {
     expect(section.textContent).toContain('財務規劃帳戶');
     expect(section.textContent).toContain('旅遊基金');
     expect(section.textContent).toContain('8,000');
+  });
+
+  it('shows_planning_funds_total', async () => {
+    const { el } = await setup('/books/book-1/summary?month=202603', {
+      ...SUMMARY, planningFunds: [...SUMMARY.planningFunds, { id: 'fund-car', name: '換車基金', balance: -2500 }],
+    });
+    const total = el.querySelector('.planning-funds tr.total .amount')!;
+    expect(total.textContent?.trim()).toBe('5,500');
   });
 
   it('shows_budget_card_with_totals', async () => {
