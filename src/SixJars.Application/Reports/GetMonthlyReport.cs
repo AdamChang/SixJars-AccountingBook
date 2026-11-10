@@ -50,7 +50,7 @@ public sealed record MonthlyReportDto(
 internal sealed class GetMonthlyReportValidator : AbstractValidator<GetMonthlyReport>
 {
     public GetMonthlyReportValidator() =>
-        RuleFor(q => q.BudgetMonth).Must(BudgetWrites.IsMonthKey).WithMessage(BudgetWrites.MonthKeyMessage);
+        RuleFor(q => q.BudgetMonth).MustBeBudgetMonthKey();
 }
 
 /// <summary>

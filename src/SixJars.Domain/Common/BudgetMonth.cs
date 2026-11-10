@@ -20,6 +20,13 @@ public readonly record struct BudgetMonth : IComparable<BudgetMonth>
     public static BudgetMonth Of(DateOnly date) => new(date.Year, date.Month);
     public static BudgetMonth FromKey(int key) => new(key / 100, key % 100);
 
+    public const int MinYear = 1900;
+    public const int MaxYear = 2999;
+
+    /// <summary>yyyymm 是否為可支援的歸屬月份：年份在 <see cref="MinYear"/>–<see cref="MaxYear"/>，月份 1–12。</summary>
+    public static bool IsValidKey(int key) =>
+        key / 100 is >= MinYear and <= MaxYear && key % 100 is >= 1 and <= 12;
+
     public int CompareTo(BudgetMonth other) => Key.CompareTo(other.Key);
     public static bool operator <(BudgetMonth left, BudgetMonth right) => left.CompareTo(right) < 0;
     public static bool operator >(BudgetMonth left, BudgetMonth right) => left.CompareTo(right) > 0;

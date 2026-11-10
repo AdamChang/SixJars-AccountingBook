@@ -1,4 +1,5 @@
 using FluentValidation;
+using SixJars.Application.Common;
 using SixJars.Domain.Planning;
 
 namespace SixJars.Application.Planning;
@@ -21,8 +22,6 @@ public sealed record RecurringPlannedExpenseInput(
 /// <summary>只檢查形狀；性質、月份清單與起訖由 Domain 檢查（422）。</summary>
 public sealed class RecurringPlannedExpenseInputValidator : AbstractValidator<RecurringPlannedExpenseInput>
 {
-    private const string MonthMessage = "月份必須是 yyyymm，月份介於 1 到 12。";
-
     public RecurringPlannedExpenseInputValidator()
     {
         RuleFor(i => i.CategoryId).NotEmpty();
@@ -32,9 +31,7 @@ public sealed class RecurringPlannedExpenseInputValidator : AbstractValidator<Re
         RuleFor(i => i.Note).MaximumLength(500);
         RuleFor(i => i.Frequency).IsInEnum();
         RuleFor(i => i.Months).NotNull();
-        RuleFor(i => i.StartMonth).Must(IsMonthKey).WithMessage(MonthMessage);
-        RuleFor(i => i.EndMonth).Must(key => IsMonthKey(key!.Value)).When(i => i.EndMonth is not null).WithMessage(MonthMessage);
+        RuleFor(i => i.StartMonth).MustBeBudgetMonthKey("開始月份");
+        RuleFor(i => i.EndMonth).MustBeBudgetMonthKey("結束月份");
     }
-
-    private static bool IsMonthKey(int key) => key % 100 is >= 1 and <= 12;
 }

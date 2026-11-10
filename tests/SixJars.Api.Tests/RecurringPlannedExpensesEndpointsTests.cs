@@ -51,6 +51,61 @@ public class RecurringPlannedExpensesEndpointsTests(PostgresFixture postgres)
         positive.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
+    [Theory]
+    [InlineData(1)]
+    [InlineData(189912)]
+    [InlineData(300001)]
+    [InlineData(100000001)]
+    public async Task Unsupported_start_year_is_400_on_start_month_only_and_stores_nothing(int startMonth)
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var book = await factory.SeedBookAsync(Ct);
+        var client = await factory.CreateMemberClientAsync();
+
+        // EndMonth 為 null（沒有結束）：驗證不可因為 null 而失敗，也不可把 endMonth 誤報成錯誤。
+        var response = await client.PostAsJsonAsync(Url(book), Insurance(book) with { StartMonth = startMonth, EndMonth = null }, ApiJson.Options, Ct);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var errors = (await response.Content.ReadFromJsonAsync<JsonElement>(Ct)).GetProperty("errors");
+        errors.TryGetProperty("startMonth", out _).Should().BeTrue();
+        errors.TryGetProperty("endMonth", out _).Should().BeFalse();
+        (await client.GetFromJsonAsync<List<RecurringPlannedExpenseDto>>(Url(book), ApiJson.Options, Ct)).Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(189912)]
+    [InlineData(300001)]
+    [InlineData(100000001)]
+    public async Task Unsupported_end_year_is_400_on_end_month_only_and_stores_nothing(int endMonth)
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var book = await factory.SeedBookAsync(Ct);
+        var client = await factory.CreateMemberClientAsync();
+
+        var response = await client.PostAsJsonAsync(Url(book), Insurance(book) with { EndMonth = endMonth }, ApiJson.Options, Ct);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var errors = (await response.Content.ReadFromJsonAsync<JsonElement>(Ct)).GetProperty("errors");
+        errors.TryGetProperty("endMonth", out _).Should().BeTrue();
+        errors.TryGetProperty("startMonth", out _).Should().BeFalse();
+        (await client.GetFromJsonAsync<List<RecurringPlannedExpenseDto>>(Url(book), ApiJson.Options, Ct)).Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData(190001, null)]
+    [InlineData(202601, 299912)]
+    public async Task Boundary_years_are_accepted_with_or_without_end_month(int startMonth, int? endMonth)
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var book = await factory.SeedBookAsync(Ct);
+        var client = await factory.CreateMemberClientAsync();
+
+        var response = await client.PostAsJsonAsync(Url(book), Insurance(book) with { StartMonth = startMonth, EndMonth = endMonth }, ApiJson.Options, Ct);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+    }
+
     [Fact]
     public async Task Update_with_current_version_changes_the_item_and_writes_audit()
     {

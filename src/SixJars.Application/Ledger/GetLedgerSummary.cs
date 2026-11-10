@@ -11,13 +11,10 @@ namespace SixJars.Application.Ledger;
 /// <param name="AsOf">餘額的截止日（含）；null 表示 Asia/Taipei 的今天。</param>
 public sealed record GetLedgerSummary(Guid BookId, int BudgetMonth, DateOnly? AsOf) : IRequest<LedgerSummaryDto>, IBookScoped;
 
-/// <summary>歸屬月份必須是合法的 yyyymm；否則 <see cref="BudgetMonth.FromKey"/> 會擲例外，變成 500。</summary>
+/// <summary>歸屬月份必須是合法的 yyyymm（見 <see cref="BudgetMonth.IsValidKey"/>）；否則 <see cref="BudgetMonth.FromKey"/> 之後的計算可能擲例外或回傳無意義的結果。</summary>
 internal sealed class GetLedgerSummaryValidator : AbstractValidator<GetLedgerSummary>
 {
-    public GetLedgerSummaryValidator() =>
-        RuleFor(q => q.BudgetMonth)
-            .Must(key => key % 100 is >= 1 and <= 12)
-            .WithMessage("歸屬月份必須是 yyyymm，月份介於 1 到 12。");
+    public GetLedgerSummaryValidator() => RuleFor(q => q.BudgetMonth).MustBeBudgetMonthKey();
 }
 
 /// <summary>

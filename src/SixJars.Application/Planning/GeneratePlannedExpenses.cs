@@ -24,7 +24,7 @@ public sealed record GeneratePlannedExpensesResult(IReadOnlyList<PlannedExpenseD
 internal sealed class GeneratePlannedExpensesValidator : AbstractValidator<GeneratePlannedExpenses>
 {
     public GeneratePlannedExpensesValidator() =>
-        RuleFor(c => c.BudgetMonth).Must(key => key % 100 is >= 1 and <= 12).WithMessage("歸屬月份必須是 yyyymm，月份介於 1 到 12。");
+        RuleFor(c => c.BudgetMonth).MustBeBudgetMonthKey();
 }
 
 internal sealed class GeneratePlannedExpensesHandler(ISixJarsDbContext db, IAuditTrail audit, IBookReader books)

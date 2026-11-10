@@ -19,6 +19,24 @@ public class BudgetMonthTests
         act.Should().Throw<ArgumentOutOfRangeException>();
     }
 
+    [Theory]
+    [InlineData(190001)]
+    [InlineData(202602)]
+    [InlineData(299912)]
+    public void IsValidKey_accepts_yyyymm_within_supported_years(int key) =>
+        BudgetMonth.IsValidKey(key).Should().BeTrue();
+
+    [Theory]
+    [InlineData(1)]            // 第 0 年 1 月
+    [InlineData(189912)]       // 年份下限前一個月
+    [InlineData(300001)]       // 年份上限後一個月
+    [InlineData(100000001)]    // 第 1000000 年 1 月
+    [InlineData(202600)]       // 月份 0
+    [InlineData(202613)]       // 月份 13
+    [InlineData(-202601)]      // 負數
+    public void IsValidKey_rejects_unsupported_year_or_month(int key) =>
+        BudgetMonth.IsValidKey(key).Should().BeFalse();
+
     [Fact]
     public void Compares_across_years()
     {

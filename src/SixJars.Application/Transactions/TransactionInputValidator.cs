@@ -1,4 +1,5 @@
 using FluentValidation;
+using SixJars.Application.Common;
 using SixJars.Domain.Transactions;
 using static SixJars.Domain.Transactions.TransactionKind;
 
@@ -51,10 +52,7 @@ public sealed class TransactionInputValidator : AbstractValidator<TransactionInp
         RuleFor(i => i.LoanPrincipal).Null().When(i => !LoanPrincipalRequired.Contains(i.Kind)).WithMessage(Unused);
 
         RuleFor(i => i.Note).MaximumLength(500);
-        RuleFor(i => i.BudgetMonth)
-            .Must(key => key!.Value % 100 is >= 1 and <= 12)
-            .When(i => i.BudgetMonth is not null)
-            .WithMessage("歸屬月份必須是 yyyymm，月份介於 1 到 12。");
+        RuleFor(i => i.BudgetMonth).MustBeBudgetMonthKey();
 
         RuleFor(i => i.TagIds)
             .Must(ids => ids!.Count <= Transaction.MaxTags).WithMessage($"一筆交易最多 {Transaction.MaxTags} 個標籤。")

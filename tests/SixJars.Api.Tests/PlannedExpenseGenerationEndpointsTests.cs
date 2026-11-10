@@ -86,16 +86,43 @@ public class PlannedExpenseGenerationEndpointsTests(PostgresFixture postgres)
         (await SettingsMaintenanceEndpointsTests.ReadProblemAsync(response)).GetProperty("code").GetString().Should().Be("locked");
     }
 
-    [Fact]
-    public async Task Invalid_month_is_400()
+    [Theory]
+    [InlineData(202613)]
+    [InlineData(1)]
+    [InlineData(189912)]
+    [InlineData(300001)]
+    [InlineData(100000001)]
+    public async Task Invalid_month_is_400_and_generates_nothing(int budgetMonth)
     {
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         var book = await factory.SeedBookAsync(Ct);
+        var client = await factory.CreateMemberClientAsync();
+        // 有一筆週期項目，確認壞月份不會被當成「到期」而產生預定支出。
+        await CreateAsync(client, book, Insurance(book) with { StartMonth = 190001 });
 
-        var response = await (await factory.CreateMemberClientAsync())
-            .PostAsync($"/api/books/{book.Id.Value}/planned-expenses/generate?budgetMonth=202613", null, Ct);
+        var response = await client.PostAsync($"/api/books/{book.Id.Value}/planned-expenses/generate?budgetMonth={budgetMonth}", null, Ct);
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await SettingsMaintenanceEndpointsTests.ReadProblemAsync(response)).GetProperty("errors").TryGetProperty("budgetMonth", out _).Should().BeTrue();
+        await using var scope = factory.Services.CreateAsyncScope();
+        (await scope.ServiceProvider.GetRequiredService<SixJarsDbContext>().PlannedExpenses.CountAsync(Ct)).Should().Be(0);
+    }
+
+    [Theory]
+    [InlineData(190001)]
+    [InlineData(299912)]
+    public async Task Boundary_years_are_accepted(int budgetMonth)
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var book = await factory.SeedBookAsync(Ct);
+        var client = await factory.CreateMemberClientAsync();
+        // 週期項目 1900-01 起、每月適用，兩個邊界月份都到期，才分辨得出「有產生」與「被擋下」。
+        await CreateAsync(client, book, Insurance(book) with { Frequency = RecurrenceFrequency.Monthly, Months = [], StartMonth = 190001 });
+
+        var result = await GenerateAsync(client, book, budgetMonth);
+
+        result.Created.Should().ContainSingle().Which.BudgetMonth.Should().Be(budgetMonth);
+        result.Skipped.Should().BeEmpty();
     }
 
     [Fact]
@@ -167,6 +194,51 @@ public class PlannedExpenseGenerationEndpointsTests(PostgresFixture postgres)
         var response = await client.PostAsync($"/api/books/{book.Id.Value}/planned-expenses/refresh?budgetMonth=202601", null, Ct);
 
         response.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
+    }
+
+    [Theory]
+    [InlineData(202613)]
+    [InlineData(1)]
+    [InlineData(189912)]
+    [InlineData(300001)]
+    [InlineData(100000001)]
+    public async Task Refresh_with_invalid_month_is_400_and_changes_nothing(int budgetMonth)
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var book = await factory.SeedBookAsync(Ct);
+        var client = await factory.CreateMemberClientAsync();
+        var item = await CreateAsync(client, book, Insurance(book) with { Frequency = RecurrenceFrequency.Monthly, Months = [], StartMonth = 190001 });
+        await GenerateAsync(client, book, 202601);
+        (await client.PutAsJsonAsync(RecurringUrl(book, item.Id),
+            new { version = item.Version, input = Insurance(book) with { Frequency = RecurrenceFrequency.Monthly, Months = [], StartMonth = 190001, DefaultAmount = -3600m } },
+            ApiJson.Options, Ct)).EnsureSuccessStatusCode();
+
+        var response = await client.PostAsync($"/api/books/{book.Id.Value}/planned-expenses/refresh?budgetMonth={budgetMonth}", null, Ct);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await SettingsMaintenanceEndpointsTests.ReadProblemAsync(response)).GetProperty("errors").TryGetProperty("budgetMonth", out _).Should().BeTrue();
+        // 週期項目已改成 -3600；若壞月份被放行並誤更新了既有項目，這裡就不會是原本的 -3000。
+        await using var scope = factory.Services.CreateAsyncScope();
+        (await scope.ServiceProvider.GetRequiredService<SixJarsDbContext>().PlannedExpenses.SingleAsync(Ct)).EstimatedAmount.Should().Be(-3000m);
+    }
+
+    [Theory]
+    [InlineData(190001)]
+    [InlineData(299912)]
+    public async Task Refresh_boundary_years_are_accepted_and_applied(int budgetMonth)
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var book = await factory.SeedBookAsync(Ct);
+        var client = await factory.CreateMemberClientAsync();
+        var item = await CreateAsync(client, book, Insurance(book) with { Frequency = RecurrenceFrequency.Monthly, Months = [], StartMonth = 190001 });
+        await GenerateAsync(client, book, budgetMonth);
+        (await client.PutAsJsonAsync(RecurringUrl(book, item.Id),
+            new { version = item.Version, input = Insurance(book) with { Frequency = RecurrenceFrequency.Monthly, Months = [], StartMonth = 190001, DefaultAmount = -3600m } },
+            ApiJson.Options, Ct)).EnsureSuccessStatusCode();
+
+        var result = await RefreshAsync(client, book, budgetMonth);
+
+        result.Updated.Should().ContainSingle().Which.EstimatedAmount.Should().Be(-3600m);
     }
 
     private static string RecurringUrl(Book book, Guid id) => $"/api/books/{book.Id.Value}/recurring-planned-expenses/{id}";

@@ -19,14 +19,10 @@ public sealed record ListTransactions(
     Guid BookId, DateOnly? From, DateOnly? To, int? BudgetMonth, Guid? AccountId, Guid? TagId = null, Guid? CategoryId = null)
     : IRequest<IReadOnlyList<TransactionDto>>, IBookScoped;
 
-/// <summary>歸屬月份必須是合法的 yyyymm；否則 <see cref="BudgetMonth.FromKey"/> 會擲例外，變成 500。</summary>
+/// <summary>有指定歸屬月份時必須是合法的 yyyymm（見 <see cref="BudgetMonth.IsValidKey"/>）；null 表示不篩選。</summary>
 internal sealed class ListTransactionsValidator : AbstractValidator<ListTransactions>
 {
-    public ListTransactionsValidator() =>
-        RuleFor(q => q.BudgetMonth)
-            .Must(key => key!.Value % 100 is >= 1 and <= 12)
-            .When(q => q.BudgetMonth is not null)
-            .WithMessage("歸屬月份必須是 yyyymm，月份介於 1 到 12。");
+    public ListTransactionsValidator() => RuleFor(q => q.BudgetMonth).MustBeBudgetMonthKey();
 }
 
 internal sealed class ListTransactionsHandler(ISixJarsDbContext db) : IRequestHandler<ListTransactions, IReadOnlyList<TransactionDto>>

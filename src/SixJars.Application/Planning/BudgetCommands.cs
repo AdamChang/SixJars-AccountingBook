@@ -30,7 +30,7 @@ internal sealed class SetBudgetOverrideValidator : AbstractValidator<SetBudgetOv
 {
     public SetBudgetOverrideValidator()
     {
-        RuleFor(c => c.BudgetMonth).Must(BudgetWrites.IsMonthKey).WithMessage(BudgetWrites.MonthKeyMessage);
+        RuleFor(c => c.BudgetMonth).MustBeBudgetMonthKey();
         RuleFor(c => c.Amount).GreaterThanOrEqualTo(0m).WithMessage("預算金額不能是負數。");
     }
 }
@@ -38,7 +38,7 @@ internal sealed class SetBudgetOverrideValidator : AbstractValidator<SetBudgetOv
 internal sealed class RemoveBudgetOverrideValidator : AbstractValidator<RemoveBudgetOverride>
 {
     public RemoveBudgetOverrideValidator() =>
-        RuleFor(c => c.BudgetMonth).Must(BudgetWrites.IsMonthKey).WithMessage(BudgetWrites.MonthKeyMessage);
+        RuleFor(c => c.BudgetMonth).MustBeBudgetMonthKey();
 }
 
 internal sealed class SetDefaultBudgetHandler(ISixJarsDbContext db, IBookReader books, IAuditTrail audit) : IRequestHandler<SetDefaultBudget, CategoryBudgetDto>
@@ -70,11 +70,6 @@ internal sealed class RemoveBudgetOverrideHandler(ISixJarsDbContext db, IAuditTr
 
 internal static class BudgetWrites
 {
-    public const string MonthKeyMessage = "歸屬月份必須是 yyyymm，月份介於 1 到 12。";
-
-    /// <summary>同 GetLedgerSummaryValidator；否則 <see cref="BudgetMonth.FromKey"/> 會擲例外，變成 500（年份範圍是 issue #1，P4 L plan Q5）。</summary>
-    public static bool IsMonthKey(int key) => key % 100 is >= 1 and <= 12;
-
     /// <summary>
     /// 設定一格：沒有預算時先建立（稽核 Create），其餘 Update；同值照樣寫稽核（P4 L plan Q8a、Q8b）。
     /// 只有建立時需要帳本（驗證分類），已有預算時不載入帳本。
