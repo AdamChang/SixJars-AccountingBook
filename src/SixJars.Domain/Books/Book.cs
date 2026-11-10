@@ -158,7 +158,7 @@ public sealed class Book
         category.Rename(name);
     }
 
-    /// <summary>改名、改色回溯套用到所有交易（ADR 0011）。</summary>
+    /// <summary>改名、改色回溯套用到所有交易（ADR 0015）。</summary>
     public void UpdateTag(TagId id, string name, TagColor color)
     {
         var tag = GetTag(id);

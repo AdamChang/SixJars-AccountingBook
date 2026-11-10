@@ -2,12 +2,12 @@
 
 - 需求與 grilling 結論：2026-10-19 與使用者的 grilling（G 編號，三輪問答），本文件「決策」一節完整收錄
 - 前端設計：[`2026-10-19-tags-frontend-design.md`](2026-10-19-tags-frontend-design.md)
-- 相關 ADR：[`0006`](../../adr/0006-explicit-snapshot-audit-and-soft-delete.md)（稽核快照、軟刪除）、[`0008`](../../adr/0008-reports-show-spending-not-disposable-balance.md)（報表口徑）；本設計新增 [`0011`](../../adr/0011-tags-are-multi-select-and-not-additive.md)
+- 相關 ADR：[`0006`](../../adr/0006-explicit-snapshot-audit-and-soft-delete.md)（稽核快照、軟刪除）、[`0008`](../../adr/0008-reports-show-spending-not-disposable-balance.md)（報表口徑）；本設計新增 [`0015`](../../adr/0015-tags-are-multi-select-and-not-additive.md)
 - 用語：`CONTEXT.md` 的「標籤 (Tag)」「標籤統計 (Tag Summary)」
 
 ## 目標
 
-使用者可以在帳本設定裡自訂標籤（名稱＋顏色），記帳時替任何交易選填最多 4 個標籤，交易清單能依標籤篩選，匯出與備份都帶著標籤。每月標籤統計的**規則**這次定案（ADR 0011），API 留到報表階段實作。
+使用者可以在帳本設定裡自訂標籤（名稱＋顏色），記帳時替任何交易選填最多 4 個標籤，交易清單能依標籤篩選，匯出與備份都帶著標籤。每月標籤統計的**規則**這次定案（ADR 0015），API 留到報表階段實作。
 
 ## 範圍
 
@@ -18,7 +18,7 @@
 - `GET /transactions?tagId=` 篩選。
 - 交易明細匯出（CSV／xlsx）新增「標籤」欄。
 - 備份格式 v5（標籤定義＋交易的 `TagIds`），還原接受 v1–v5。
-- `CONTEXT.md`、ADR 0011。
+- `CONTEXT.md`、ADR 0015。
 
 **排除**
 
@@ -159,7 +159,7 @@ public sealed record ListTransactions(Guid BookId, DateOnly? From, DateOnly? To,
 
 ## 後續：標籤統計（這次不實作）
 
-規則已定案（G9–G11、ADR 0011），報表階段實作時依此：
+規則已定案（G9–G11、ADR 0015），報表階段實作時依此：
 
 - 以歸屬月份與標籤歸組；只看未刪除的交易。
 - `收入合計`：收入類交易金額。`支出合計`：支出類交易金額（含電子錢包消費）＋貸款繳款總額，與月報表的支出口徑相同。

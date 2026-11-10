@@ -11,7 +11,7 @@ public sealed record UpdateAccount(Guid BookId, Guid AccountId, string Name, boo
 
 public sealed record UpdatePlanningFund(Guid BookId, Guid PlanningFundId, string Name) : IRequest, IBookScoped;
 
-/// <summary>改名、改色回溯套用到所有交易（ADR 0011）。</summary>
+/// <summary>改名、改色回溯套用到所有交易（ADR 0015）。</summary>
 public sealed record UpdateTag(Guid BookId, Guid TagId, string Name, TagColor Color) : IRequest, IBookScoped;
 
 /// <summary><see cref="Nature"/> 為 null 時不修改性質；只有支出主分類可以修改（回溯生效，spec Q4）。</summary>

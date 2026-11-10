@@ -2,7 +2,7 @@ using SixJars.Domain.Common;
 
 namespace SixJars.Domain.Books;
 
-/// <summary>標籤：帳本的設定項目，可複選掛在任何交易上，與分類互相獨立（ADR 0011）。</summary>
+/// <summary>標籤：帳本的設定項目，可複選掛在任何交易上，與分類互相獨立（ADR 0015）。</summary>
 public sealed class Tag
 {
     /// <summary>名稱上限，以 text element 計算（一個 emoji 算 1 個字，spec G5、D8）。</summary>

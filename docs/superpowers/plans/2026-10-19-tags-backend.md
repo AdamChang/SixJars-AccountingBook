@@ -9,7 +9,7 @@
 **Tech Stack**：.NET 10、EF Core 10（Npgsql）、MediatR、FluentValidation、xUnit v3、FluentAssertions、Testcontainers（postgres:17-alpine）。
 
 - 設計文件：[`docs/superpowers/specs/2026-10-19-tags-backend-design.md`](../specs/2026-10-19-tags-backend-design.md)（G 編號來自 grilling，D 編號來自 spec）
-- ADR：[`0011`](../../adr/0011-tags-are-multi-select-and-not-additive.md)；`CONTEXT.md` 的「標籤」「標籤統計」**已在撰寫 spec 時一併提交**，不必再做
+- ADR：[`0015`](../../adr/0015-tags-are-multi-select-and-not-additive.md)；`CONTEXT.md` 的「標籤」「標籤統計」**已在撰寫 spec 時一併提交**，不必再做
 - 後續計畫：[`2026-10-19-tags-frontend.md`](2026-10-19-tags-frontend.md)（本計畫的 checkpoint 全綠之後才能開工）
 
 ---
