@@ -1,5 +1,6 @@
 using FluentValidation;
 using MediatR;
+using Microsoft.EntityFrameworkCore;
 using SixJars.Application.Auditing;
 using SixJars.Application.Books;
 using SixJars.Application.Common;
@@ -41,8 +42,15 @@ internal sealed class PrependLegacyYearHandler(ISixJarsDbContext db, IAuditTrail
         var book = await db.GetBookForUpdateAsync(request.BookId, cancellationToken);
         var previousOpeningDate = book.OpeningDate;
 
-        // 2. 年度不相連（R2-Q1）：不必往下對應。
-        if (LegacyJunction.CheckYear(previousOpeningDate, request.Workbook.Settings.Year) is { } yearError)
+        // 2. 年度不相連（spec M1）：不必往下對應。開始年度看最早的歸屬月份（舊 Excel 依月表分年）。
+        var earliestBudgetMonth = await db.Transactions
+            .Where(t => t.BookId == book.Id)
+            .OrderBy(t => t.BudgetMonth)
+            .Select(t => t.BudgetMonth)
+            .Take(1)
+            .ToListAsync(cancellationToken);
+        var bookStartYear = LegacyJunction.BookStartYear(previousOpeningDate, earliestBudgetMonth.Count > 0 ? earliestBudgetMonth[0] : null);
+        if (LegacyJunction.CheckYear(bookStartYear, request.Workbook.Settings.Year) is { } yearError)
         {
             var report = new ImportReport();
             report.AddError(LegacyJunction.Sheet, 0, yearError);

@@ -23,15 +23,18 @@ public static class LegacyJunction
     /// <summary>檢查錯誤沒有來源列號，一律記在這個虛擬工作表第 0 列。</summary>
     public const string Sheet = "銜接檢查";
 
-    /// <summary>年度必須剛好是帳本開始那年的前一年（R2-Q1）；回傳錯誤訊息，通過時為 null。對應前呼叫，不符就不必往下。</summary>
-    public static string? CheckYear(DateOnly bookOpeningDate, int excelYear)
-    {
-        // 期初日是開始記帳的前一天，所以帳本開始的年度是期初日的隔天。
-        var expectedYear = bookOpeningDate.AddDays(1).Year - 1;
-        return excelYear == expectedYear
+    /// <summary>
+    /// 帳本開始的年度（spec M1）：最早一筆交易的歸屬月份的年度。舊 Excel 依月表分年，
+    /// 12/31 入帳、歸屬隔年 1 月的交易很常見，看日期會錯判。帳本沒有交易時，以期初日的隔天（帳本第一天）為準。
+    /// </summary>
+    public static int BookStartYear(DateOnly bookOpeningDate, BudgetMonth? earliestBudgetMonth) =>
+        earliestBudgetMonth?.Year ?? bookOpeningDate.AddDays(1).Year;
+
+    /// <summary>年度必須剛好是帳本開始那年的前一年（spec M1）；回傳錯誤訊息，通過時為 null。對應前呼叫，不符就不必往下。</summary>
+    public static string? CheckYear(int bookStartYear, int excelYear) =>
+        excelYear == bookStartYear - 1
             ? null
-            : $"舊帳本是 {excelYear} 年，帳本期初日是 {bookOpeningDate:yyyy-MM-dd}，只能補匯 {expectedYear} 年。";
-    }
+            : $"舊帳本是 {excelYear} 年，帳本從 {bookStartYear} 年開始，只能補匯 {bookStartYear - 1} 年。";
 
     /// <summary>
     /// 日期檢查與銜接檢查；錯誤寫進 <paramref name="report"/>，回傳每個帳戶與財務規劃帳戶的摘要。
@@ -40,12 +43,14 @@ public static class LegacyJunction
     /// <param name="bookOpeningDate">對應前的帳本期初日。</param>
     public static IReadOnlyList<JunctionLine> Check(Book book, DateOnly bookOpeningDate, LegacyPrependMapping mapping, ImportReport report)
     {
-        // R2-Q5：舊年度的交易都要落在帳本期初日（含）之前，否則與既有交易重疊。
-        foreach (var transaction in mapping.Transactions.Where(t => t.Date > bookOpeningDate))
+        // spec M2：舊年度的交易都要落在帳本第一天（含）之前。第一天起每天的餘額都會把它們全數計入，
+        // 加上下面的銜接檢查，餘額必然不變；晚於第一天的交易會讓第一天起的某些天少算。
+        var firstDay = bookOpeningDate.AddDays(1);
+        foreach (var transaction in mapping.Transactions.Where(t => t.Date > firstDay))
         {
             var source = mapping.Sources[transaction.Id];
             report.AddError(source.Sheet, source.Row,
-                $"日期 {transaction.Date:yyyy-MM-dd}（金額 {transaction.Amount:#,0.##}）晚於帳本期初日 {bookOpeningDate:yyyy-MM-dd}，會與帳本既有的交易重疊。");
+                $"日期 {transaction.Date:yyyy-MM-dd}（金額 {transaction.Amount:#,0.##}）晚於帳本第一天 {firstDay:yyyy-MM-dd}，會改變帳本既有的餘額。");
         }
 
         // 與 BalanceCalculator 相同的算法：帳戶加總分錄，財務規劃帳戶加總 FundDelta。

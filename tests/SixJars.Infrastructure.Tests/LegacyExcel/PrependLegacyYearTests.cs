@@ -25,8 +25,9 @@ public class PrependLegacyYearTests(PostgresFixture postgres)
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
     /// <summary>2026：薪資、中餐、已付的電話費（同時產生一筆預定支出）。</summary>
-    private static LegacyWorkbook Workbook2026() => Workbook(Month(1,
-        journal: [Row(7, Jan6, "國泰世華銀行", "工作薪資1", null, 84223m), Row(8, Jan6, "現金", "主食", "中餐", -80m)],
+    /// <param name="salaryDate">薪資日期；2025-12-31 模擬真實記帳本「1 月表第一筆是前一年 12/31」。</param>
+    private static LegacyWorkbook Workbook2026(DateOnly? salaryDate = null) => Workbook(Month(1,
+        journal: [Row(7, salaryDate ?? Jan6, "國泰世華銀行", "工作薪資1", null, 84223m), Row(8, Jan6, "現金", "主食", "中餐", -80m)],
         templates: [new(52, LegacyTemplateSection.Fixed, "行動電話費", "國泰世華銀行", -599m, new DateOnly(2026, 1, 16), null)]));
 
     /// <summary>
@@ -45,9 +46,11 @@ public class PrependLegacyYearTests(PostgresFixture postgres)
                 CreditCards = cards ?? [new("國泰Combo卡", 22668m)],
             },
             [new("主食", ["早餐", "中餐", "晚餐", "宵夜", "點心"]), new("金融交易", ["手續費"])],
-            [Month(snackDate is null ? 3 : 12,
-                journal: [Row(7, snackDate ?? new DateOnly(2025, 3, 5), "國泰世華銀行", "主食", "點心", -80m)],
-                templates: [new(52, LegacyTemplateSection.Fixed, "行動電話費", "國泰世華銀行", -599m, new DateOnly(2025, 3, 16), null)])]);
+            // 指定 snackDate 時點心放在 12 月表；電話費固定在 3 月表（放進 12 月表會被 LegacyDateNormalizer 改成隔年）。
+            [Month(3,
+                journal: snackDate is null ? [Row(7, new DateOnly(2025, 3, 5), "國泰世華銀行", "主食", "點心", -80m)] : [],
+                templates: [new(52, LegacyTemplateSection.Fixed, "行動電話費", "國泰世華銀行", -599m, new DateOnly(2025, 3, 16), null)]),
+             .. snackDate is { } date ? [Month(12, journal: [Row(7, date, "國泰世華銀行", "主食", "點心", -80m)])] : Array.Empty<LegacyMonthSheet>()]);
 
     private static PrependLegacyYear Prepend(Guid bookId, LegacyWorkbook workbook, bool dryRun = false) =>
         new(workbook, @"C:\Users\someone\私人資料夾\2025記帳.xlsm", bookId, dryRun);
@@ -128,17 +131,38 @@ public class PrependLegacyYearTests(PostgresFixture postgres)
         (await StateAsync(host)).Should().BeEquivalentTo(before, o => o.WithStrictOrdering());
     }
 
+    /// <summary>
+    /// spec M1、M2：帳本第一筆是 12/31（歸屬 1 月）時，期初日是 12/30；開始年度仍是 2026，
+    /// 舊年度 12 月表 12/31 的交易落在帳本第一天，可以接上，且第一天起每天的餘額不變。
+    /// </summary>
     [Fact]
-    public async Task Transaction_after_the_book_opening_date_writes_nothing()
+    public async Task Book_starting_on_december_31_accepts_the_previous_year_including_december_31()
+    {
+        await using var host = await LegacyImportHost.CreateAsync(postgres);
+        var bookId = await ImportBookAsync(host, Workbook2026(salaryDate: new DateOnly(2025, 12, 31)));
+        var firstDay = new DateOnly(2025, 12, 31);
+        var before = await DailyBalancesAsync(host, bookId, from: firstDay);
+
+        var result = await host.SendAsync(Prepend(bookId, Workbook2025(snackDate: firstDay)));
+
+        result.Report.Errors.Should().BeEmpty();
+        result.Written.Should().BeTrue();
+        result.PreviousOpeningDate.Should().Be(new DateOnly(2025, 12, 30));
+        (await DailyBalancesAsync(host, bookId, before.Keys, from: firstDay)).Should().Equal(before);
+    }
+
+    [Fact]
+    public async Task Transaction_after_the_first_book_day_writes_nothing()
     {
         await using var host = await LegacyImportHost.CreateAsync(postgres);
         var bookId = await ImportBookAsync(host);
         var before = await StateAsync(host);
 
-        var result = await host.SendAsync(Prepend(bookId, Workbook2025(snackDate: Jan6)));
+        // 帳本第一天是 1/6；1/7 晚於第一天。
+        var result = await host.SendAsync(Prepend(bookId, Workbook2025(snackDate: new DateOnly(2026, 1, 7))));
 
         result.Written.Should().BeFalse();
-        result.Report.Errors.Should().Contain(i => i.Message.Contains("2026-01-06"));
+        result.Report.Errors.Should().Contain(i => i.Message.Contains("2026-01-07"));
         (await StateAsync(host)).Should().BeEquivalentTo(before, o => o.WithStrictOrdering());
     }
 
@@ -252,21 +276,22 @@ public class PrependLegacyYearTests(PostgresFixture postgres)
         doc.RootElement.GetProperty("planningFunds").GetArrayLength().Should().Be(0);
     }
 
-    private static async Task<Guid> ImportBookAsync(LegacyImportHost host)
+    private static async Task<Guid> ImportBookAsync(LegacyImportHost host, LegacyWorkbook? workbook = null)
     {
-        var result = await host.SendAsync(new ImportLegacyBook(Workbook2026(), "2026帳本v3.xlsm", "我們家的帳本", "owner@example.com", DryRun: false));
+        var result = await host.SendAsync(new ImportLegacyBook(workbook ?? Workbook2026(), "2026帳本v3.xlsm", "我們家的帳本", "owner@example.com", DryRun: false));
         result.Report.Errors.Should().BeEmpty();
         return result.BookId!.Value;
     }
 
-    /// <summary>2026 每一天（期初日隔天到月底）每個帳戶與財務規劃帳戶的餘額。</summary>
-    private static async Task<Dictionary<string, decimal>> DailyBalancesAsync(LegacyImportHost host, Guid bookId, IEnumerable<string>? keys = null)
+    /// <summary>帳本第一天（預設 1/6）到 1/31，每一天每個帳戶與財務規劃帳戶的餘額。</summary>
+    private static async Task<Dictionary<string, decimal>> DailyBalancesAsync(
+        LegacyImportHost host, Guid bookId, IEnumerable<string>? keys = null, DateOnly? from = null)
     {
         await using var db = host.Open();
         var ledger = await new LedgerSnapshotLoader(db).LoadAsync(new BookId(bookId), Ct);
         var calculator = new BalanceCalculator(ledger);
         var balances = new Dictionary<string, decimal>();
-        for (var date = BookOpening.AddDays(1); date <= new DateOnly(2026, 1, 31); date = date.AddDays(1))
+        for (var date = from ?? BookOpening.AddDays(1); date <= new DateOnly(2026, 1, 31); date = date.AddDays(1))
         {
             foreach (var account in ledger.Book.Accounts)
             {

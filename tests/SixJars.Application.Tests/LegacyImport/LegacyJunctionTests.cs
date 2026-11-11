@@ -1,6 +1,7 @@
 using FluentAssertions;
 using SixJars.Application.LegacyImport;
 using SixJars.Domain.Books;
+using SixJars.Domain.Common;
 using Xunit;
 using static SixJars.Application.Tests.LegacyImport.LegacyWorkbookFactory;
 
@@ -36,18 +37,29 @@ public class LegacyJunctionTests
         return (mapping, LegacyJunction.Check(_book, openingDate, mapping, mapping.Report));
     }
 
+    /// <summary>M1：帳本開始年度看最早的歸屬月份；12/31 入帳、歸屬隔年 1 月的交易不會讓年度錯判。</summary>
     [Theory]
-    [InlineData("2025-12-31", 2025)]
-    [InlineData("2026-10-18", 2025)]
-    public void Year_right_before_the_book_passes(string openingDate, int excelYear) =>
-        LegacyJunction.CheckYear(DateOnly.Parse(openingDate), excelYear).Should().BeNull();
+    [InlineData("2025-12-30", 202601, 2026)]
+    [InlineData("2025-12-30", 202512, 2025)]
+    [InlineData("2026-10-18", 202610, 2026)]
+    public void Book_start_year_is_the_year_of_the_earliest_budget_month(string openingDate, int earliestBudgetMonth, int expected) =>
+        LegacyJunction.BookStartYear(DateOnly.Parse(openingDate), BudgetMonth.FromKey(earliestBudgetMonth)).Should().Be(expected);
 
     [Theory]
-    [InlineData("2025-12-31", 2024)]
     [InlineData("2025-12-31", 2026)]
-    [InlineData("2026-10-18", 2026)]
-    public void Year_not_right_before_the_book_is_an_error(string openingDate, int excelYear) =>
-        LegacyJunction.CheckYear(DateOnly.Parse(openingDate), excelYear).Should().Contain(excelYear.ToString());
+    [InlineData("2025-12-30", 2025)]
+    public void Book_without_transactions_starts_the_day_after_the_opening_date(string openingDate, int expected) =>
+        LegacyJunction.BookStartYear(DateOnly.Parse(openingDate), null).Should().Be(expected);
+
+    [Fact]
+    public void Year_right_before_the_book_passes() =>
+        LegacyJunction.CheckYear(2026, 2025).Should().BeNull();
+
+    [Theory]
+    [InlineData(2024)]
+    [InlineData(2026)]
+    public void Year_not_right_before_the_book_is_an_error(int excelYear) =>
+        LegacyJunction.CheckYear(2026, excelYear).Should().Contain(excelYear.ToString()).And.Contain("2025");
 
     [Fact]
     public void Matching_junction_has_no_errors_and_summarises_each_account()
@@ -89,13 +101,22 @@ public class LegacyJunctionTests
         mapping.Report.Errors.Should().BeEmpty();
     }
 
+    /// <summary>M2：帳本第一天（期初日 + 1）的交易，第一天起每天都會全數計入，餘額不變。</summary>
     [Fact]
-    public void Transaction_after_the_book_opening_date_is_an_error()
+    public void Transaction_on_the_first_book_day_passes()
     {
         var (mapping, _) = Check(Workbook2025(date: new DateOnly(2026, 1, 1)));
 
+        mapping.Report.Errors.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Transaction_after_the_first_book_day_is_an_error()
+    {
+        var (mapping, _) = Check(Workbook2025(date: new DateOnly(2026, 1, 2)));
+
         // spec 處理流程第 4 步：錯誤帶來源的工作表與列號，使用者才能回到 Excel 找到那一列。
-        mapping.Report.Errors.Should().ContainSingle(i => i.Sheet == "12月" && i.Row == 7 && i.Message.Contains("2026-01-01"));
+        mapping.Report.Errors.Should().ContainSingle(i => i.Sheet == "12月" && i.Row == 7 && i.Message.Contains("2026-01-02"));
     }
 
     [Fact]
