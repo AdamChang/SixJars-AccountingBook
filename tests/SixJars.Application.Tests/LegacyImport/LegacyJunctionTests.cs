@@ -30,11 +30,11 @@ public class LegacyJunctionTests
         new(settings ?? Settings2025(), Floating(),
             [Month(date is null ? 3 : 12, journal: [Row(7, date ?? new DateOnly(2025, 3, 5), "國泰世華銀行", "主食", "早餐", -80m)])]);
 
-    private (LegacyPrependMapping Mapping, IReadOnlyList<JunctionLine> Lines) Check(LegacyWorkbook workbook)
+    private (LegacyPrependMapping Mapping, IReadOnlyList<JunctionLine> Lines) Check(LegacyWorkbook workbook, bool allowAdjustments = false)
     {
         var openingDate = _book.OpeningDate;
         var mapping = LegacyWorkbookMapper.MapInto(workbook, _book);
-        return (mapping, LegacyJunction.Check(_book, openingDate, mapping, mapping.Report));
+        return (mapping, LegacyJunction.Check(_book, openingDate, mapping, mapping.Report, allowAdjustments));
     }
 
     /// <summary>M1：帳本開始年度看最早的歸屬月份；12/31 入帳、歸屬隔年 1 月的交易不會讓年度錯判。</summary>
@@ -166,5 +166,56 @@ public class LegacyJunctionTests
         foreign.CurrentOpening.Should().BeNull();
         foreign.Difference.Should().BeNull();
         foreign.ExpectedOpening.Should().Be(16365m);
+    }
+
+    /// <summary>spec M3-3：同意調整時，既有項目的差額不是錯誤，改成調整（應有期初 − 推算期末）。</summary>
+    [Fact]
+    public void Difference_with_adjustments_becomes_an_adjustment()
+    {
+        var (mapping, lines) = Check(Workbook2025(Settings2025(
+            banks: [new("國泰世華銀行", 21691m), new("華南銀行", 11637m), new("國泰投資帳戶", 20m), new("國泰外幣帳戶", 16365m)],
+            funds: [new("財務自由帳戶", 9000m), new("外幣現金", 10000m)])), allowAdjustments: true);
+
+        mapping.Report.Errors.Should().BeEmpty();
+        lines.Single(l => l.Name == "國泰世華銀行").Should().BeEquivalentTo(new { Difference = (decimal?)1m, Adjustment = -1m });
+        lines.Single(l => l.Name == "財務自由帳戶").Adjustment.Should().Be(874.3m);
+        lines.Single(l => l.Name == "華南銀行").Adjustment.Should().Be(0m);
+    }
+
+    [Fact]
+    public void Previous_year_only_account_with_adjustments_is_adjusted_to_zero()
+    {
+        var (mapping, lines) = Check(Workbook2025(Settings2025(
+            banks: [new("國泰世華銀行", 21690m), new("華南銀行", 11637m), new("國泰投資帳戶", 20m), new("國泰外幣帳戶", 16365m), new("郵局", 500m)])),
+            allowAdjustments: true);
+
+        mapping.Report.Errors.Should().BeEmpty();
+        lines.Single(l => l.Name == "郵局").Adjustment.Should().Be(-500m);
+    }
+
+    /// <summary>spec M3-3：設定漏列不是「期初沒接上」，同意調整也仍然是錯誤。</summary>
+    [Fact]
+    public void Account_only_in_book_with_movement_is_still_an_error_with_adjustments()
+    {
+        var workbook = new LegacyWorkbook(
+            Settings2025(banks: [new("國泰世華銀行", 21690m), new("華南銀行", 11637m), new("國泰投資帳戶", 20m)]), Floating(),
+            [Month(3, journal: [
+                Row(7, new DateOnly(2025, 3, 5), "國泰世華銀行", "主食", "早餐", -80m),
+                Row(8, new DateOnly(2025, 3, 6), "國泰外幣帳戶", "主食", "中餐", -500m)])]);
+
+        var (mapping, lines) = Check(workbook, allowAdjustments: true);
+
+        mapping.Report.Errors.Should().ContainSingle(i => i.Message.Contains("國泰外幣帳戶"));
+        lines.Should().OnlyContain(l => l.Adjustment == 0m);
+    }
+
+    [Fact]
+    public void Without_adjustments_lines_carry_no_adjustment()
+    {
+        var (mapping, lines) = Check(Workbook2025(Settings2025(
+            banks: [new("國泰世華銀行", 21691m), new("華南銀行", 11637m), new("國泰投資帳戶", 20m), new("國泰外幣帳戶", 16365m)])));
+
+        mapping.Report.Errors.Should().ContainSingle();
+        lines.Should().OnlyContain(l => l.Adjustment == 0m);
     }
 }

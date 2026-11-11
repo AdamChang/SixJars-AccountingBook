@@ -7,6 +7,7 @@ using SixJars.Application.LegacyImport;
 using SixJars.Domain.Books;
 using SixJars.Domain.Common;
 using SixJars.Domain.Ledger;
+using SixJars.Domain.Transactions;
 using SixJars.Infrastructure.Persistence;
 using SixJars.Tests.Shared;
 using Xunit;
@@ -38,11 +39,13 @@ public class PrependLegacyYearTests(PostgresFixture postgres)
         int year = 2025,
         decimal bankOpening = 22289m,
         DateOnly? snackDate = null,
-        IReadOnlyList<LegacyNamedAmount>? cards = null) =>
-        new(Settings() with
+        IReadOnlyList<LegacyNamedAmount>? cards = null,
+        decimal postOfficeOpening = 0m,
+        IReadOnlyList<LegacyNamedAmount>? funds = null) =>
+        new(Settings(funds: funds) with
             {
                 Year = year,
-                Banks = [new("國泰世華銀行", bankOpening), new("華南銀行", 11637m), new("國泰投資帳戶", 20m), new("國泰外幣帳戶", 16365m), new("郵局", 0m)],
+                Banks = [new("國泰世華銀行", bankOpening), new("華南銀行", 11637m), new("國泰投資帳戶", 20m), new("國泰外幣帳戶", 16365m), new("郵局", postOfficeOpening)],
                 CreditCards = cards ?? [new("國泰Combo卡", 22668m)],
             },
             [new("主食", ["早餐", "中餐", "晚餐", "宵夜", "點心"]), new("金融交易", ["手續費"])],
@@ -52,8 +55,59 @@ public class PrependLegacyYearTests(PostgresFixture postgres)
                 templates: [new(52, LegacyTemplateSection.Fixed, "行動電話費", "國泰世華銀行", -599m, new DateOnly(2025, 3, 16), null)]),
              .. snackDate is { } date ? [Month(12, journal: [Row(7, date, "國泰世華銀行", "主食", "點心", -80m)])] : Array.Empty<LegacyMonthSheet>()]);
 
-    private static PrependLegacyYear Prepend(Guid bookId, LegacyWorkbook workbook, bool dryRun = false) =>
-        new(workbook, @"C:\Users\someone\私人資料夾\2025記帳.xlsm", bookId, dryRun);
+    private static PrependLegacyYear Prepend(Guid bookId, LegacyWorkbook workbook, bool dryRun = false, bool adjust = false) =>
+        new(workbook, @"C:\Users\someone\私人資料夾\2025記帳.xlsm", bookId, dryRun, adjust);
+
+    /// <summary>
+    /// spec M3：同意調整時，差額在原期初日（1/5）以餘額調整補齊：國泰世華銀行多 1 元、財務自由帳戶少 874.3、
+    /// 只在 2025 出現的郵局期末 500 → 調整到 0 後封存。之後每天的餘額不變，2025 的期初仍是 Excel 的值。
+    /// </summary>
+    [Fact]
+    public async Task Adjust_fills_differences_on_the_old_opening_date_and_keeps_every_later_balance()
+    {
+        await using var host = await LegacyImportHost.CreateAsync(postgres);
+        var bookId = await ImportBookAsync(host);
+        var before = await DailyBalancesAsync(host, bookId);
+
+        var result = await host.SendAsync(Prepend(bookId,
+            Workbook2025(bankOpening: 22290m, postOfficeOpening: 500m, funds: [new("財務自由帳戶", 9000m), new("外幣現金", 10000m)]), adjust: true));
+
+        result.Report.Errors.Should().BeEmpty();
+        result.Written.Should().BeTrue();
+        result.Adjustments.Should().Be(3);
+        await using var db = host.Open();
+        var book = await db.Books.SingleAsync(Ct);
+        book.FindAccount("國泰世華銀行")!.OpeningBalance.Should().Be(22290m);
+        book.FindAccount("郵局")!.IsArchived.Should().BeTrue();
+        var adjustments = await db.Transactions.Where(t => t.Kind == TransactionKind.BalanceAdjustment).ToListAsync(Ct);
+        adjustments.Should().HaveCount(3).And.OnlyContain(t => t.Date == BookOpening && t.BudgetMonth == new BudgetMonth(2025, 12));
+        adjustments.Should().ContainSingle(t => t.AccountId == book.FindAccount("國泰世華銀行")!.Id && t.Amount == -1m);
+        adjustments.Should().ContainSingle(t => t.AccountId == book.FindAccount("郵局")!.Id && t.Amount == -500m);
+        var fund = adjustments.Should().ContainSingle(t => t.PlanningFundId == book.FindPlanningFund("財務自由帳戶")!.Id).Subject;
+        fund.Amount.Should().Be(874.3m);
+        fund.Postings.Should().BeEmpty();
+        fund.AccountId.Should().Be(book.FindAccount("現金")!.Id);
+        (await DailyBalancesAsync(host, bookId, before.Keys)).Should().Equal(before);
+
+        var import = (await db.AuditEntries.ToListAsync(Ct)).Single(e => e.After!.Contains("previousOpeningDate"));
+        using var after = JsonDocument.Parse(import.After!);
+        after.RootElement.GetProperty("adjustments").GetArrayLength().Should().Be(3);
+    }
+
+    [Fact]
+    public async Task Differences_without_adjust_still_write_nothing()
+    {
+        await using var host = await LegacyImportHost.CreateAsync(postgres);
+        var bookId = await ImportBookAsync(host);
+        var before = await StateAsync(host);
+
+        var result = await host.SendAsync(Prepend(bookId, Workbook2025(postOfficeOpening: 500m)));
+
+        result.Written.Should().BeFalse();
+        result.Adjustments.Should().Be(0);
+        result.Report.Errors.Should().ContainSingle(i => i.Message.Contains("郵局"));
+        (await StateAsync(host)).Should().BeEquivalentTo(before, o => o.WithStrictOrdering());
+    }
 
     [Fact]
     public async Task Successful_prepend_moves_openings_and_keeps_every_later_balance()
@@ -214,7 +268,8 @@ public class PrependLegacyYearTests(PostgresFixture postgres)
 
         var real = await host.SendAsync(Prepend(bookId, Workbook2025()));
 
-        dryRun.Should().BeEquivalentTo(real, o => o.Excluding(r => r.Written).WithStrictOrdering());
+        // 只在舊年度出現的項目（郵局）每次對應都會拿到新的 Id，所以不比 Id。
+        dryRun.Should().BeEquivalentTo(real, o => o.Excluding(r => r.Written).For(r => r.Junction).Exclude(l => l.Id).WithStrictOrdering());
     }
 
     [Fact]
