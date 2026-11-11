@@ -1,8 +1,10 @@
 using System.CommandLine;
 using System.Data.Common;
+using System.Globalization;
 using System.Text.Json;
 using FluentValidation;
 using MediatR;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using SixJars.Application;
 using SixJars.Application.Backup;
@@ -53,59 +55,131 @@ public static class CliApp
         return root.Parse(args).InvokeAsync(new InvocationConfiguration { Output = output, Error = output }, cancellationToken);
     }
 
-    /// <summary>報告的錯誤、警告與修正逐條印出；有錯誤時 exit code 為 1，而且沒有寫入任何資料。</summary>
+    /// <summary>
+    /// 兩種模式：匯入成新帳本（<c>--book-name</c>＋<c>--owner-email</c>），或補匯舊年度到既有帳本最前面（<c>--into</c>，spec R2-Q4）。
+    /// 報告的錯誤、警告與修正逐條印出；有錯誤時 exit code 為 1，而且沒有寫入任何資料。
+    /// </summary>
     private static Command ImportLegacyCommand(Host host)
     {
         var file = new Option<FileInfo>("--file") { Description = "舊 Excel 記帳本（.xlsm）", Required = true };
-        var bookName = new Option<string>("--book-name") { Description = "新帳本的名稱；同一位擁有者已有同名帳本時拒絕匯入", Required = true };
-        var ownerEmail = new Option<string>("--owner-email") { Description = "擁有者的 Google email", Required = true };
+        var bookName = new Option<string>("--book-name") { Description = "新帳本的名稱；同一位擁有者已有同名帳本時拒絕匯入" };
+        var ownerEmail = new Option<string>("--owner-email") { Description = "擁有者的 Google email" };
+        var into = new Option<Guid?>("--into") { Description = "補匯舊年度：接到這本既有帳本的最前面（與 --book-name／--owner-email 互斥）" };
         var dryRun = new Option<bool>("--dry-run") { Description = "只轉換與檢查，印出報告與筆數，不寫入" };
-        var command = new Command("import-legacy", "把舊 Excel 記帳本匯入成一本新帳本（單一 DB transaction）。")
+        var command = new Command("import-legacy", "把舊 Excel 記帳本匯入成一本新帳本，或補匯舊年度到既有帳本（單一 DB transaction）。")
         {
-            file, bookName, ownerEmail, dryRun,
+            file, bookName, ownerEmail, into, dryRun,
         };
-        command.SetAction((parseResult, ct) => host.RunAsync(async (sender, output) =>
+        command.SetAction(async (parseResult, ct) =>
         {
+            var (name, email, target) = (parseResult.GetValue(bookName), parseResult.GetValue(ownerEmail), parseResult.GetValue(into));
+            var isNewBook = target is null && name is not null && email is not null;
+            var isInto = target is not null && name is null && email is null;
+            if (!isNewBook && !isInto)
+            {
+                // 兩種模式互斥：不用 Required，改在這裡檢查，才能同時表達「擇一」與「不可混用」；不需要連線字串就能判斷。
+                await host.Output.WriteLineAsync("錯誤：請指定 --into <帳本 Id>，或同時指定 --book-name 與 --owner-email；兩種模式不能混用。");
+                return 1;
+            }
+
             var source = parseResult.GetValue(file)!;
-            if (!source.Exists)
-            {
-                await output.WriteLineAsync($"錯誤：找不到檔案 {source.FullName}。");
-                return 1;
-            }
-
-            LegacyWorkbook workbook;
-            await using (var stream = source.OpenRead())
-            {
-                workbook = await new ExcelLegacyWorkbookReader().ReadAsync(stream, ct);
-            }
-
             var isDryRun = parseResult.GetValue(dryRun);
-            var result = await sender.Send(
-                new ImportLegacyBook(workbook, source.Name, parseResult.GetValue(bookName)!, parseResult.GetValue(ownerEmail)!, isDryRun), ct);
-            await WriteReportAsync(output, result.Report);
-
-            if (result.Report.Errors.Count > 0)
+            return await host.RunAsync(async (IServiceProvider services, TextWriter output) =>
             {
-                await output.WriteLineAsync($"匯入報告有 {result.Report.Errors.Count} 個錯誤，沒有寫入任何資料。");
-                return 1;
-            }
+                if (!source.Exists)
+                {
+                    await output.WriteLineAsync($"錯誤：找不到檔案 {source.FullName}。");
+                    return 1;
+                }
 
-            var counts = $"交易 {result.Transactions} 筆、預定支出 {result.PlannedExpenses} 筆、警告 {result.Report.Warnings.Count} 個";
-            await output.WriteLineAsync(isDryRun
-                ? $"dry run：可以匯入（{counts}），沒有寫入任何資料。"
-                : $"已匯入帳本 {result.BookId}（{counts}）；擁有者第一次以 Google 登入時綁定帳號。");
-            return 0;
-        }, ct));
+                LegacyWorkbook workbook;
+                await using (var stream = source.OpenRead())
+                {
+                    workbook = await services.GetRequiredService<ILegacyWorkbookReader>().ReadAsync(stream, ct);
+                }
+
+                var sender = services.GetRequiredService<ISender>();
+                return isInto
+                    ? await PrependAsync(sender, output, new PrependLegacyYear(workbook, source.Name, target!.Value, isDryRun), ct)
+                    : await ImportNewBookAsync(sender, output, new ImportLegacyBook(workbook, source.Name, name!, email!, isDryRun), ct);
+            }, ct);
+        });
         return command;
     }
 
+    private static async Task<int> ImportNewBookAsync(ISender sender, TextWriter output, ImportLegacyBook request, CancellationToken ct)
+    {
+        var result = await sender.Send(request, ct);
+        await WriteReportAsync(output, result.Report);
+
+        if (result.Report.Errors.Count > 0)
+        {
+            await output.WriteLineAsync($"匯入報告有 {result.Report.Errors.Count} 個錯誤，沒有寫入任何資料。");
+            return 1;
+        }
+
+        var counts = $"交易 {result.Transactions} 筆、預定支出 {result.PlannedExpenses} 筆、警告 {result.Report.Warnings.Count} 個";
+        await output.WriteLineAsync(request.DryRun
+            ? $"dry run：可以匯入（{counts}），沒有寫入任何資料。"
+            : $"已匯入帳本 {result.BookId}（{counts}）；擁有者第一次以 Google 登入時綁定帳號。");
+        return 0;
+    }
+
+    /// <summary>補匯舊年度：報告之後印出期初日的變化與銜接摘要（spec「報告」），讓使用者看出哪個帳戶對不起來。</summary>
+    private static async Task<int> PrependAsync(ISender sender, TextWriter output, PrependLegacyYear request, CancellationToken ct)
+    {
+        PrependLegacyYearResult result;
+        try
+        {
+            result = await sender.Send(request, ct);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // spec D2：衝突機率極低，不加鎖，請使用者重跑。
+            await output.WriteLineAsync("錯誤：補匯期間帳本被修改（例如有人同時在 Web 改設定），沒有寫入任何資料；請重新執行。");
+            return 1;
+        }
+
+        await WriteReportAsync(output, result.Report);
+        if (result.Junction.Count > 0)
+        {
+            await output.WriteLineAsync($"期初日：{result.PreviousOpeningDate:yyyy-MM-dd} → {result.NewOpeningDate:yyyy-MM-dd}");
+            await output.WriteLineAsync("銜接摘要（名稱｜舊年度期初｜變動｜推算期末｜帳本期初｜差額）：");
+            foreach (var line in result.Junction)
+            {
+                var difference = line.Difference is { } d ? Amount(d) : "不檢查";
+                await output.WriteLineAsync(
+                    $"  {(line.IsPlanningFund ? "[財務規劃] " : "")}{line.Name}｜{Amount(line.PreviousOpening)}｜{Amount(line.Movement)}｜" +
+                    $"{Amount(line.PreviousClosing)}｜{Amount(line.ExpectedOpening)}｜{difference}");
+            }
+        }
+
+        if (result.Report.Errors.Count > 0)
+        {
+            await output.WriteLineAsync($"補匯報告有 {result.Report.Errors.Count} 個錯誤，沒有寫入任何資料。");
+            return 1;
+        }
+
+        var counts = $"交易 {result.Transactions} 筆、預定支出 {result.PlannedExpenses} 筆、" +
+            $"新增並封存帳戶 {result.ArchivedAccounts} 個、財務規劃帳戶 {result.ArchivedPlanningFunds} 個、分類 {result.ArchivedCategories} 個、" +
+            $"警告 {result.Report.Warnings.Count} 個";
+        await output.WriteLineAsync(request.DryRun
+            ? $"dry run：可以補匯（{counts}），沒有寫入任何資料。"
+            : $"已把 {request.FileName} 補匯到帳本 {request.BookId}（{counts}）。");
+        return 0;
+    }
+
+    private static string Amount(decimal value) => value.ToString("#,0.##", CultureInfo.InvariantCulture);
+
+    /// <summary>沒有來源列號的項目（設定、銜接檢查）Row 為 0，不印「第 0 列」。</summary>
     private static async Task WriteReportAsync(TextWriter output, ImportReport report)
     {
         foreach (var (label, issues) in new[] { ("錯誤", report.Errors), ("警告", report.Warnings), ("修正", report.Corrections) })
         {
             foreach (var issue in issues)
             {
-                await output.WriteLineAsync($"[{label}] {issue.Sheet} 第 {issue.Row} 列：{issue.Message}");
+                var location = issue.Row == 0 ? issue.Sheet : $"{issue.Sheet} 第 {issue.Row} 列";
+                await output.WriteLineAsync($"[{label}] {location}：{issue.Message}");
             }
         }
     }
@@ -211,7 +285,13 @@ public static class CliApp
     /// <summary>每個子命令各建立一次 DI container 與 scope，執行完就釋放。</summary>
     private sealed class Host(IReadOnlyDictionary<string, string?> environment, TextWriter output, Action<IServiceCollection>? testServices)
     {
-        public async Task<int> RunAsync(Func<ISender, TextWriter, Task<int>> action, CancellationToken cancellationToken)
+        public TextWriter Output => output;
+
+        public Task<int> RunAsync(Func<ISender, TextWriter, Task<int>> action, CancellationToken cancellationToken) =>
+            RunAsync((IServiceProvider services, TextWriter writer) => action(services.GetRequiredService<ISender>(), writer), cancellationToken);
+
+        /// <summary>需要 <see cref="ISender"/> 以外服務的子命令（例如 Excel 讀取，測試可以換成假的）。</summary>
+        public async Task<int> RunAsync(Func<IServiceProvider, TextWriter, Task<int>> action, CancellationToken cancellationToken)
         {
             if (!environment.TryGetValue(ConnectionStringVariable, out var connectionString) || string.IsNullOrWhiteSpace(connectionString))
             {
@@ -226,13 +306,14 @@ public static class CliApp
             services.AddSixJarsInfrastructure(connectionString);
             services.AddSingleton<ICurrentUser, CliCurrentUser>();
             services.AddSingleton(TimeProvider.System);
+            services.AddSingleton<ILegacyWorkbookReader, ExcelLegacyWorkbookReader>();
             testServices?.Invoke(services);
 
             await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
             await using var scope = provider.CreateAsyncScope();
             try
             {
-                return await action(scope.ServiceProvider.GetRequiredService<ISender>(), output);
+                return await action(scope.ServiceProvider, output);
             }
             catch (ValidationException ex)
             {

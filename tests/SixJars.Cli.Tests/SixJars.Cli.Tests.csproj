@@ -16,5 +16,6 @@
   <ItemGroup>
     <Compile Include="..\Shared\**\*.cs" Exclude="..\Shared\Api*.cs;..\Shared\TestAuthHandler.cs" LinkBase="Shared" />
     <Compile Include="..\SixJars.Api.Tests\FixedTimeProvider.cs" Link="Shared\FixedTimeProvider.cs" />
+    <Compile Include="..\SixJars.Application.Tests\LegacyImport\LegacyWorkbookFactory.cs" Link="Shared\LegacyWorkbookFactory.cs" />
   </ItemGroup>
 </Project>
