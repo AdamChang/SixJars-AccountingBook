@@ -3,6 +3,7 @@ using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
+using Npgsql;
 using SixJars.Api.Tests;
 using SixJars.Application;
 using SixJars.Application.Common;
@@ -60,7 +61,19 @@ internal sealed class LegacyImportHost(ServiceProvider provider, string connecti
         (await db.AuditEntries.CountAsync(Ct)).Should().Be(0);
     }
 
-    public ValueTask DisposeAsync() => provider.DisposeAsync();
+    /// <summary>
+    /// 每個測試一個資料庫，閒置連線池會累積到超過 max_connections（同 ApiFactory 的說明）。
+    /// app 用 <see cref="SixJarsConnectionString.ForNpgsql"/> 轉換後的字串，<see cref="Open()"/> 用原字串，兩個連線池都要清。
+    /// </summary>
+    public async ValueTask DisposeAsync()
+    {
+        await provider.DisposeAsync();
+        foreach (var pool in new[] { SixJarsConnectionString.ForNpgsql(connectionString), connectionString })
+        {
+            await using var connection = new NpgsqlConnection(pool);
+            NpgsqlConnection.ClearPool(connection);
+        }
+    }
 
     private sealed class FixedUser : ICurrentUser
     {
