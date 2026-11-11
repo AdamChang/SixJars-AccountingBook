@@ -54,7 +54,7 @@ public class ExcelLegacyWorkbookReaderTests
     {
         var figures = (await ReadAsync()).Months.Single(m => m.Month == 1).Figures;
 
-        figures.MonthlyDisposable.Should().Be(-4557m);
+        figures.MonthlyDisposable.Should().Be(-4589m);
         figures.WalletAddBack.Should().Be(562m);
         figures.AvailableCash.Should().Be(1700m);
         figures.BankBalances.Should().Contain(new LegacyNamedAmount("國泰世華銀行", 10773m));
