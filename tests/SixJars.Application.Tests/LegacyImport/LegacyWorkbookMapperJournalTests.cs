@@ -152,8 +152,19 @@ public class LegacyWorkbookMapperJournalTests
         tx.FundDelta.Should().Be(-23784m);
     }
 
+    /// <summary>v3 的副選單是子分類（放水流／吃魚喝茶）：名稱在支出子分類中唯一時對到它。</summary>
+    [Fact]
+    public void Negative_fund_row_with_unique_expense_sub_category_as_sub_is_withdrawal_with_that_category()
+    {
+        var result = MapJanuary(Row(157, Jan6, "國泰外幣帳戶", "財務自由帳戶", "中餐", -500m));
+
+        result.Report.Errors.Should().BeEmpty();
+        result.Transactions.Single().CategoryId.Should().Be(result.Book.FindCategory("主食", "中餐")!.Id);
+    }
+
     [Theory]
     [InlineData("工作薪資1", -100)]   // 收入分類不是出資金的分類
+    [InlineData("中獎", -100)]        // 收入子分類也不是
     [InlineData("主食", 100)]         // 正數不是出資金
     public void Fund_row_with_category_sub_is_rejected_otherwise(string sub, int amount)
     {

@@ -26,7 +26,7 @@ internal sealed partial class MappingSession
     /// <summary>先建立預定支出與交易，全部成功後才一起加入結果，避免留下「已付卻沒有連結交易」的預定支出。</summary>
     private void MapTemplateRow(LegacyMonthSheet month, LegacyTemplateRow row)
     {
-        var category = TemplateCategory(row);
+        var category = TemplateCategory(month, row);
         var account = row.Method is null ? null : ResolveAccount(row.Method);
         var planned = PlannedExpense.Create(_book, MonthOf(month), category.Id, account?.Id, row.Amount, row.Note);
 
@@ -53,6 +53,23 @@ internal sealed partial class MappingSession
         planned.MarkPaid(transaction);
         _transactions.Add(transaction);
         _plannedExpenses.Add(planned);
+    }
+
+    private Category TemplateCategory(LegacyMonthSheet month, LegacyTemplateRow row)
+    {
+        if (string.IsNullOrWhiteSpace(row.Item))
+        {
+            // 固定與貸款的項目就是子分類（貸款還要對到貸款帳戶），空白無法決定；特別支出可以只歸到主分類。
+            if (row.Section != LegacyTemplateSection.Special)
+            {
+                throw new RowRejected("項目空白，無法決定分類。");
+            }
+
+            _report.AddWarning(SheetName(month), row.Row, $"項目空白，歸到「{LegacyNames.SpecialExpense}」主分類。");
+            return RequireCategory(LegacyNames.SpecialExpense, null);
+        }
+
+        return TemplateCategory(row);
     }
 
     private Category TemplateCategory(LegacyTemplateRow row) => row.Section switch
