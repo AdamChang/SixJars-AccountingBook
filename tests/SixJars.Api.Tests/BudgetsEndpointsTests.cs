@@ -139,6 +139,43 @@ public class BudgetsEndpointsTests(PostgresFixture postgres)
         (await SetOverrideAsync(client, book, food, 202601, 0m)).Overrides.Should().Equal(new BudgetOverrideDto(202601, 0m));
     }
 
+    [Theory]
+    [InlineData(1)]
+    [InlineData(189912)]
+    [InlineData(300001)]
+    [InlineData(100000001)]
+    public async Task Override_with_unsupported_budget_year_is_400_and_stores_nothing(int budgetMonth)
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var book = await factory.SeedBookAsync(Ct);
+        var client = await factory.CreateMemberClientAsync();
+        var food = Food(book);
+
+        var set = await client.PutAsJsonAsync(Url(book, $"/{food}/overrides/{budgetMonth}"), new { amount = 1m }, ApiJson.Options, Ct);
+        var remove = await client.DeleteAsync(Url(book, $"/{food}/overrides/{budgetMonth}"), Ct);
+
+        set.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await SettingsMaintenanceEndpointsTests.ReadProblemAsync(set)).GetProperty("errors").TryGetProperty("budgetMonth", out _).Should().BeTrue();
+        // 沒有預算時，刪除的合法值會是 404；400 代表是 validator 先擋下，不是 handler 找不到。
+        remove.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        await using var scope = factory.Services.CreateAsyncScope();
+        (await scope.ServiceProvider.GetRequiredService<SixJarsDbContext>().CategoryBudgets.CountAsync(Ct)).Should().Be(0);
+    }
+
+    [Theory]
+    [InlineData(190001)]
+    [InlineData(299912)]
+    public async Task Override_with_boundary_budget_year_is_accepted(int budgetMonth)
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var book = await factory.SeedBookAsync(Ct);
+        var client = await factory.CreateMemberClientAsync();
+
+        var dto = await SetOverrideAsync(client, book, Food(book), budgetMonth, 100m);
+
+        dto.Overrides.Should().Equal(new BudgetOverrideDto(budgetMonth, 100m));
+    }
+
     [Fact]
     public async Task Locked_months_can_still_be_budgeted()
     {
@@ -241,6 +278,10 @@ public class BudgetsEndpointsTests(PostgresFixture postgres)
     [Theory]
     [InlineData("?budgetMonth=202600")]
     [InlineData("?budgetMonth=202613")]
+    [InlineData("?budgetMonth=1")]
+    [InlineData("?budgetMonth=189912")]
+    [InlineData("?budgetMonth=300001")]
+    [InlineData("?budgetMonth=100000001")]
     public async Task Invalid_budget_month_is_400(string query)
     {
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);

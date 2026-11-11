@@ -28,7 +28,7 @@ public sealed record BudgetSheetDto(IReadOnlyList<BudgetRowDto> Rows, BudgetTota
 internal sealed class GetBudgetsValidator : AbstractValidator<GetBudgets>
 {
     public GetBudgetsValidator() =>
-        RuleFor(q => q.BudgetMonth).Must(BudgetWrites.IsMonthKey).WithMessage(BudgetWrites.MonthKeyMessage);
+        RuleFor(q => q.BudgetMonth).MustBeBudgetMonthKey();
 }
 
 /// <summary>

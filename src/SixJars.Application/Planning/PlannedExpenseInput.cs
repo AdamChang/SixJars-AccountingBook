@@ -1,4 +1,5 @@
 using FluentValidation;
+using SixJars.Application.Common;
 
 namespace SixJars.Application.Planning;
 
@@ -13,9 +14,7 @@ public sealed class PlannedExpenseInputValidator : AbstractValidator<PlannedExpe
 {
     public PlannedExpenseInputValidator()
     {
-        RuleFor(i => i.BudgetMonth)
-            .Must(key => key % 100 is >= 1 and <= 12)
-            .WithMessage("歸屬月份必須是 yyyymm，月份介於 1 到 12。");
+        RuleFor(i => i.BudgetMonth).MustBeBudgetMonthKey();
         RuleFor(i => i.CategoryId).NotEmpty();
         RuleFor(i => i.AccountId).NotEmpty().When(i => i.AccountId is not null);
         RuleFor(i => i.Note).MaximumLength(500);

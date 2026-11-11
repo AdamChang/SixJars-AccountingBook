@@ -221,7 +221,7 @@ internal sealed class RestoreBackupHandler(ISixJarsDbContext db, IAuditTrail aud
             }
 
             var planned = PlannedExpense.Create(
-                book, BudgetMonth.FromKey(dto.BudgetMonth), new CategoryId(dto.CategoryId),
+                book, BudgetMonth.Create(dto.BudgetMonth), new CategoryId(dto.CategoryId),
                 dto.AccountId is { } accountId ? new AccountId(accountId) : null, dto.EstimatedAmount, dto.Note, new PlannedExpenseId(dto.Id),
                 sourceId);
 
@@ -271,7 +271,7 @@ internal sealed class RestoreBackupHandler(ISixJarsDbContext db, IAuditTrail aud
         {
             var item = RecurringPlannedExpense.Create(
                 book, new CategoryId(dto.CategoryId), dto.AccountId is { } a ? new AccountId(a) : null, dto.DefaultAmount, dto.Note,
-                dto.Frequency, dto.Months, BudgetMonth.FromKey(dto.StartMonth), dto.EndMonth is { } e ? BudgetMonth.FromKey(e) : null,
+                dto.Frequency, dto.Months, BudgetMonth.Create(dto.StartMonth), dto.EndMonth is { } e ? BudgetMonth.Create(e) : null,
                 new RecurringPlannedExpenseId(dto.Id));
             var rebuilt = RecurringPlannedExpenseDto.From(item, dto.Version);
             if (rebuilt with { Months = dto.Months } != dto || !rebuilt.Months.SequenceEqual(dto.Months))
@@ -306,7 +306,7 @@ internal sealed class RestoreBackupHandler(ISixJarsDbContext db, IAuditTrail aud
 
             foreach (var monthOverride in dto.Overrides)
             {
-                budget.SetOverride(BudgetMonth.FromKey(monthOverride.BudgetMonth), monthOverride.Amount);
+                budget.SetOverride(BudgetMonth.Create(monthOverride.BudgetMonth), monthOverride.Amount);
             }
 
             var rebuilt = CategoryBudgetDto.From(budget);

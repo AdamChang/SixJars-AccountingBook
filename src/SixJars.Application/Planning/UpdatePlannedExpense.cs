@@ -30,7 +30,7 @@ internal sealed class UpdatePlannedExpenseHandler(ISixJarsDbContext db, IAuditTr
         // 帳本只用來驗證帳戶、分類與鎖帳日，不會被修改。
         var book = await books.GetReadOnlyBookAsync(request.BookId, cancellationToken);
         var input = request.Input;
-        var budgetMonth = BudgetMonth.FromKey(input.BudgetMonth);
+        var budgetMonth = BudgetMonth.Create(input.BudgetMonth);
         // 原本的月份與新的月份都要檢查：不能把預定支出搬進或搬出鎖定的月份（spec §3.1）。
         book.EnsureUnlocked(planned.BudgetMonth);
         book.EnsureUnlocked(budgetMonth);

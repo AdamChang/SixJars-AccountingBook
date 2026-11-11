@@ -18,7 +18,7 @@ public static class TransactionBuilder
         var date = input.Date;
         var amount = input.Amount;
         var account = new AccountId(input.AccountId);
-        var budgetMonth = input.BudgetMonth is { } key ? BudgetMonth.FromKey(key) : (BudgetMonth?)null;
+        var budgetMonth = input.BudgetMonth is { } key ? BudgetMonth.Create(key) : (BudgetMonth?)null;
         var note = input.Note;
 
         var transaction = input.Kind switch

@@ -18,7 +18,7 @@ public sealed record RefreshPlannedExpensesResult(IReadOnlyList<PlannedExpenseDt
 internal sealed class RefreshPlannedExpensesValidator : AbstractValidator<RefreshPlannedExpenses>
 {
     public RefreshPlannedExpensesValidator() =>
-        RuleFor(c => c.BudgetMonth).Must(key => key % 100 is >= 1 and <= 12).WithMessage("歸屬月份必須是 yyyymm，月份介於 1 到 12。");
+        RuleFor(c => c.BudgetMonth).MustBeBudgetMonthKey();
 }
 
 internal sealed class RefreshPlannedExpensesHandler(ISixJarsDbContext db, IAuditTrail audit, IBookReader books)
@@ -27,7 +27,7 @@ internal sealed class RefreshPlannedExpensesHandler(ISixJarsDbContext db, IAudit
     public async Task<RefreshPlannedExpensesResult> Handle(RefreshPlannedExpenses request, CancellationToken cancellationToken)
     {
         var book = await books.GetReadOnlyBookAsync(request.BookId, cancellationToken);
-        var month = BudgetMonth.FromKey(request.BudgetMonth);
+        var month = BudgetMonth.Create(request.BudgetMonth);
         book.EnsureUnlocked(month);
 
         // 追蹤變更：存檔時以 xmin 做並行檢查。

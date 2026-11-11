@@ -19,6 +19,51 @@ public class BudgetMonthTests
         act.Should().Throw<ArgumentOutOfRangeException>();
     }
 
+    [Theory]
+    [InlineData(190001)]
+    [InlineData(202602)]
+    [InlineData(299912)]
+    public void IsValidKey_accepts_yyyymm_within_supported_years(int key) =>
+        BudgetMonth.IsValidKey(key).Should().BeTrue();
+
+    [Theory]
+    [InlineData(1)]            // 第 0 年 1 月
+    [InlineData(189912)]       // 年份下限前一個月
+    [InlineData(300001)]       // 年份上限後一個月
+    [InlineData(100000001)]    // 第 1000000 年 1 月
+    [InlineData(202600)]       // 月份 0
+    [InlineData(202613)]       // 月份 13
+    [InlineData(-202601)]      // 負數
+    public void IsValidKey_rejects_unsupported_year_or_month(int key) =>
+        BudgetMonth.IsValidKey(key).Should().BeFalse();
+
+    [Theory]
+    [InlineData(190001, 1900, 1)]
+    [InlineData(202602, 2026, 2)]
+    [InlineData(299912, 2999, 12)]
+    public void Create_accepts_yyyymm_within_supported_years(int key, int year, int month) =>
+        BudgetMonth.Create(key).Should().Be(new BudgetMonth(year, month));
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(189912)]
+    [InlineData(300001)]
+    [InlineData(100000001)]
+    [InlineData(202600)]
+    [InlineData(202613)]
+    [InlineData(-202601)]
+    public void Create_rejects_unsupported_year_or_month_with_domain_exception(int key)
+    {
+        var act = () => BudgetMonth.Create(key);
+        act.Should().Throw<DomainException>().Which.Code.Should().Be(DomainException.RuleCode);
+    }
+
+    [Theory]
+    [InlineData(189912)]
+    [InlineData(300001)]
+    public void FromKey_still_reads_out_of_range_years_so_stored_rows_stay_readable(int key) =>
+        BudgetMonth.FromKey(key).Key.Should().Be(key);
+
     [Fact]
     public void Compares_across_years()
     {

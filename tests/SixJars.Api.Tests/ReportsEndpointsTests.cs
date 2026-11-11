@@ -81,6 +81,10 @@ public class ReportsEndpointsTests(PostgresFixture postgres)
     [Theory]
     [InlineData("?budgetMonth=202600")]
     [InlineData("?budgetMonth=202613")]
+    [InlineData("?budgetMonth=1")]
+    [InlineData("?budgetMonth=189912")]
+    [InlineData("?budgetMonth=300001")]
+    [InlineData("?budgetMonth=100000001")]
     public async Task Invalid_budget_month_is_400(string query)
     {
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);

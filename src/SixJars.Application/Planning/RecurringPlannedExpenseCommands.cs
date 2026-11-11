@@ -53,7 +53,7 @@ internal sealed class CreateRecurringPlannedExpenseHandler(ISixJarsDbContext db,
         var input = request.Input;
         var item = RecurringPlannedExpense.Create(
             book, new CategoryId(input.CategoryId), input.AccountId is { } a ? new AccountId(a) : null, input.DefaultAmount, input.Note,
-            input.Frequency, input.Months, BudgetMonth.FromKey(input.StartMonth), input.EndMonth is { } e ? BudgetMonth.FromKey(e) : null);
+            input.Frequency, input.Months, BudgetMonth.Create(input.StartMonth), input.EndMonth is { } e ? BudgetMonth.Create(e) : null);
         db.RecurringPlannedExpenses.Add(item);
         audit.Record(request.BookId, AuditAction.Create, AuditEntityTypes.RecurringPlannedExpense, item.Id.Value,
             null, RecurringPlannedExpenseDto.From(item, AuditSnapshots.UnknownVersion));
@@ -75,7 +75,7 @@ internal sealed class UpdateRecurringPlannedExpenseHandler(ISixJarsDbContext db,
         db.ExpectVersion(item, request.Version);
         item.Update(
             book, new CategoryId(input.CategoryId), input.AccountId is { } a ? new AccountId(a) : null, input.DefaultAmount, input.Note,
-            input.Frequency, input.Months, BudgetMonth.FromKey(input.StartMonth), input.EndMonth is { } e ? BudgetMonth.FromKey(e) : null);
+            input.Frequency, input.Months, BudgetMonth.Create(input.StartMonth), input.EndMonth is { } e ? BudgetMonth.Create(e) : null);
         audit.Record(request.BookId, AuditAction.Update, AuditEntityTypes.RecurringPlannedExpense, item.Id.Value,
             before, RecurringPlannedExpenseDto.From(item, AuditSnapshots.UnknownVersion));
         await db.SaveChangesAsync(cancellationToken);

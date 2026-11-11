@@ -443,17 +443,103 @@ public class PlannedExpensesEndpointsTests(PostgresFixture postgres)
         (await ListAsync(client, other, "")).Should().ContainSingle().Which.Should().BeEquivalentTo(theirs);
     }
 
+    private static readonly string[] ListResources = ["planned-expenses", "transactions"];
+
+    public static TheoryData<string, int> InvalidListMonths() => Combine([202600, 202613, 1, 189912, 300001, 100000001]);
+
+    public static TheoryData<string, int> BoundaryListMonths() => Combine([190001, 299912]);
+
+    private static TheoryData<string, int> Combine(int[] months)
+    {
+        var data = new TheoryData<string, int>();
+        foreach (var resource in ListResources)
+        {
+            foreach (var month in months)
+            {
+                data.Add(resource, month);
+            }
+        }
+
+        return data;
+    }
+
     [Theory]
-    [InlineData("planned-expenses")]
-    [InlineData("transactions")]
-    public async Task List_with_invalid_budget_month_is_400(string resource)
+    [MemberData(nameof(InvalidListMonths))]
+    public async Task List_with_invalid_budget_month_is_400(string resource, int budgetMonth)
     {
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         var book = await factory.SeedBookAsync(Ct);
 
-        var response = await (await factory.CreateMemberClientAsync()).GetAsync($"/api/books/{book.Id.Value}/{resource}?budgetMonth=202613", Ct);
+        var response = await (await factory.CreateMemberClientAsync()).GetAsync($"/api/books/{book.Id.Value}/{resource}?budgetMonth={budgetMonth}", Ct);
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await SettingsMaintenanceEndpointsTests.ReadProblemAsync(response)).GetProperty("errors").TryGetProperty("budgetMonth", out _).Should().BeTrue();
+    }
+
+    [Theory]
+    [MemberData(nameof(BoundaryListMonths))]
+    public async Task List_with_boundary_budget_month_is_200_and_empty(string resource, int budgetMonth)
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var book = await factory.SeedBookAsync(Ct);
+
+        var response = await (await factory.CreateMemberClientAsync()).GetAsync($"/api/books/{book.Id.Value}/{resource}?budgetMonth={budgetMonth}", Ct);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        (await response.Content.ReadFromJsonAsync<JsonElement>(Ct)).GetArrayLength().Should().Be(0);
+    }
+
+    [Fact]
+    public async Task List_without_budget_month_returns_every_month()
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var book = await factory.SeedBookAsync(Ct);
+        var client = await factory.CreateMemberClientAsync();
+        await CreateAsync(client, book, InsuranceInput(book, 202601, -1000m, "1 月"));
+        await CreateAsync(client, book, InsuranceInput(book, 202603, -3000m, "3 月"));
+
+        var list = await ListAsync(client, book, "");
+
+        list.Select(p => p.BudgetMonth).Should().Equal(202601, 202603);
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(189912)]
+    [InlineData(300001)]
+    [InlineData(100000001)]
+    public async Task Create_with_unsupported_budget_year_is_400_and_stores_nothing(int budgetMonth)
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var book = await factory.SeedBookAsync(Ct);
+        var client = await factory.CreateMemberClientAsync();
+
+        var response = await client.PostAsJsonAsync(Url(book), InsuranceInput(book, budgetMonth, -3000m, "壞年份"), ApiJson.Options, Ct);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await SettingsMaintenanceEndpointsTests.ReadProblemAsync(response)).GetProperty("errors").TryGetProperty("budgetMonth", out _).Should().BeTrue();
+        (await ListAsync(client, book, "")).Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(189912)]
+    [InlineData(300001)]
+    [InlineData(100000001)]
+    public async Task Update_with_unsupported_budget_year_is_400_and_leaves_the_item_unchanged(int budgetMonth)
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var book = await factory.SeedBookAsync(Ct);
+        var client = await factory.CreateMemberClientAsync();
+        var created = await CreateAsync(client, book, InsuranceInput(book, 202602, -3000m, "原本"));
+
+        var response = await client.PutAsJsonAsync($"{Url(book)}/{created.Id}",
+            new { version = created.Version, input = InsuranceInput(book, budgetMonth, -3100m, "壞年份") }, ApiJson.Options, Ct);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await SettingsMaintenanceEndpointsTests.ReadProblemAsync(response)).GetProperty("errors").TryGetProperty("budgetMonth", out _).Should().BeTrue();
+        // 修之前 189912、300001 會回 200 並把項目搬進壞月份，1、100000001 回 500。
+        (await ListAsync(client, book, "")).Should().ContainSingle().Which.Should().BeEquivalentTo(created);
     }
 
     internal static string Url(Book book) => $"/api/books/{book.Id.Value}/planned-expenses";

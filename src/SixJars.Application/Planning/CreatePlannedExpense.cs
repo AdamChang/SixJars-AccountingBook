@@ -23,7 +23,7 @@ internal sealed class CreatePlannedExpenseHandler(ISixJarsDbContext db, IAuditTr
         // 帳本只用來驗證帳戶、分類與鎖帳日，不會被修改。
         var book = await books.GetReadOnlyBookAsync(request.BookId, cancellationToken);
         var input = request.Input;
-        var budgetMonth = BudgetMonth.FromKey(input.BudgetMonth);
+        var budgetMonth = BudgetMonth.Create(input.BudgetMonth);
         book.EnsureUnlocked(budgetMonth);
         var planned = PlannedExpense.Create(
             book, budgetMonth, new CategoryId(input.CategoryId),
