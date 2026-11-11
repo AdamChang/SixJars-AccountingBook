@@ -66,10 +66,31 @@ public class RecurringPlannedExpensesEndpointsTests(PostgresFixture postgres)
         var response = await client.PostAsJsonAsync(Url(book), Insurance(book) with { StartMonth = startMonth, EndMonth = null }, ApiJson.Options, Ct);
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
-        var errors = (await response.Content.ReadFromJsonAsync<JsonElement>(Ct)).GetProperty("errors");
+        var errors = (await SettingsMaintenanceEndpointsTests.ReadProblemAsync(response)).GetProperty("errors");
         errors.TryGetProperty("startMonth", out _).Should().BeTrue();
         errors.TryGetProperty("endMonth", out _).Should().BeFalse();
         (await client.GetFromJsonAsync<List<RecurringPlannedExpenseDto>>(Url(book), ApiJson.Options, Ct)).Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(189912)]
+    [InlineData(300001)]
+    [InlineData(100000001)]
+    public async Task Update_with_unsupported_start_year_is_400_and_leaves_the_item_unchanged(int startMonth)
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var book = await factory.SeedBookAsync(Ct);
+        var client = await factory.CreateMemberClientAsync();
+        var created = await CreateAsync(client, book, Insurance(book));
+
+        var response = await client.PutAsJsonAsync(Url(book, $"/{created.Id}"),
+            new { version = created.Version, input = Insurance(book) with { StartMonth = startMonth } }, ApiJson.Options, Ct);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await SettingsMaintenanceEndpointsTests.ReadProblemAsync(response)).GetProperty("errors").TryGetProperty("startMonth", out _).Should().BeTrue();
+        // 修之前壞值一律回 200 並改掉起始月份。
+        (await client.GetFromJsonAsync<List<RecurringPlannedExpenseDto>>(Url(book), ApiJson.Options, Ct)).Should().ContainSingle().Which.Should().BeEquivalentTo(created);
     }
 
     [Theory]
@@ -86,7 +107,7 @@ public class RecurringPlannedExpensesEndpointsTests(PostgresFixture postgres)
         var response = await client.PostAsJsonAsync(Url(book), Insurance(book) with { EndMonth = endMonth }, ApiJson.Options, Ct);
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
-        var errors = (await response.Content.ReadFromJsonAsync<JsonElement>(Ct)).GetProperty("errors");
+        var errors = (await SettingsMaintenanceEndpointsTests.ReadProblemAsync(response)).GetProperty("errors");
         errors.TryGetProperty("endMonth", out _).Should().BeTrue();
         errors.TryGetProperty("startMonth", out _).Should().BeFalse();
         (await client.GetFromJsonAsync<List<RecurringPlannedExpenseDto>>(Url(book), ApiJson.Options, Ct)).Should().BeEmpty();

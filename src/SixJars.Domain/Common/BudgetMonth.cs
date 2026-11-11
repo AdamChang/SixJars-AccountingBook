@@ -3,6 +3,9 @@ namespace SixJars.Domain.Common;
 /// <summary>歸屬月份：交易計入月可用餘額、預算與月報表的月份（可與交易日期不同）。</summary>
 public readonly record struct BudgetMonth : IComparable<BudgetMonth>
 {
+    public const int MinYear = 1900;
+    public const int MaxYear = 2999;
+
     public BudgetMonth(int year, int month)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(month, 1);
@@ -19,9 +22,6 @@ public readonly record struct BudgetMonth : IComparable<BudgetMonth>
 
     public static BudgetMonth Of(DateOnly date) => new(date.Year, date.Month);
     public static BudgetMonth FromKey(int key) => new(key / 100, key % 100);
-
-    public const int MinYear = 1900;
-    public const int MaxYear = 2999;
 
     /// <summary>yyyymm 是否為可支援的歸屬月份：年份在 <see cref="MinYear"/>–<see cref="MaxYear"/>，月份 1–12。</summary>
     public static bool IsValidKey(int key) =>

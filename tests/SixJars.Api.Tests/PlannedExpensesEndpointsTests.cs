@@ -517,7 +517,29 @@ public class PlannedExpensesEndpointsTests(PostgresFixture postgres)
         var response = await client.PostAsJsonAsync(Url(book), InsuranceInput(book, budgetMonth, -3000m, "壞年份"), ApiJson.Options, Ct);
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await SettingsMaintenanceEndpointsTests.ReadProblemAsync(response)).GetProperty("errors").TryGetProperty("budgetMonth", out _).Should().BeTrue();
         (await ListAsync(client, book, "")).Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(189912)]
+    [InlineData(300001)]
+    [InlineData(100000001)]
+    public async Task Update_with_unsupported_budget_year_is_400_and_leaves_the_item_unchanged(int budgetMonth)
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var book = await factory.SeedBookAsync(Ct);
+        var client = await factory.CreateMemberClientAsync();
+        var created = await CreateAsync(client, book, InsuranceInput(book, 202602, -3000m, "原本"));
+
+        var response = await client.PutAsJsonAsync($"{Url(book)}/{created.Id}",
+            new { version = created.Version, input = InsuranceInput(book, budgetMonth, -3100m, "壞年份") }, ApiJson.Options, Ct);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await SettingsMaintenanceEndpointsTests.ReadProblemAsync(response)).GetProperty("errors").TryGetProperty("budgetMonth", out _).Should().BeTrue();
+        // 修之前 189912、300001 會回 200 並把項目搬進壞月份，1、100000001 回 500。
+        (await ListAsync(client, book, "")).Should().ContainSingle().Which.Should().BeEquivalentTo(created);
     }
 
     internal static string Url(Book book) => $"/api/books/{book.Id.Value}/planned-expenses";

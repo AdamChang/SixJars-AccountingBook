@@ -120,15 +120,32 @@ public class TransactionsEndpointsTests(PostgresFixture postgres)
         var book = await factory.SeedBookAsync(Ct);
         var client = await factory.CreateMemberClientAsync();
 
-        var response = await client.PostAsJsonAsync($"/api/books/{book.Id.Value}/transactions", new
-        {
-            kind = "Expense", date = "2026-01-10", budgetMonth, amount = -120m,
-            accountId = book.FindAccount("現金")!.Id.Value, categoryId = book.FindCategory("主食", "午餐")!.Id.Value,
-        }, ApiJson.Options, Ct);
+        var response = await client.PostAsJsonAsync($"/api/books/{book.Id.Value}/transactions", LunchWithBudgetMonth(book, budgetMonth), ApiJson.Options, Ct);
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
         (await ReadProblemAsync(response)).GetProperty("errors").EnumerateObject().Select(e => e.Name).Should().Equal("budgetMonth");
         (await ListAsync(client, book, "")).Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(189912)]
+    [InlineData(300001)]
+    [InlineData(100000001)]
+    public async Task Update_with_unsupported_budget_year_is_400_and_leaves_the_transaction_unchanged(int budgetMonth)
+    {
+        await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
+        var book = await factory.SeedBookAsync(Ct);
+        var client = await factory.CreateMemberClientAsync();
+        var created = await CreateDtoAsync(client, book, LunchInput(book, "2026-01-10", "原本"));
+
+        var response = await client.PutAsJsonAsync($"/api/books/{book.Id.Value}/transactions/{created.Id}",
+            new { version = created.Version, input = LunchWithBudgetMonth(book, budgetMonth) }, ApiJson.Options, Ct);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await ReadProblemAsync(response)).GetProperty("errors").EnumerateObject().Select(e => e.Name).Should().Equal("budgetMonth");
+        // 修之前壞值一律回 200 並改掉歸屬月份，該筆交易就會從原本的月報消失。
+        (await ListAsync(client, book, "")).Should().ContainSingle().Which.Should().BeEquivalentTo(created);
     }
 
     [Fact]
@@ -138,11 +155,7 @@ public class TransactionsEndpointsTests(PostgresFixture postgres)
         var book = await factory.SeedBookAsync(Ct);
         var client = await factory.CreateMemberClientAsync();
 
-        var created = await CreateDtoAsync(client, book, new
-        {
-            kind = "Expense", date = "2026-01-10", budgetMonth = (int?)null, amount = -120m,
-            accountId = book.FindAccount("現金")!.Id.Value, categoryId = book.FindCategory("主食", "午餐")!.Id.Value,
-        });
+        var created = await CreateDtoAsync(client, book, LunchWithBudgetMonth(book, null));
 
         created.BudgetMonth.Should().Be(202601);
     }
@@ -156,11 +169,7 @@ public class TransactionsEndpointsTests(PostgresFixture postgres)
         var book = await factory.SeedBookAsync(Ct);
         var client = await factory.CreateMemberClientAsync();
 
-        var created = await CreateDtoAsync(client, book, new
-        {
-            kind = "Expense", date = "2026-01-10", budgetMonth, amount = -120m,
-            accountId = book.FindAccount("現金")!.Id.Value, categoryId = book.FindCategory("主食", "午餐")!.Id.Value,
-        });
+        var created = await CreateDtoAsync(client, book, LunchWithBudgetMonth(book, budgetMonth));
 
         created.BudgetMonth.Should().Be(budgetMonth);
     }
@@ -556,6 +565,13 @@ public class TransactionsEndpointsTests(PostgresFixture postgres)
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
         (await ListAsync(client, other, "")).Should().ContainSingle().Which.Should().BeEquivalentTo(theirs);
     }
+
+    /// <summary>2026-01-10 的午餐支出；只有歸屬月份可變（null 表示取交易日期的月份）。</summary>
+    private static object LunchWithBudgetMonth(Book book, int? budgetMonth) => new
+    {
+        kind = "Expense", date = "2026-01-10", budgetMonth, amount = -120m,
+        accountId = book.FindAccount("現金")!.Id.Value, categoryId = book.FindCategory("主食", "午餐")!.Id.Value,
+    };
 
     private static object LunchInput(Book book, string date, string note) => new
     {

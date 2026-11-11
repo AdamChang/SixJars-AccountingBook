@@ -97,8 +97,9 @@ public class PlannedExpenseGenerationEndpointsTests(PostgresFixture postgres)
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         var book = await factory.SeedBookAsync(Ct);
         var client = await factory.CreateMemberClientAsync();
-        // 有一筆週期項目，確認壞月份不會被當成「到期」而產生預定支出。
-        await CreateAsync(client, book, Insurance(book) with { StartMonth = 190001 });
+        // 週期項目 1900-01 起、每月適用。「沒有產生任何預定支出」這條斷言只對 300001 有鑑別力（修之前它會被當成到期而產生一筆）；
+        // 189912 早於起始月本來就不會產生，1 與 100000001 修之前是 500。其餘靠 400 與錯誤欄位。
+        await CreateAsync(client, book, Insurance(book) with { Frequency = RecurrenceFrequency.Monthly, Months = [], StartMonth = 190001 });
 
         var response = await client.PostAsync($"/api/books/{book.Id.Value}/planned-expenses/generate?budgetMonth={budgetMonth}", null, Ct);
 
@@ -202,24 +203,18 @@ public class PlannedExpenseGenerationEndpointsTests(PostgresFixture postgres)
     [InlineData(189912)]
     [InlineData(300001)]
     [InlineData(100000001)]
-    public async Task Refresh_with_invalid_month_is_400_and_changes_nothing(int budgetMonth)
+    public async Task Refresh_with_invalid_month_is_400(int budgetMonth)
     {
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         var book = await factory.SeedBookAsync(Ct);
         var client = await factory.CreateMemberClientAsync();
-        var item = await CreateAsync(client, book, Insurance(book) with { Frequency = RecurrenceFrequency.Monthly, Months = [], StartMonth = 190001 });
-        await GenerateAsync(client, book, 202601);
-        (await client.PutAsJsonAsync(RecurringUrl(book, item.Id),
-            new { version = item.Version, input = Insurance(book) with { Frequency = RecurrenceFrequency.Monthly, Months = [], StartMonth = 190001, DefaultAmount = -3600m } },
-            ApiJson.Options, Ct)).EnsureSuccessStatusCode();
 
         var response = await client.PostAsync($"/api/books/{book.Id.Value}/planned-expenses/refresh?budgetMonth={budgetMonth}", null, Ct);
 
+        // refresh 只處理「歸屬月份等於 budgetMonth」的項目，壞月份被放行也不會有項目可改，
+        // 所以這裡能分辨「擋下」與「放行」的只有 400 與錯誤欄位（修之前 1、100000001 是 500，其餘是 200）。
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
         (await SettingsMaintenanceEndpointsTests.ReadProblemAsync(response)).GetProperty("errors").TryGetProperty("budgetMonth", out _).Should().BeTrue();
-        // 週期項目已改成 -3600；若壞月份被放行並誤更新了既有項目，這裡就不會是原本的 -3000。
-        await using var scope = factory.Services.CreateAsyncScope();
-        (await scope.ServiceProvider.GetRequiredService<SixJarsDbContext>().PlannedExpenses.SingleAsync(Ct)).EstimatedAmount.Should().Be(-3000m);
     }
 
     [Theory]
