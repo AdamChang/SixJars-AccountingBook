@@ -23,10 +23,10 @@ namespace SixJars.Infrastructure.Tests.LegacyExcel;
 /// <summary>正式匯入（spec §8.1）：以合成的舊記帳本經 MediatR 寫入真實的 PostgreSQL。</summary>
 public class ImportLegacyBookTests(PostgresFixture postgres)
 {
-    private const string Actor = "importer-sub";
+    private const string Actor = LegacyImportHost.Actor;
     private const string BookName = "我們家的帳本";
     private static readonly DateOnly Jan6 = new(2026, 1, 6);
-    private static readonly DateTimeOffset Now = new(2026, 10, 4, 1, 2, 3, TimeSpan.Zero);
+    private static readonly DateTimeOffset Now = LegacyImportHost.Now;
 
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
@@ -38,7 +38,7 @@ public class ImportLegacyBookTests(PostgresFixture postgres)
     [Fact]
     public async Task Report_errors_write_nothing()
     {
-        await using var host = await Host.CreateAsync(postgres);
+        await using var host = await LegacyImportHost.CreateAsync(postgres);
 
         var result = await host.SendAsync(Import(ValidWorkbook(Row(14, Jan6, "不存在的銀行", "主食", "中餐", -80m))));
 
@@ -50,7 +50,7 @@ public class ImportLegacyBookTests(PostgresFixture postgres)
     [Fact]
     public async Task Duplicate_book_name_of_the_same_owner_is_rejected()
     {
-        await using var host = await Host.CreateAsync(postgres);
+        await using var host = await LegacyImportHost.CreateAsync(postgres);
         await using (var db = host.Open())
         {
             var existing = new Book(BookName, new DateOnly(2025, 12, 31));
@@ -76,7 +76,7 @@ public class ImportLegacyBookTests(PostgresFixture postgres)
     [Fact]
     public async Task Same_name_owned_by_someone_else_is_imported()
     {
-        await using var host = await Host.CreateAsync(postgres);
+        await using var host = await LegacyImportHost.CreateAsync(postgres);
         await using (var db = host.Open())
         {
             var existing = new Book(BookName, new DateOnly(2025, 12, 31));
@@ -96,7 +96,7 @@ public class ImportLegacyBookTests(PostgresFixture postgres)
     [Fact]
     public async Task Dry_run_reports_counts_and_writes_nothing()
     {
-        await using var host = await Host.CreateAsync(postgres);
+        await using var host = await LegacyImportHost.CreateAsync(postgres);
 
         var result = await host.SendAsync(Import(ValidWorkbook()) with { DryRun = true });
 
@@ -110,7 +110,7 @@ public class ImportLegacyBookTests(PostgresFixture postgres)
     [Fact]
     public async Task Successful_import_writes_book_ledger_owner_and_one_audit_entry()
     {
-        await using var host = await Host.CreateAsync(postgres);
+        await using var host = await LegacyImportHost.CreateAsync(postgres);
 
         var result = await host.SendAsync(Import(ValidWorkbook()));
 
@@ -157,7 +157,7 @@ public class ImportLegacyBookTests(PostgresFixture postgres)
     [Fact]
     public async Task Failure_midway_leaves_nothing_behind()
     {
-        await using var host = await Host.CreateAsync(postgres, new FailOnSecondSave());
+        await using var host = await LegacyImportHost.CreateAsync(postgres, new FailOnSecondSave());
 
         var act = () => host.SendAsync(Import(ValidWorkbook()));
 
@@ -177,53 +177,5 @@ public class ImportLegacyBookTests(PostgresFixture postgres)
         public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
             DbContextEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default) =>
             ++_saves == 2 ? throw new InvalidOperationException(Message) : base.SavingChangesAsync(eventData, result, cancellationToken);
-    }
-
-    private sealed class FixedUser : ICurrentUser
-    {
-        public string Subject => Actor;
-        public string? Email => null;
-    }
-
-    /// <summary>與 CLI 相同的組裝方式（Application + Infrastructure），每個測試一個獨立的資料庫。</summary>
-    private sealed class Host(ServiceProvider provider, string connectionString) : IAsyncDisposable
-    {
-        public static async Task<Host> CreateAsync(PostgresFixture postgres, IInterceptor? interceptor = null)
-        {
-            var connectionString = await postgres.CreateConnectionStringAsync(Ct);
-            var services = new ServiceCollection();
-            services.AddLogging();
-            services.AddSixJarsApplication(mediatRLicenseKey: null);
-            services.AddSixJarsInfrastructure(connectionString);
-            services.AddSingleton<ICurrentUser, FixedUser>();
-            services.AddSingleton<TimeProvider>(new FixedTimeProvider(Now));
-            if (interceptor is not null)
-            {
-                services.AddSingleton(interceptor);
-            }
-
-            return new Host(services.BuildServiceProvider(), connectionString);
-        }
-
-        public async Task<ImportLegacyBookResult> SendAsync(ImportLegacyBook request)
-        {
-            await using var scope = provider.CreateAsyncScope();
-            return await scope.ServiceProvider.GetRequiredService<ISender>().Send(request, Ct);
-        }
-
-        public SixJarsDbContext Open() =>
-            new(new DbContextOptionsBuilder<SixJarsDbContext>().UseNpgsql(connectionString).Options);
-
-        public async Task ShouldBeEmptyAsync()
-        {
-            await using var db = Open();
-            (await db.Books.CountAsync(Ct)).Should().Be(0);
-            (await db.Transactions.IgnoreQueryFilters().CountAsync(Ct)).Should().Be(0);
-            (await db.PlannedExpenses.IgnoreQueryFilters().CountAsync(Ct)).Should().Be(0);
-            (await db.BookMembers.CountAsync(Ct)).Should().Be(0);
-            (await db.AuditEntries.CountAsync(Ct)).Should().Be(0);
-        }
-
-        public ValueTask DisposeAsync() => provider.DisposeAsync();
     }
 }

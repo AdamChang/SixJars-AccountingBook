@@ -85,7 +85,7 @@ internal sealed class ImportLegacyBookHandler(ISixJarsDbContext db, IAuditTrail 
     /// 只取檔名。兩種分隔字元都切：<see cref="Path.GetFileName(string)"/> 在 Linux 不認得 Windows 的 <c>\</c>，
     /// 而使用者在 Windows 本機執行 CLI。
     /// </summary>
-    private static string FileNameOnly(string path) => path.Split('/', '\\')[^1];
+    internal static string FileNameOnly(string path) => path.Split('/', '\\')[^1];
 
     /// <summary>Import 稽核記錄的 After：<c>{ fileName, transactions, plannedExpenses, warnings }</c>。</summary>
     private sealed record ImportSnapshot(string FileName, int Transactions, int PlannedExpenses, int Warnings);
