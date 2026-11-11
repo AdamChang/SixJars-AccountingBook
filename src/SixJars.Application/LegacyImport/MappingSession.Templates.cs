@@ -51,7 +51,7 @@ internal sealed partial class MappingSession
             : _factory.Expense(date, account.Id, category.Id, row.Amount, row.Note, MonthOf(month));
 
         planned.MarkPaid(transaction);
-        _transactions.Add(transaction);
+        AddTransaction(transaction, month, row.Row);
         _plannedExpenses.Add(planned);
     }
 

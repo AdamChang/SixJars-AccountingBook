@@ -20,7 +20,7 @@ internal sealed partial class MappingSession
 
             try
             {
-                _transactions.Add(MapJournalRow(month, row));
+                AddTransaction(MapJournalRow(month, row), month, row.Row);
             }
             catch (Exception ex) when (ex is DomainException or RowRejected)
             {

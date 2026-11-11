@@ -94,7 +94,24 @@ public class LegacyJunctionTests
     {
         var (mapping, _) = Check(Workbook2025(date: new DateOnly(2026, 1, 1)));
 
-        mapping.Report.Errors.Should().ContainSingle(i => i.Sheet == JunctionSheet && i.Message.Contains("2026-01-01"));
+        // spec 處理流程第 4 步：錯誤帶來源的工作表與列號，使用者才能回到 Excel 找到那一列。
+        mapping.Report.Errors.Should().ContainSingle(i => i.Sheet == "12月" && i.Row == 7 && i.Message.Contains("2026-01-01"));
+    }
+
+    [Fact]
+    public void Account_only_in_book_with_previous_year_movement_is_an_error()
+    {
+        // 國泰外幣帳戶不在 2025 設定，但 2025 流水帳用了它：期初不改、交易照寫，之後每天的餘額都會少 500。
+        var workbook = new LegacyWorkbook(
+            Settings2025(banks: [new("國泰世華銀行", 21690m), new("華南銀行", 11637m), new("國泰投資帳戶", 20m)]), Floating(),
+            [Month(3, journal: [
+                Row(7, new DateOnly(2025, 3, 5), "國泰世華銀行", "主食", "早餐", -80m),
+                Row(8, new DateOnly(2025, 3, 6), "國泰外幣帳戶", "主食", "中餐", -500m)])]);
+
+        var (mapping, lines) = Check(workbook);
+
+        lines.Single(l => l.Name == "國泰外幣帳戶").Movement.Should().Be(-500m);
+        mapping.Report.Errors.Should().ContainSingle(i => i.Sheet == JunctionSheet && i.Message.Contains("國泰外幣帳戶") && i.Message.Contains("500"));
     }
 
     [Fact]

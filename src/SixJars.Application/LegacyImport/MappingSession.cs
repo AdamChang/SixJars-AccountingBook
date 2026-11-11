@@ -16,6 +16,7 @@ internal sealed partial class MappingSession(LegacyWorkbook workbook, string boo
 
     private readonly ImportReport _report = new();
     private readonly List<Transaction> _transactions = [];
+    private readonly Dictionary<TransactionId, LegacySource> _sources = [];
     private readonly List<PlannedExpense> _plannedExpenses = [];
     private readonly Dictionary<AccountId, decimal> _accountOpenings = [];
     private readonly Dictionary<PlanningFundId, decimal> _fundOpenings = [];
@@ -52,7 +53,8 @@ internal sealed partial class MappingSession(LegacyWorkbook workbook, string boo
             target.Accounts.Select(a => a.Id).Where(id => !accounts.Contains(id)).ToHashSet(),
             target.PlanningFunds.Select(f => f.Id).Where(id => !funds.Contains(id)).ToHashSet(),
             target.Categories.Select(c => c.Id).Where(id => !categories.Contains(id)).ToHashSet(),
-            _report);
+            _report,
+            _sources);
     }
 
     private void MapAll(Book book)
@@ -195,6 +197,13 @@ internal sealed partial class MappingSession(LegacyWorkbook workbook, string boo
 
             _book.AddSubCategory(main.Id, name);
         }
+    }
+
+    /// <summary>記下來源列：補匯的日期檢查要回報工作表與列號（spec 處理流程第 4 步）。</summary>
+    private void AddTransaction(Transaction transaction, LegacyMonthSheet month, int row)
+    {
+        _transactions.Add(transaction);
+        _sources[transaction.Id] = new LegacySource(SheetName(month), row);
     }
 
     private BudgetMonth MonthOf(LegacyMonthSheet sheet) => new(Settings.Year, sheet.Month);

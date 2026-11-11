@@ -43,8 +43,9 @@ public static class LegacyJunction
         // R2-Q5：舊年度的交易都要落在帳本期初日（含）之前，否則與既有交易重疊。
         foreach (var transaction in mapping.Transactions.Where(t => t.Date > bookOpeningDate))
         {
-            report.AddError(Sheet, 0,
-                $"{transaction.Date:yyyy-MM-dd} 的{transaction.Kind}（{transaction.Amount:#,0.##}）晚於帳本期初日 {bookOpeningDate:yyyy-MM-dd}。");
+            var source = mapping.Sources[transaction.Id];
+            report.AddError(source.Sheet, source.Row,
+                $"日期 {transaction.Date:yyyy-MM-dd}（金額 {transaction.Amount:#,0.##}）晚於帳本期初日 {bookOpeningDate:yyyy-MM-dd}，會與帳本既有的交易重疊。");
         }
 
         // 與 BalanceCalculator 相同的算法：帳戶加總分錄，財務規劃帳戶加總 FundDelta。
@@ -66,6 +67,14 @@ public static class LegacyJunction
             lines.Add(Line(fund.Name, isPlanningFund: true, fund.OpeningBalance,
                 mapping.FundOpenings.TryGetValue(fund.Id, out var opening) ? opening : null,
                 fundMovements.GetValueOrDefault(fund.Id), mapping.AddedPlanningFunds.Contains(fund.Id)));
+        }
+
+        // R3-Q1 的前提是舊年度沒動過這個項目：期初不改、交易卻寫入，之後每天的餘額都會差這個數。
+        foreach (var line in lines.Where(l => l.CurrentOpening is null && l.Movement != 0m))
+        {
+            var kind = line.IsPlanningFund ? "財務規劃帳戶" : "帳戶";
+            report.AddError(Sheet, 0,
+                $"{kind}「{line.Name}」不在舊年度的設定裡，但舊年度有 {line.Movement:#,0.##} 的異動，無法銜接。");
         }
 
         // 金額用 decimal 精確相等，不設容差：差 1 元就代表帳對不起來。
