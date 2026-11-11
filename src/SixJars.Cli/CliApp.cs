@@ -66,9 +66,10 @@ public static class CliApp
         var ownerEmail = new Option<string>("--owner-email") { Description = "擁有者的 Google email" };
         var into = new Option<Guid?>("--into") { Description = "補匯舊年度：接到這本既有帳本的最前面（與 --book-name／--owner-email 互斥）" };
         var dryRun = new Option<bool>("--dry-run") { Description = "只轉換與檢查，印出報告與筆數，不寫入" };
+        var adjust = new Option<bool>("--adjust") { Description = "只用於 --into：銜接差額以「餘額調整」補在原期初日，而不是整批拒絕（先用 --dry-run 檢查）" };
         var command = new Command("import-legacy", "把舊 Excel 記帳本匯入成一本新帳本，或補匯舊年度到既有帳本（單一 DB transaction）。")
         {
-            file, bookName, ownerEmail, into, dryRun,
+            file, bookName, ownerEmail, into, dryRun, adjust,
         };
         command.SetAction(async (parseResult, ct) =>
         {
@@ -79,6 +80,13 @@ public static class CliApp
             {
                 // 兩種模式互斥：不用 Required，改在這裡檢查，才能同時表達「擇一」與「不可混用」；不需要連線字串就能判斷。
                 await host.Output.WriteLineAsync("錯誤：請指定 --into <帳本 Id>，或同時指定 --book-name 與 --owner-email；兩種模式不能混用。");
+                return 1;
+            }
+
+            var isAdjust = parseResult.GetValue(adjust);
+            if (isAdjust && !isInto)
+            {
+                await host.Output.WriteLineAsync("錯誤：--adjust 只能搭配 --into（補匯舊年度）使用。");
                 return 1;
             }
 
@@ -100,7 +108,7 @@ public static class CliApp
 
                 var sender = services.GetRequiredService<ISender>();
                 return isInto
-                    ? await PrependAsync(sender, output, new PrependLegacyYear(workbook, source.Name, target!.Value, isDryRun), ct)
+                    ? await PrependAsync(sender, output, new PrependLegacyYear(workbook, source.Name, target!.Value, isDryRun, isAdjust), ct)
                     : await ImportNewBookAsync(sender, output, new ImportLegacyBook(workbook, source.Name, name!, email!, isDryRun), ct);
             }, ct);
         });
@@ -144,13 +152,13 @@ public static class CliApp
         if (result.Junction.Count > 0)
         {
             await output.WriteLineAsync($"期初日：{result.PreviousOpeningDate:yyyy-MM-dd} → {result.NewOpeningDate:yyyy-MM-dd}");
-            await output.WriteLineAsync("銜接摘要（名稱｜舊年度期初｜變動｜推算期末｜帳本期初｜差額）：");
+            await output.WriteLineAsync("銜接摘要（名稱｜舊年度期初｜變動｜推算期末｜帳本期初｜差額｜調整）：");
             foreach (var line in result.Junction)
             {
                 var difference = line.Difference is { } d ? Amount(d) : "不檢查";
                 await output.WriteLineAsync(
                     $"  {(line.IsPlanningFund ? "[財務規劃] " : "")}{line.Name}｜{Amount(line.PreviousOpening)}｜{Amount(line.Movement)}｜" +
-                    $"{Amount(line.PreviousClosing)}｜{Amount(line.ExpectedOpening)}｜{difference}");
+                    $"{Amount(line.PreviousClosing)}｜{Amount(line.ExpectedOpening)}｜{difference}｜{Amount(line.Adjustment)}");
             }
         }
 
@@ -162,7 +170,7 @@ public static class CliApp
 
         var counts = $"交易 {result.Transactions} 筆、預定支出 {result.PlannedExpenses} 筆、" +
             $"新增並封存帳戶 {result.ArchivedAccounts} 個、財務規劃帳戶 {result.ArchivedPlanningFunds} 個、分類 {result.ArchivedCategories} 個、" +
-            $"警告 {result.Report.Warnings.Count} 個";
+            $"餘額調整 {result.Adjustments} 筆、警告 {result.Report.Warnings.Count} 個";
         await output.WriteLineAsync(request.DryRun
             ? $"dry run：可以補匯（{counts}），沒有寫入任何資料。"
             : $"已把 {request.FileName} 補匯到帳本 {request.BookId}（{counts}）。");

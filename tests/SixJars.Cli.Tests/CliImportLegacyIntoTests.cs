@@ -131,6 +131,37 @@ public class CliImportLegacyIntoTests(PostgresFixture postgres)
         (await db.Books.SingleAsync(Ct)).OpeningDate.Should().Be(new DateOnly(2026, 1, 5));
     }
 
+    /// <summary>spec M3-2：--adjust 才把差額轉成餘額調整，摘要多一欄調整金額。</summary>
+    [Fact]
+    public async Task Into_with_adjust_fills_the_difference_with_a_balance_adjustment()
+    {
+        var connectionString = await postgres.CreateConnectionStringAsync(Ct);
+        var bookId = await ImportBookAsync(connectionString);
+        var output = new StringWriter();
+
+        var exitCode = await RunAsync(connectionString, output,
+            "import-legacy", "--file", await FileAsync("2025差1元.xlsm"), "--into", bookId.ToString(), "--adjust");
+
+        exitCode.Should().Be(0, output.ToString());
+        var text = output.ToString();
+        text.Should().Contain("調整").And.Contain("餘額調整 1 筆").And.NotContain("[錯誤]");
+        text.Should().MatchRegex("國泰世華銀行｜.*｜1｜-1");
+        await using var db = Open(connectionString);
+        (await db.Transactions.CountAsync(t => t.Kind == Domain.Transactions.TransactionKind.BalanceAdjustment, Ct)).Should().Be(1);
+    }
+
+    [Fact]
+    public async Task Adjust_without_into_is_rejected()
+    {
+        var output = new StringWriter();
+
+        var exitCode = await RunAsync("Host=unused", output,
+            "import-legacy", "--file", await FileAsync("2026帳本v3.xlsm"), "--book-name", "我的帳本", "--owner-email", "owner@example.com", "--adjust");
+
+        exitCode.Should().Be(1);
+        output.ToString().Should().Contain("--adjust").And.Contain("--into");
+    }
+
     /// <summary>用既有模式匯入 2026 合成帳本，回傳帳本 Id（從輸出「已匯入帳本 {id}」取出）。</summary>
     private async Task<Guid> ImportBookAsync(string connectionString)
     {
