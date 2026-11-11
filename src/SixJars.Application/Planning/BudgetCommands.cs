@@ -58,13 +58,13 @@ internal sealed class SetBudgetOverrideHandler(ISixJarsDbContext db, IBookReader
 {
     public Task<CategoryBudgetDto> Handle(SetBudgetOverride request, CancellationToken cancellationToken) =>
         db.SetBudgetAsync(books, audit, request.BookId, request.CategoryId,
-            b => b.SetOverride(BudgetMonth.FromKey(request.BudgetMonth), request.Amount), cancellationToken);
+            b => b.SetOverride(BudgetMonth.Create(request.BudgetMonth), request.Amount), cancellationToken);
 }
 
 internal sealed class RemoveBudgetOverrideHandler(ISixJarsDbContext db, IAuditTrail audit) : IRequestHandler<RemoveBudgetOverride>
 {
     public Task Handle(RemoveBudgetOverride request, CancellationToken cancellationToken) =>
-        db.RemoveBudgetValueAsync(audit, request.BookId, request.CategoryId, b => b.RemoveOverride(BudgetMonth.FromKey(request.BudgetMonth)),
+        db.RemoveBudgetValueAsync(audit, request.BookId, request.CategoryId, b => b.RemoveOverride(BudgetMonth.Create(request.BudgetMonth)),
             $"分類 {request.CategoryId} 在 {request.BudgetMonth} 沒有預算覆寫值。", cancellationToken);
 }
 

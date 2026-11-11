@@ -33,7 +33,7 @@ internal sealed class GeneratePlannedExpensesHandler(ISixJarsDbContext db, IAudi
     public async Task<GeneratePlannedExpensesResult> Handle(GeneratePlannedExpenses request, CancellationToken cancellationToken)
     {
         var book = await books.GetReadOnlyBookAsync(request.BookId, cancellationToken);
-        var month = BudgetMonth.FromKey(request.BudgetMonth);
+        var month = BudgetMonth.Create(request.BudgetMonth);
         book.EnsureUnlocked(month);
 
         var items = await db.RecurringPlannedExpenses.AsNoTracking()

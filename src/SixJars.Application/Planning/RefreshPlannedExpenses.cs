@@ -27,7 +27,7 @@ internal sealed class RefreshPlannedExpensesHandler(ISixJarsDbContext db, IAudit
     public async Task<RefreshPlannedExpensesResult> Handle(RefreshPlannedExpenses request, CancellationToken cancellationToken)
     {
         var book = await books.GetReadOnlyBookAsync(request.BookId, cancellationToken);
-        var month = BudgetMonth.FromKey(request.BudgetMonth);
+        var month = BudgetMonth.Create(request.BudgetMonth);
         book.EnsureUnlocked(month);
 
         // 追蹤變更：存檔時以 xmin 做並行檢查。

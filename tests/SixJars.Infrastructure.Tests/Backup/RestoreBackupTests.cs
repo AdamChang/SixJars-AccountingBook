@@ -215,6 +215,10 @@ public class RestoreBackupTests(PostgresFixture postgres)
     [InlineData("budget-on-non-floating-category")]
     [InlineData("empty-budget")]
     [InlineData("unknown-tag")]
+    [InlineData("planned-expense-month-out-of-range")]
+    [InlineData("recurring-start-month-out-of-range")]
+    [InlineData("recurring-end-month-out-of-range")]
+    [InlineData("budget-override-month-out-of-range")]
     public async Task Corrupted_backup_writes_nothing(string corruption)
     {
         var source = await Scenario.BuildAsync(postgres);
@@ -280,6 +284,29 @@ public class RestoreBackupTests(PostgresFixture postgres)
                 // 清到全空就整筆刪除（P4 L plan Q1c），API 不會留下空的預算。
                 var budgets = backup.Budgets!.ToList();
                 budgets[0] = budgets[0] with { DefaultAmount = null, Overrides = [] };
+                return backup with { Budgets = budgets };
+            }
+            case "planned-expense-month-out-of-range":
+                // 歸屬月份年份不在 BudgetMonth 支援的範圍（1900–2999）：還原走寫入用的 Create，不放行壞資料。
+                plans[0] = plans[0] with { PlannedExpense = plans[0].PlannedExpense with { BudgetMonth = 300001 } };
+                return backup with { PlannedExpenses = plans };
+            case "recurring-start-month-out-of-range":
+            {
+                var recurring = backup.RecurringPlannedExpenses!.ToList();
+                recurring[0] = recurring[0] with { StartMonth = 189912 };
+                return backup with { RecurringPlannedExpenses = recurring };
+            }
+            case "recurring-end-month-out-of-range":
+            {
+                var recurring = backup.RecurringPlannedExpenses!.ToList();
+                recurring[0] = recurring[0] with { EndMonth = 300001 };
+                return backup with { RecurringPlannedExpenses = recurring };
+            }
+            case "budget-override-month-out-of-range":
+            {
+                var budgets = backup.Budgets!.ToList();
+                var index = budgets.FindIndex(b => b.Overrides.Count > 0);
+                budgets[index] = budgets[index] with { Overrides = [budgets[index].Overrides[0] with { BudgetMonth = 189912 }] };
                 return backup with { Budgets = budgets };
             }
             case "planned-expense-unknown-source":

@@ -21,7 +21,18 @@ public readonly record struct BudgetMonth : IComparable<BudgetMonth>
     public int Key => Year * 100 + Month;
 
     public static BudgetMonth Of(DateOnly date) => new(date.Year, date.Month);
+
+    /// <summary>
+    /// 讀取用：不檢查年份範圍，只給 <c>BudgetMonthConverter</c> 從 DB 還原既有資料，避免歷史資料讓讀取路徑擲例外。
+    /// 寫入或接受外部輸入的路徑一律用 <see cref="Create"/>。
+    /// </summary>
     public static BudgetMonth FromKey(int key) => new(key / 100, key % 100);
+
+    /// <summary>寫入用：yyyymm 必須通過 <see cref="IsValidKey"/>，否則擲 <see cref="DomainException"/>（API 回 422）。</summary>
+    public static BudgetMonth Create(int key) =>
+        IsValidKey(key)
+            ? FromKey(key)
+            : throw new DomainException($"歸屬月份 {key} 不合法：必須是 yyyymm，年份介於 {MinYear} 到 {MaxYear}，月份介於 1 到 12。");
 
     /// <summary>yyyymm 是否為可支援的歸屬月份：年份在 <see cref="MinYear"/>–<see cref="MaxYear"/>，月份 1–12。</summary>
     public static bool IsValidKey(int key) =>

@@ -37,6 +37,33 @@ public class BudgetMonthTests
     public void IsValidKey_rejects_unsupported_year_or_month(int key) =>
         BudgetMonth.IsValidKey(key).Should().BeFalse();
 
+    [Theory]
+    [InlineData(190001, 1900, 1)]
+    [InlineData(202602, 2026, 2)]
+    [InlineData(299912, 2999, 12)]
+    public void Create_accepts_yyyymm_within_supported_years(int key, int year, int month) =>
+        BudgetMonth.Create(key).Should().Be(new BudgetMonth(year, month));
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(189912)]
+    [InlineData(300001)]
+    [InlineData(100000001)]
+    [InlineData(202600)]
+    [InlineData(202613)]
+    [InlineData(-202601)]
+    public void Create_rejects_unsupported_year_or_month_with_domain_exception(int key)
+    {
+        var act = () => BudgetMonth.Create(key);
+        act.Should().Throw<DomainException>().Which.Code.Should().Be(DomainException.RuleCode);
+    }
+
+    [Theory]
+    [InlineData(189912)]
+    [InlineData(300001)]
+    public void FromKey_still_reads_out_of_range_years_so_stored_rows_stay_readable(int key) =>
+        BudgetMonth.FromKey(key).Key.Should().Be(key);
+
     [Fact]
     public void Compares_across_years()
     {
