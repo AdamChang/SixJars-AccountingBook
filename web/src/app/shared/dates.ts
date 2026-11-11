@@ -25,11 +25,16 @@ export function addMonths(budgetMonth: number, delta: number): number {
   return Math.floor(index / 12) * 100 + (index % 12) + 1;
 }
 
+// 與後端 BudgetMonth.MinYear／MaxYear 對齊；超出範圍後端一律回 400
+export const BUDGET_MONTH_MIN_YEAR = 1900;
+export const BUDGET_MONTH_MAX_YEAR = 2999;
+
 export function parseBudgetMonth(value: string | null): number | null {
   if (value === null || !/^\d{6}$/.test(value)) {
     return null;
   }
   const year = Number(value.slice(0, 4));
   const month = Number(value.slice(4));
-  return year >= 1900 && month >= 1 && month <= 12 ? Number(value) : null;
+  const yearInRange = year >= BUDGET_MONTH_MIN_YEAR && year <= BUDGET_MONTH_MAX_YEAR;
+  return yearInRange && month >= 1 && month <= 12 ? Number(value) : null;
 }
