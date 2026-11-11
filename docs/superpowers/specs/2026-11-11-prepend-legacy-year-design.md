@@ -101,11 +101,12 @@ M1、M2 之後，真實資料的差額全部來自 Excel 本身：2025 年 12 �
 ## CLI
 
 ```
-import-legacy --file <xlsm> --into <bookId> [--dry-run]
+import-legacy --file <xlsm> --into <bookId> [--dry-run] [--adjust]
 import-legacy --file <xlsm> --book-name <名稱> --owner-email <email> [--dry-run]   # 現有模式，不變
 ```
 
 - `--into` 與 `--book-name`／`--owner-email` 互斥，兩種都沒給或混用時直接失敗。
+- `--adjust`（M3-2）只能搭配 `--into`，否則直接失敗。給了才把可調整的差額（M3-3）轉成餘額調整；可以和 `--dry-run` 一起用，先看調整清單再決定。銜接摘要多一欄「調整」，結尾列出餘額調整筆數。
 - 結束碼與現有模式相同：報告有錯誤時回 1。
 
 ## 稽核記錄

@@ -209,6 +209,34 @@ public class LegacyJunctionTests
         lines.Should().OnlyContain(l => l.Adjustment == 0m);
     }
 
+    /// <summary>
+    /// spec M3-3：類型不符（D4）同意調整也仍然是錯誤。對應不收集它的期初，
+    /// 所以不會被當成「期初沒接上」而調整；其他項目的差額照樣列入調整清單。
+    /// </summary>
+    [Fact]
+    public void Type_mismatch_is_still_an_error_with_adjustments()
+    {
+        var settings = Settings2025(banks: [new("國泰世華銀行", 21691m), new("國泰投資帳戶", 20m), new("國泰外幣帳戶", 16365m)])
+            with { CreditCards = [new("國泰Combo卡", 22668m), new("華南銀行", 11637m)] };
+
+        var (mapping, lines) = Check(Workbook2025(settings), allowAdjustments: true);
+
+        mapping.Report.Errors.Should().ContainSingle(i => i.Message.Contains("華南銀行"));
+        lines.Single(l => l.Name == "華南銀行").Adjustment.Should().Be(0m);
+        lines.Single(l => l.Name == "國泰世華銀行").Adjustment.Should().Be(-1m);
+    }
+
+    /// <summary>spec M3-3：日期晚於帳本第一天（M2）同意調整也仍然是錯誤。</summary>
+    [Fact]
+    public void Transaction_after_the_first_book_day_is_still_an_error_with_adjustments()
+    {
+        var settings = Settings2025(banks: [new("國泰世華銀行", 21691m), new("華南銀行", 11637m), new("國泰投資帳戶", 20m), new("國泰外幣帳戶", 16365m)]);
+
+        var (mapping, _) = Check(Workbook2025(settings, date: new DateOnly(2026, 1, 2)), allowAdjustments: true);
+
+        mapping.Report.Errors.Should().ContainSingle(i => i.Sheet == "12月" && i.Row == 7 && i.Message.Contains("2026-01-02"));
+    }
+
     [Fact]
     public void Without_adjustments_lines_carry_no_adjustment()
     {
