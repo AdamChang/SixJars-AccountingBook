@@ -2,7 +2,9 @@
 export type TransactionKind =
   | 'Income' | 'Expense' | 'Transfer' | 'Withdrawal' | 'CashDeposit' | 'TopUp'
   | 'CardPayment' | 'LoanDisbursement' | 'LoanPayment' | 'FundAllocation'
-  | 'FundWithdrawal' | 'FundReturn';
+  | 'FundWithdrawal' | 'FundReturn'
+  // 只由 CLI 補匯舊年度在銜接點產生；API 會回傳，但不接受建立或改成這個類型
+  | 'BalanceAdjustment';
 export type AccountType = 'Cash' | 'Bank' | 'CreditCard' | 'EWallet' | 'Loan';
 export type CategoryKind = 'Income' | 'Expense';
 export type ExpenseNature = 'Floating' | 'Fixed' | 'Loan' | 'Special';

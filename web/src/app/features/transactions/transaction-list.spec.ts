@@ -146,6 +146,44 @@ describe('TransactionList', () => {
     expect(edit).toHaveBeenCalledTimes(1);
   });
 
+  it('balance_adjustment_shows_label_and_signed_amount', async () => {
+    const { cellTexts, element } = await setup([
+      tx({ id: 'a', kind: 'BalanceAdjustment', amount: -320, accountId: 'acc-bank' }),
+      tx({ id: 'b', kind: 'BalanceAdjustment', amount: 150, accountId: 'acc-cash', planningFundId: 'fund-travel' }),
+    ]);
+    const rows = await cellTexts();
+    expect(rows.map(row => row[1])).toEqual(['餘額調整', '餘額調整']);
+    // 帳戶的調整顯示帳戶；財務規劃帳戶的調整掛在現金帳戶，顯示被調整的信封
+    expect(rows.map(row => row[2])).toEqual(['銀行', '旅遊基金']);
+    expect(rows.map(row => row[4])).toEqual(['-320', '150']);
+    expect(element.querySelectorAll('td.mat-column-amount')[0].classList).toContain('negative');
+  });
+
+  it('balance_adjustment_cannot_be_edited_but_can_be_deleted', async () => {
+    const adjustment = tx({ id: 'adj', kind: 'BalanceAdjustment', amount: 100, accountId: 'acc-bank' });
+    const { rows, loader, edit, remove, element } = await setup([adjustment]);
+    const [row] = await rows();
+    await (await row.host()).click();
+    expect(edit).not.toHaveBeenCalled();
+
+    const hint = Array.from(element.querySelectorAll('mat-icon')).find(icon => icon.textContent?.trim() === 'edit_off');
+    expect(hint?.getAttribute('aria-label')).toContain('餘額調整只能由補匯舊年度產生');
+    expect(element.querySelector('tr.mat-mdc-row')!.classList).toContain('not-editable');
+    expect(element.querySelector('tr.mat-mdc-row')!.classList).not.toContain('locked');
+
+    const deleteButton = await loader.getHarness(MatButtonHarness.with({ selector: '.delete' }));
+    expect(await deleteButton.isDisabled()).toBe(false);
+    await deleteButton.click();
+    expect(remove).toHaveBeenCalledExactlyOnceWith(adjustment);
+  });
+
+  it('locked_balance_adjustment_shows_only_lock', async () => {
+    const book: BookDto = { ...BOOK, lockDate: '2026-03-31' };
+    const { element } = await setup([tx({ kind: 'BalanceAdjustment', amount: 100, accountId: 'acc-bank' })], book);
+    const icons = Array.from(element.querySelectorAll('td.actions mat-icon')).map(icon => icon.textContent?.trim());
+    expect(icons).toEqual(['lock', 'delete']);
+  });
+
   it('shows_empty_message', async () => {
     const { element } = await setup([]);
     expect(element.textContent).toContain('這個月還沒有交易');

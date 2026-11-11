@@ -27,6 +27,7 @@ const EXPECTED: Record<TransactionKind, Expectation> = {
   FundAllocation: { label: '入新資金', account: ['Cash', 'Bank', 'EWallet'], counter: ['Cash', 'Bank'], counterRequired: false, category: null, fund: true, principal: false },
   FundWithdrawal: { label: '出資金', account: ['Cash', 'Bank', 'CreditCard', 'EWallet'], counter: null, category: false, fund: true, principal: false },
   FundReturn: { label: '資金回流', account: ['Cash', 'Bank', 'EWallet'], counter: null, category: null, fund: true, principal: false },
+  BalanceAdjustment: { label: '餘額調整', account: ['Cash', 'Bank', 'CreditCard', 'EWallet', 'Loan'], counter: null, category: null, fund: false, principal: false },
 };
 const ALL_KINDS = Object.keys(EXPECTED) as TransactionKind[];
 
@@ -61,7 +62,7 @@ describe('KIND_RULES', () => {
     ['Transfer', 'accountToCounter'], ['Withdrawal', 'accountToCounter'], ['CashDeposit', 'counterToAccount'],
     ['TopUp', 'counterToAccount'], ['CardPayment', 'accountToCounter'], ['LoanDisbursement', 'counterToAccount'],
     ['LoanPayment', 'accountToCounter'], ['FundAllocation', 'counterToAccount'],
-    ['Income', null], ['Expense', null], ['FundWithdrawal', null], ['FundReturn', null],
+    ['Income', null], ['Expense', null], ['FundWithdrawal', null], ['FundReturn', null], ['BalanceAdjustment', null],
   ] as [TransactionKind, string | null][])('%s 的 flow 為 %s', (kind, flow) => {
     expect(KIND_RULES[kind].flow).toBe(flow);
   });
@@ -75,6 +76,12 @@ describe('KIND_RULES', () => {
     const all = [...PRIMARY_KINDS, ...MORE_KINDS];
     expect(all.length).toBe(12);
     expect(new Set(all).size).toBe(12);
+  });
+
+  it('只有餘額調整不能在 Web 編輯，也不出現在新增選單', () => {
+    expect(ALL_KINDS.filter(k => !KIND_RULES[k].webEditable)).toEqual(['BalanceAdjustment']);
+    expect([...PRIMARY_KINDS, ...MORE_KINDS]).not.toContain('BalanceAdjustment');
+    expect([...PRIMARY_KINDS, ...MORE_KINDS].sort()).toEqual(ALL_KINDS.filter(k => KIND_RULES[k].webEditable).sort());
   });
 });
 
