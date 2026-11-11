@@ -20,7 +20,7 @@ dotnet ef migrations add <Name> --project src/SixJars.Infrastructure --startup-p
 
 # CLI（管理工具：import-legacy / add-member / add-creator / remove-creator / revoke-mcp-access / restore-backup），連線字串只讀環境變數 ConnectionStrings__SixJars
 dotnet run --project src/SixJars.Cli -- --help
-# 補匯舊年度到既有帳本最前面（與 --book-name／--owner-email 互斥；銜接檢查不過整批不寫入）
+# 補匯舊年度到既有帳本最前面（與 --book-name／--owner-email 互斥；銜接差額預設整批不寫入，--adjust 才以「餘額調整」補齊）
 dotnet run --project src/SixJars.Cli -- import-legacy --file <前一年.xlsm> --into <bookId> --dry-run
 ```
 

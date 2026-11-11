@@ -10,7 +10,8 @@ namespace SixJars.AcceptanceTests;
 
 /// <summary>
 /// 補匯舊年度的真實資料驗收（spec「測試」）：CLI 匯入本年度記帳本後，再以 <c>import-legacy --into</c> 補上前一年，
-/// 銜接檢查必須通過，而且本年度每一天的帳戶與財務規劃帳戶餘額都不變。兩個檔案任一不存在時略過。
+/// 真實資料的 2026 期初沒有承接 2025 年底的餘額，所以用 --adjust（spec M3）以餘額調整補齊；
+/// 除此之外的檢查都必須通過，而且本年度每一天的帳戶與財務規劃帳戶餘額都不變。兩個檔案任一不存在時略過。
 /// </summary>
 public class CliPrependAcceptanceTests(PostgresFixture postgres)
 {
@@ -37,7 +38,7 @@ public class CliPrependAcceptanceTests(PostgresFixture postgres)
 
         var prepend = new StringWriter();
         var exitCode = await RunAsync(connectionString, prepend,
-            "import-legacy", "--file", RepoPaths.PreviousLegacyWorkbook, "--into", bookId.ToString());
+            "import-legacy", "--file", RepoPaths.PreviousLegacyWorkbook, "--into", bookId.ToString(), "--adjust");
 
         // 失敗時輸出含銜接摘要：判斷是 Excel 本身對不起來還是對應邏輯的 bug，不要放寬檢查。
         exitCode.Should().Be(0, prepend.ToString());
