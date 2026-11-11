@@ -105,6 +105,7 @@ public class TransactionTagTests
         TransactionKind.FundAllocation => _s.Factory.FundAllocation(Date, _s.FreedomFund.Id, _s.Investment.Id, _s.Bank.Id, 100m),
         TransactionKind.FundWithdrawal => _s.Factory.FundWithdrawal(Date, _s.FreedomFund.Id, _s.Investment.Id, 1m),
         TransactionKind.FundReturn => _s.Factory.FundReturn(Date, _s.FreedomFund.Id, _s.Investment.Id, 100m),
+        TransactionKind.BalanceAdjustment => _s.Factory.AccountAdjustment(Date, _s.Bank.Id, -100m),
         _ => throw new ArgumentOutOfRangeException(nameof(kind)),
     };
 }

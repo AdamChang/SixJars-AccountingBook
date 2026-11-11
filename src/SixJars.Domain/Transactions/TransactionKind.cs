@@ -5,4 +5,7 @@ public enum TransactionKind
 {
     Income, Expense, Transfer, Withdrawal, CashDeposit, TopUp, CardPayment,
     LoanDisbursement, LoanPayment, FundAllocation, FundWithdrawal, FundReturn,
+
+    /// <summary>餘額調整：只由補匯舊年度在銜接點產生（spec M3），不計入月可用餘額與收支報表。</summary>
+    BalanceAdjustment,
 }

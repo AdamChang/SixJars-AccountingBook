@@ -80,10 +80,11 @@ public sealed class Transaction
     public DateTimeOffset? DeletedAt { get; private set; }
     public bool IsDeleted => DeletedAt is not null;
 
-    /// <summary>對財務規劃帳戶的影響：入新資金與資金回流為正、出資金為負。</summary>
+    /// <summary>對財務規劃帳戶的影響：入新資金與資金回流為正、出資金為負；財務規劃帳戶的餘額調整帶正負號。</summary>
     public decimal FundDelta => Kind switch
     {
         TransactionKind.FundAllocation or TransactionKind.FundReturn => Amount,
+        TransactionKind.BalanceAdjustment when PlanningFundId is not null => Amount,
         TransactionKind.FundWithdrawal => -Amount,
         _ => 0m,
     };

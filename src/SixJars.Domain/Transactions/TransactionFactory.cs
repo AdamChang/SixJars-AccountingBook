@@ -176,6 +176,26 @@ public sealed class TransactionFactory(Book book, TransactionId? fixedId = null)
         return Create(TransactionKind.FundReturn, date, budgetMonth, amount, accountId, null, null, note, [new(accountId, amount)], planningFundId: fundId);
     }
 
+    /// <summary>帳戶的餘額調整（spec M3-1）：任何類型的帳戶都可以，金額帶正負號，產生一筆分錄。</summary>
+    public Transaction AccountAdjustment(DateOnly date, AccountId accountId, decimal amount, string? note = null, BudgetMonth? budgetMonth = null)
+    {
+        RequireNonZero(amount);
+        book.GetAccount(accountId);
+        return Create(TransactionKind.BalanceAdjustment, date, budgetMonth, amount, accountId, null, null, note, [new(accountId, amount)]);
+    }
+
+    /// <summary>
+    /// 財務規劃帳戶的餘額調整（spec M3-1）：財務規劃帳戶是信封，調整不影響任何帳戶，所以不產生分錄、只有 FundDelta。
+    /// Transaction 一定要掛一個帳戶，比照同帳戶圈存的入新資金，掛在現金帳戶上。
+    /// </summary>
+    public Transaction FundAdjustment(DateOnly date, PlanningFundId fundId, AccountId cashId, decimal amount, string? note = null, BudgetMonth? budgetMonth = null)
+    {
+        RequireNonZero(amount);
+        book.GetPlanningFund(fundId);
+        RequireAccount(cashId, AccountType.Cash);
+        return Create(TransactionKind.BalanceAdjustment, date, budgetMonth, amount, cashId, null, null, note, [], planningFundId: fundId);
+    }
+
     /// <summary>
     /// 掛上標籤：每個標籤都必須屬於本帳本（找不到時 422）。不檢查封存：還原備份要能重建掛著封存標籤的交易，
     /// 「不可新加封存標籤」由寫入 command 檢查（spec D2）。
