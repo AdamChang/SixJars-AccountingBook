@@ -25,7 +25,7 @@ const EXPECTED: Record<TransactionKind, Expectation> = {
   LoanDisbursement: { label: '新增貸款', account: ['Cash', 'Bank'], counter: ['Loan'], counterRequired: true, category: null, fund: false, principal: false },
   LoanPayment: { label: '貸款繳款', account: ['Cash', 'Bank'], counter: ['Loan'], counterRequired: true, category: false, fund: false, principal: true },
   FundAllocation: { label: '入新資金', account: ['Cash', 'Bank', 'EWallet'], counter: ['Cash', 'Bank'], counterRequired: false, category: null, fund: true, principal: false },
-  FundWithdrawal: { label: '出資金', account: ['Cash', 'Bank', 'EWallet'], counter: null, category: false, fund: true, principal: false },
+  FundWithdrawal: { label: '出資金', account: ['Cash', 'Bank', 'CreditCard', 'EWallet'], counter: null, category: false, fund: true, principal: false },
   FundReturn: { label: '資金回流', account: ['Cash', 'Bank', 'EWallet'], counter: null, category: null, fund: true, principal: false },
 };
 const ALL_KINDS = Object.keys(EXPECTED) as TransactionKind[];

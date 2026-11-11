@@ -53,6 +53,25 @@ public class TransactionFactoryFundTests
             .CategoryId.Should().Be(_s.Food.Id);
 
     [Fact]
+    public void Withdrawal_by_credit_card_increases_card_debt_and_reduces_fund()
+    {
+        var tx = _s.Factory.FundWithdrawal(Jan11, _s.FreedomFund.Id, _s.Card.Id, 6000m);
+
+        tx.Postings.Should().Equal(new Posting(_s.Card.Id, -6000m));
+        tx.FundDelta.Should().Be(-6000m);
+    }
+
+    [Fact]
+    public void Allocation_and_return_still_reject_credit_card()
+    {
+        var allocation = () => _s.Factory.FundAllocation(Jan11, _s.FreedomFund.Id, _s.Card.Id, null, 1m);
+        var fundReturn = () => _s.Factory.FundReturn(Jan11, _s.FreedomFund.Id, _s.Card.Id, 1m);
+
+        allocation.Should().Throw<DomainException>();
+        fundReturn.Should().Throw<DomainException>();
+    }
+
+    [Fact]
     public void Return_increases_account_and_fund()
     {
         var tx = _s.Factory.FundReturn(Jan11, _s.FreedomFund.Id, _s.Investment.Id, 254m);

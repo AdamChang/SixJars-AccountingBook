@@ -69,7 +69,7 @@ export const KIND_RULES: Record<TransactionKind, KindRule> = {
     category: null, planningFund: true, loanPrincipal: false, signed: false, flow: 'counterToAccount',
   },
   FundWithdrawal: {
-    label: '出資金', account: { label: '帳戶', types: CASH_BANK_EWALLET }, counter: null,
+    label: '出資金', account: { label: '帳戶', types: ['Cash', 'Bank', 'CreditCard', 'EWallet'] }, counter: null,
     category: { required: false }, planningFund: true, loanPrincipal: false, signed: false, flow: null,
   },
   FundReturn: {

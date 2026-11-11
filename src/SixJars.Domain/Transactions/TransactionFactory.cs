@@ -12,6 +12,9 @@ public sealed class TransactionFactory(Book book, TransactionId? fixedId = null)
 {
     private static readonly AccountType[] FundAccountTypes = [AccountType.Cash, AccountType.Bank, AccountType.EWallet];
 
+    /// <summary>出資金可以刷卡：消費刷在信用卡上，錢算是從信封出（舊 Excel 允許，2026-11-11 決定）。</summary>
+    private static readonly AccountType[] FundWithdrawalAccountTypes = [.. FundAccountTypes, AccountType.CreditCard];
+
     public Transaction Income(DateOnly date, AccountId accountId, CategoryId categoryId, decimal amount, string? note = null, BudgetMonth? budgetMonth = null)
     {
         RequireNonZero(amount);
@@ -155,7 +158,7 @@ public sealed class TransactionFactory(Book book, TransactionId? fixedId = null)
     {
         RequirePositive(amount);
         book.GetPlanningFund(fundId);
-        RequireAccount(accountId, FundAccountTypes);
+        RequireAccount(accountId, FundWithdrawalAccountTypes);
         if (categoryId is { } category)
         {
             RequireCategory(category, CategoryKind.Expense);
