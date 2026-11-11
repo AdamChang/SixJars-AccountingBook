@@ -31,6 +31,8 @@ public class TransactionInputValidatorTests
         { "Transfer 帶了 CategoryId", nameof(TransactionInput.CategoryId) },
         { "Expense 帶了 LoanPrincipal", nameof(TransactionInput.LoanPrincipal) },
         { "BudgetMonth 月份 13", nameof(TransactionInput.BudgetMonth) },
+        // spec M3-5：餘額調整只能由補匯舊年度產生，Web／API 不能建立或改成這個類型。
+        { "BalanceAdjustment", nameof(TransactionInput.Kind) },
     };
 
     [Theory]
@@ -102,6 +104,8 @@ public class TransactionInputValidatorTests
             new(TransactionKind.Expense, Jan5, null, -120m, Cash, null, Food, null, 10m, null),
         "BudgetMonth 月份 13" =>
             new(TransactionKind.Expense, Jan5, 202613, -120m, Cash, null, Food, null, null, null),
+        "BalanceAdjustment" =>
+            new(TransactionKind.BalanceAdjustment, Jan5, null, -100m, Bank, null, null, null, null, null),
         _ => throw new ArgumentOutOfRangeException(nameof(caseName), caseName, null),
     };
 }

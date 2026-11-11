@@ -37,12 +37,13 @@ public sealed class SqlLedgerSummaryQuery(SixJarsDbContext db) : ILedgerSummaryQ
             .Select(g => new { g.Key.PlanningFundId, g.Key.Kind, Total = g.Sum(t => t.Amount) })
             .ToListAsync(cancellationToken);
 
-        // 符號與 Transaction.FundDelta 相同：入新資金與資金回流為正、出資金為負。
+        // 符號與 Transaction.FundDelta 相同：入新資金與資金回流為正、出資金為負；
+        // 已篩選 PlanningFundId != null，所以這裡的餘額調整都是財務規劃帳戶的調整（帶正負號）。
         return totals
             .GroupBy(x => x.PlanningFundId!.Value)
             .ToDictionary(g => g.Key, g => g.Sum(x => x.Kind switch
             {
-                TransactionKind.FundAllocation or TransactionKind.FundReturn => x.Total,
+                TransactionKind.FundAllocation or TransactionKind.FundReturn or TransactionKind.BalanceAdjustment => x.Total,
                 TransactionKind.FundWithdrawal => -x.Total,
                 _ => 0m,
             }));
