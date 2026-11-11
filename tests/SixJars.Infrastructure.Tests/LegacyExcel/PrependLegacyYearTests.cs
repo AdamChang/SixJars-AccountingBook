@@ -91,7 +91,13 @@ public class PrependLegacyYearTests(PostgresFixture postgres)
 
         var import = (await db.AuditEntries.ToListAsync(Ct)).Single(e => e.After!.Contains("previousOpeningDate"));
         using var after = JsonDocument.Parse(import.After!);
-        after.RootElement.GetProperty("adjustments").GetArrayLength().Should().Be(3);
+        var items = after.RootElement.GetProperty("adjustments").EnumerateArray().ToList();
+        items.Should().HaveCount(3);
+        // 帳戶與財務規劃帳戶可以同名，稽核明細要帶 Id 與類型才能追到是哪一個。
+        items.Should().ContainSingle(i => i.GetProperty("type").GetString() == AuditEntityTypes.PlanningFund
+            && i.GetProperty("id").GetGuid() == book.FindPlanningFund("財務自由帳戶")!.Id.Value && i.GetProperty("amount").GetDecimal() == 874.3m);
+        items.Should().ContainSingle(i => i.GetProperty("type").GetString() == AuditEntityTypes.Account
+            && i.GetProperty("id").GetGuid() == book.FindAccount("郵局")!.Id.Value && i.GetProperty("amount").GetDecimal() == -500m);
     }
 
     [Fact]

@@ -96,7 +96,7 @@ internal sealed class PrependLegacyYearHandler(ISixJarsDbContext db, IAuditTrail
 
         audit.Record(book.Id.Value, AuditAction.Import, AuditEntityTypes.Book, book.Id.Value, null, new PrependImportSnapshot(
             fileName, mapping.Transactions.Count, mapping.PlannedExpenses.Count, mapping.Report.Warnings.Count, previousOpeningDate,
-            [.. junction.Where(l => l.Adjustment != 0m).Select(l => new AdjustmentItem(l.Name, l.Adjustment))]));
+            [.. junction.Where(l => l.Adjustment != 0m).Select(AdjustmentItem.Of)]));
         var (changedBefore, changedAfter) = before.ChangedAgainst(OpeningsSnapshot.Of(book));
         audit.Record(book.Id.Value, AuditAction.Update, AuditEntityTypes.Book, book.Id.Value, changedBefore, changedAfter);
 
@@ -151,7 +151,14 @@ internal sealed class PrependLegacyYearHandler(ISixJarsDbContext db, IAuditTrail
     private sealed record PrependImportSnapshot(
         string FileName, int Transactions, int PlannedExpenses, int Warnings, DateOnly PreviousOpeningDate, IReadOnlyList<AdjustmentItem> Adjustments);
 
-    private sealed record AdjustmentItem(string Name, decimal Amount);
+    /// <summary>
+    /// 一筆餘額調整的稽核明細。帳戶與財務規劃帳戶可以同名，所以帶 Id 與類型（<see cref="AuditEntityTypes"/>）才追得到是哪一個。
+    /// </summary>
+    private sealed record AdjustmentItem(Guid Id, string Type, string Name, decimal Amount)
+    {
+        public static AdjustmentItem Of(JunctionLine line) => new(
+            line.Id, line.IsPlanningFund ? AuditEntityTypes.PlanningFund : AuditEntityTypes.Account, line.Name, line.Adjustment);
+    }
 
     private sealed record OpeningItem(Guid Id, string Name, decimal OpeningBalance);
 

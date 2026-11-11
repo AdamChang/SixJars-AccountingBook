@@ -150,6 +150,20 @@ public class CliImportLegacyIntoTests(PostgresFixture postgres)
         (await db.Transactions.CountAsync(t => t.Kind == Domain.Transactions.TransactionKind.BalanceAdjustment, Ct)).Should().Be(1);
     }
 
+    /// <summary>spec D2：並行衝突由 CLI 的全域例外處理統一轉成「請重新執行」，不印例外型別或 stack trace。</summary>
+    [Fact]
+    public async Task Concurrency_conflict_asks_to_rerun()
+    {
+        var connectionString = await postgres.CreateConnectionStringAsync(Ct);
+        var output = new StringWriter();
+
+        var exitCode = await RunAsync(connectionString, output,
+            "import-legacy", "--file", await FileAsync(ConflictFile), "--into", Guid.NewGuid().ToString());
+
+        exitCode.Should().Be(1);
+        output.ToString().Should().Contain("請重新執行").And.Contain("沒有寫入").And.NotContain(nameof(DbUpdateConcurrencyException)).And.NotContain("   at ");
+    }
+
     [Fact]
     public async Task Adjust_without_into_is_rejected()
     {
@@ -197,9 +211,17 @@ public class CliImportLegacyIntoTests(PostgresFixture postgres)
     private static SixJarsDbContext Open(string connectionString) =>
         new(new DbContextOptionsBuilder<SixJarsDbContext>().UseNpgsql(connectionString).Options);
 
+    /// <summary>假 reader 讀到這個檔名時擲並行衝突，模擬寫入時帳本被別人改過。</summary>
+    private const string ConflictFile = "並行衝突.xlsm";
+
     private sealed class FakeReader : ILegacyWorkbookReader
     {
-        public Task<LegacyWorkbook> ReadAsync(Stream stream, CancellationToken cancellationToken) =>
-            Task.FromResult(Workbooks[Path.GetFileName(((FileStream)stream).Name)]);
+        public Task<LegacyWorkbook> ReadAsync(Stream stream, CancellationToken cancellationToken)
+        {
+            var name = Path.GetFileName(((FileStream)stream).Name);
+            return name == ConflictFile
+                ? throw new DbUpdateConcurrencyException("模擬的並行衝突")
+                : Task.FromResult(Workbooks[name]);
+        }
     }
 }

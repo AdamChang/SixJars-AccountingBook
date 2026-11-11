@@ -136,18 +136,7 @@ public static class CliApp
     /// <summary>補匯舊年度：報告之後印出期初日的變化與銜接摘要（spec「報告」），讓使用者看出哪個帳戶對不起來。</summary>
     private static async Task<int> PrependAsync(ISender sender, TextWriter output, PrependLegacyYear request, CancellationToken ct)
     {
-        PrependLegacyYearResult result;
-        try
-        {
-            result = await sender.Send(request, ct);
-        }
-        catch (DbUpdateConcurrencyException)
-        {
-            // spec D2：衝突機率極低，不加鎖，請使用者重跑。
-            await output.WriteLineAsync("錯誤：補匯期間帳本被修改（例如有人同時在 Web 改設定），沒有寫入任何資料；請重新執行。");
-            return 1;
-        }
-
+        var result = await sender.Send(request, ct);
         await WriteReportAsync(output, result.Report);
         if (result.Junction.Count > 0)
         {
@@ -335,6 +324,12 @@ public static class CliApp
             catch (Exception ex) when (ex is DomainException or NotFoundException)
             {
                 await output.WriteLineAsync($"錯誤：{ex.Message}");
+                return 1;
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                // 並行衝突（例如補匯期間有人在 Web 改設定，spec D2）：機率極低、不加鎖；整筆寫入已回復，請使用者重跑。
+                await output.WriteLineAsync("錯誤：執行期間資料被其他人修改（例如有人同時在 Web 改設定），這次沒有寫入任何資料；請重新執行。");
                 return 1;
             }
             catch (Exception ex) when (ex is not OperationCanceledException)

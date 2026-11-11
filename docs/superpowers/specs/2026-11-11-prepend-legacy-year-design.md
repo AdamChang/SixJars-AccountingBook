@@ -113,7 +113,7 @@ import-legacy --file <xlsm> --book-name <名稱> --owner-email <email> [--dry-ru
 
 | Action | EntityType | Before | After |
 |---|---|---|---|
-| `Import` | `Book` | null | `{ fileName, transactions, plannedExpenses, warnings, previousOpeningDate }` |
+| `Import` | `Book` | null | `{ fileName, transactions, plannedExpenses, warnings, previousOpeningDate, adjustments: [{ id, type, name, amount }] }`；`type` 是 `Account` 或 `PlanningFund`（兩者可以同名，M3） |
 | `Update` | `Book` | `{ openingDate, accounts: [{ id, name, openingBalance }], planningFunds: [...] }` | 同左，改寫後的值；只列有變動的項目 |
 
 新增並封存的設定項目不逐筆記錄，摘要裡的數字與帳本現況就能看出來。
