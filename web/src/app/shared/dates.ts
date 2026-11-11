@@ -20,6 +20,11 @@ export function formatBudgetMonth(budgetMonth: number): string {
   return `${Math.floor(budgetMonth / 100)}/${pad(budgetMonth % 100)}`;
 }
 
+// 該月最後一天（yyyy-MM-dd）；Date 的日為 0 即上個月最後一天
+export function lastDayOfBudgetMonth(budgetMonth: number): string {
+  return toDateString(new Date(Math.floor(budgetMonth / 100), budgetMonth % 100, 0));
+}
+
 export function addMonths(budgetMonth: number, delta: number): number {
   const index = Math.floor(budgetMonth / 100) * 12 + (budgetMonth % 100 - 1) + delta;
   return Math.floor(index / 12) * 100 + (index % 12) + 1;

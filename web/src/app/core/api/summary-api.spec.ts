@@ -27,4 +27,9 @@ describe('SummaryApi', () => {
       .flush(summary);
     expect(result).toEqual(summary);
   });
+
+  it('get_passes_as_of_when_given', () => {
+    api.get('b1', 202601, '2026-01-31').subscribe();
+    httpTesting.expectOne({ method: 'GET', url: '/api/books/b1/summary?budgetMonth=202601&asOf=2026-01-31' }).flush({});
+  });
 });

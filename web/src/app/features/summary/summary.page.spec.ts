@@ -21,14 +21,22 @@ const SUMMARY: LedgerSummaryDto = {
   ],
   planningFunds: [{ id: 'fund-travel', name: '旅遊基金', balance: 8000 }],
 };
-const url = (month: number) => `/api/books/${BOOK.id}/summary?budgetMonth=${month}`;
+// 預設 asOf 對應過去月份 2026/03 的月底
+const url = (month: number, asOf: string | null = '2026-03-31') =>
+  `/api/books/${BOOK.id}/summary?budgetMonth=${month}` + (asOf ? `&asOf=${asOf}` : '');
 const budgetsUrl = (month: number) => `/api/books/${BOOK.id}/budgets?budgetMonth=${month}`;
 const BUDGETS: BudgetSheetDto = {
   rows: [{ categoryId: 'cat-food', defaultAmount: 3000, budget: 3000, source: 'Default', actual: 960, remaining: 2040 }],
   totals: { budget: 3000, actual: 960, remaining: 2040 },
 };
 
-async function setup(path: string, summary: LedgerSummaryDto = SUMMARY, month = 202603, budgets: BudgetSheetDto = BUDGETS) {
+async function setup(
+  path: string,
+  summary: LedgerSummaryDto = SUMMARY,
+  month = 202603,
+  budgets: BudgetSheetDto = BUDGETS,
+  asOf: string | null = '2026-03-31',
+) {
   TestBed.configureTestingModule({
     providers: [
       provideRouter([{ path: 'books/:bookId', children: [{ path: 'summary', component: SummaryPage }] }]),
@@ -40,7 +48,7 @@ async function setup(path: string, summary: LedgerSummaryDto = SUMMARY, month = 
   const harness = await RouterTestingHarness.create();
   await harness.navigateByUrl(path, SummaryPage);
   const httpTesting = TestBed.inject(HttpTestingController);
-  httpTesting.expectOne(url(month)).flush(summary);
+  httpTesting.expectOne(url(month, asOf)).flush(summary);
   httpTesting.expectOne(budgetsUrl(month)).flush(budgets);
   await harness.fixture.whenStable();
   const el = harness.fixture.nativeElement as HTMLElement;
@@ -56,6 +64,18 @@ describe('SummaryPage', () => {
   it('loads_summary_for_query_month', async () => {
     const { el } = await setup('/books/book-1/summary?month=202603');
     expect(el.textContent).toContain('2026/03');
+  });
+
+  it('other_month_balances_are_as_of_month_end', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 10, 11));
+    await setup('/books/book-1/summary?month=202702', SUMMARY, 202702, BUDGETS, '2027-02-28');
+  });
+
+  it('current_month_balances_omit_as_of_so_backend_uses_today', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 10, 11));
+    await setup('/books/book-1/summary?month=202611', SUMMARY, 202611, BUDGETS, null);
   });
 
   it('shows_three_cards_with_formatted_amounts', async () => {

@@ -7,9 +7,12 @@ import { LedgerSummaryDto } from './dto';
 export class SummaryApi {
   private readonly http = inject(HttpClient);
 
-  // 不帶 asOf，由後端依 budgetMonth 決定截止日
-  get(bookId: string, budgetMonth: number): Observable<LedgerSummaryDto> {
-    const params = new HttpParams().set('budgetMonth', budgetMonth);
+  // asOf 省略時後端以台北時間的今天截止
+  get(bookId: string, budgetMonth: number, asOf?: string): Observable<LedgerSummaryDto> {
+    let params = new HttpParams().set('budgetMonth', budgetMonth);
+    if (asOf) {
+      params = params.set('asOf', asOf);
+    }
     return this.http.get<LedgerSummaryDto>(`/api/books/${bookId}/summary`, { params });
   }
 }

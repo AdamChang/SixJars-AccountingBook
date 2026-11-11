@@ -7,7 +7,7 @@ import { BudgetApi } from '../../core/api/budget-api';
 import { AccountType, BalanceDto } from '../../core/api/dto';
 import { SummaryApi } from '../../core/api/summary-api';
 import { CurrentBook } from '../../core/book/current-book';
-import { budgetMonthOf, parseBudgetMonth } from '../../shared/dates';
+import { budgetMonthOf, lastDayOfBudgetMonth, parseBudgetMonth } from '../../shared/dates';
 import { formatAmount } from '../../shared/money';
 import { MonthNav } from '../../shared/month-nav';
 
@@ -16,6 +16,11 @@ interface AccountGroup { title: string; accounts: BalanceDto[]; total: number }
 // 金額最多兩位小數，四捨五入到分避免浮點加總誤差
 function sumBalances(items: { balance: number }[]): number {
   return Math.round(items.reduce((sum, item) => sum + item.balance, 0) * 100) / 100;
+}
+
+// 當月不帶 asOf，由後端以台北時間的今天截止；其他月份以該月最後一天截止（帳戶餘額依日期計算）
+function balanceAsOf(month: number): string | undefined {
+  return month === budgetMonthOf(new Date()) ? undefined : lastDayOfBudgetMonth(month);
 }
 
 // 組的順序即畫面順序
@@ -53,7 +58,7 @@ export class SummaryPage {
   // 載入失敗時 interceptor 已通知，保留上一次的數字
   protected readonly summary = toSignal(
     toObservable(computed(() => ({ bookId: this.bookId(), month: this.month() }))).pipe(
-      switchMap(({ bookId, month }) => this.summaryApi.get(bookId, month).pipe(catchError(() => EMPTY))),
+      switchMap(({ bookId, month }) => this.summaryApi.get(bookId, month, balanceAsOf(month)).pipe(catchError(() => EMPTY))),
     ),
   );
 

@@ -1,4 +1,4 @@
-import { addMonths, budgetMonthOf, formatBudgetMonth, parseBudgetMonth, parseDateString, toDateString } from './dates';
+import { addMonths, budgetMonthOf, lastDayOfBudgetMonth, formatBudgetMonth, parseBudgetMonth, parseDateString, toDateString } from './dates';
 
 describe('dates', () => {
   it.each([
@@ -50,5 +50,15 @@ describe('dates', () => {
 
   it('formatBudgetMonth', () => {
     expect(formatBudgetMonth(202601)).toBe('2026/01');
+  });
+
+  it.each([
+    [202601, '2026-01-31'],
+    [202602, '2026-02-28'],
+    [202402, '2024-02-29'],
+    [202604, '2026-04-30'],
+    [202612, '2026-12-31'],
+  ])('lastDayOfBudgetMonth(%i)', (month, expected) => {
+    expect(lastDayOfBudgetMonth(month)).toBe(expected);
   });
 });
