@@ -25,6 +25,8 @@ public sealed class PlanningFund
 
     internal void Rename(string name) => Name = name;
 
+    internal void SetOpeningBalance(decimal amount) => OpeningBalance = amount;
+
     /// <summary>重複封存時保留第一次的時間。</summary>
     internal void Archive(DateTimeOffset at) => ArchivedAt ??= at;
 

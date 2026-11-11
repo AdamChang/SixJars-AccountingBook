@@ -102,6 +102,27 @@ public sealed class Book
 
     public void SetLockDate(DateOnly? lockDate) => LockDate = lockDate;
 
+    /// <summary>
+    /// 補匯舊年度：期初日往前移，期初餘額改成那一年的年初值。
+    /// 呼叫端負責保證「新期初 + 補進來的分錄 == 舊期初」；這裡只守住期初日只能往前，而且先驗證全部再套用。
+    /// </summary>
+    public void PrependHistory(
+        DateOnly newOpeningDate,
+        IReadOnlyDictionary<AccountId, decimal> accountOpenings,
+        IReadOnlyDictionary<PlanningFundId, decimal> fundOpenings)
+    {
+        if (newOpeningDate >= OpeningDate)
+        {
+            throw new DomainException($"新的期初日 {newOpeningDate:yyyy-MM-dd} 必須早於目前的期初日 {OpeningDate:yyyy-MM-dd}。");
+        }
+
+        var accounts = accountOpenings.Select(p => (Account: GetAccount(p.Key), Amount: p.Value)).ToList();
+        var funds = fundOpenings.Select(p => (Fund: GetPlanningFund(p.Key), Amount: p.Value)).ToList();
+        accounts.ForEach(a => a.Account.SetOpeningBalance(a.Amount));
+        funds.ForEach(f => f.Fund.SetOpeningBalance(f.Amount));
+        OpeningDate = newOpeningDate;
+    }
+
     /// <summary>交易日期落在鎖帳日（含）以前時擲出 <see cref="DomainException"/>，code 為 <see cref="DomainException.LockedCode"/>。</summary>
     public void EnsureUnlocked(DateOnly date)
     {
