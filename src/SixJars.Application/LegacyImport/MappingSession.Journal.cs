@@ -11,6 +11,13 @@ internal sealed partial class MappingSession
     {
         foreach (var row in month.Journal)
         {
+            // Excel 裡 0 元的列不影響任何數字；略過並警告，與制式表格略過 0 元一致。
+            if (row.Amount == 0m)
+            {
+                _report.AddWarning(SheetName(month), row.Row, "金額為 0，略過。");
+                continue;
+            }
+
             try
             {
                 _transactions.Add(MapJournalRow(month, row));
@@ -90,6 +97,12 @@ internal sealed partial class MappingSession
         if (subAccount is not null && x > 0m)
         {
             return _factory.FundAllocation(date, fund.Id, account.Id, subAccount.Id, x, row.Note, budgetMonth);
+        }
+
+        // Excel 的出資金只看「主選單 = 財務規劃帳戶、金額 < 0」，不看副選單；副選單寫成支出主分類時，當成帶該分類的出資金。
+        if (x < 0m && row.Sub is { } categoryName && _book.FindCategory(categoryName) is { Kind: CategoryKind.Expense } category)
+        {
+            return _factory.FundWithdrawal(date, fund.Id, account.Id, -x, category.Id, row.Note, budgetMonth);
         }
 
         throw new RowRejected($"無法辨識的財務規劃帳戶列：「{fund.Name}／{row.Sub}」，金額 {x}。");
