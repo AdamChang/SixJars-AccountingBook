@@ -98,6 +98,15 @@ describe('TransactionList', () => {
     expect(amounts[1].classList).not.toContain('negative');
   });
 
+  it('fund_withdrawal_amount_is_red', async () => {
+    const { cellTexts, element } = await setup([
+      tx({ id: 'a', kind: 'FundWithdrawal', amount: 500, accountId: 'acc-cash', planningFundId: 'fund-travel' }),
+    ]);
+    // 出資金的金額是正數，但錢是從財務規劃帳戶流出，比照支出顯示紅字
+    expect((await cellTexts())[0][4]).toBe('500');
+    expect(element.querySelectorAll('td.mat-column-amount')[0].classList).toContain('negative');
+  });
+
   it('shows_note', async () => {
     const { cellTexts } = await setup([tx({ note: '便當' })]);
     expect((await cellTexts())[0][5]).toBe('便當');

@@ -70,7 +70,8 @@ export class TransactionList {
         note: dto.note ?? '',
         // 標籤放在備註欄、備註文字之前，依標籤的設定排序（F9）；封存的也顯示
         tags: sortTags(book.tags, dto.tagIds),
-        negative: dto.amount < 0,
+        // 出資金存的是正數，但錢是從財務規劃帳戶流出，比照支出顯示紅字
+        negative: dto.amount < 0 || dto.kind === 'FundWithdrawal',
         locked: isLocked(dto.date, book.lockDate),
         notEditableReason: rule.webEditable ? null : NOT_EDITABLE_MESSAGE,
       };
