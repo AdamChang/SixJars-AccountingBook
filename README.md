@@ -71,7 +71,7 @@ dotnet test --project tests/SixJars.Domain.Tests --filter-class "*BalanceCalcula
 ```
 
 - Domain 以外的測試會用 Testcontainers 啟動 PostgreSQL，Docker 必須在執行中。
-- Acceptance 測試會讀 `reference/2026帳本v1.xlsm`（含個資，不在 repo 中，可用環境變數 `SIXJARS_LEGACY_WORKBOOK` 指定路徑）。找不到檔案時，這些測試會略過。
+- Acceptance 測試會讀 `reference/2026帳本v3.xlsm`（含個資，不在 repo 中，可用環境變數 `SIXJARS_LEGACY_WORKBOOK` 指定路徑）。找不到檔案時，這些測試會略過。
 
 前端（在 `web/` 目錄下）：
 

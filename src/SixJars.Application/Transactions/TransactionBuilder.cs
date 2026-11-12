@@ -38,6 +38,10 @@ public static class TransactionBuilder
                 date, Fund(), account, input.CounterAccountId is { } from ? new AccountId(from) : null, amount, note, budgetMonth),
             TransactionKind.FundWithdrawal => factory.FundWithdrawal(date, Fund(), account, amount, OptionalCategory(), note, budgetMonth),
             TransactionKind.FundReturn => factory.FundReturn(date, Fund(), account, amount, note, budgetMonth),
+            // 只有還原備份會走到這裡：API 的 validator 擋下這個類型（spec M3-5）。
+            TransactionKind.BalanceAdjustment => input.PlanningFundId is { } fund
+                ? factory.FundAdjustment(date, new PlanningFundId(fund), account, amount, note, budgetMonth)
+                : factory.AccountAdjustment(date, account, amount, note, budgetMonth),
             _ => throw new DomainException($"不支援的交易類型 {input.Kind}。"),
         };
         return factory.WithTags(transaction, [.. (input.TagIds ?? []).Select(id => new TagId(id))]);

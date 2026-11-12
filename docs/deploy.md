@@ -531,11 +531,11 @@ $env:ConnectionStrings__SixJars = "Host=<neon-host>;Port=5432;Database=sixjars;U
 
 # 1. dry run：只轉換與檢查，印出錯誤、警告、修正與筆數，不寫入
 dotnet run --project src/SixJars.Cli -- import-legacy `
-  --file reference/2026帳本v1.xlsm --book-name 家庭帳本 --owner-email <你的 Gmail> --dry-run
+  --file reference/2026帳本v3.xlsm --book-name 家庭帳本 --owner-email <你的 Gmail> --dry-run
 
 # 2. 確認報告無誤後，拿掉 --dry-run 正式匯入
 dotnet run --project src/SixJars.Cli -- import-legacy `
-  --file reference/2026帳本v1.xlsm --book-name 家庭帳本 --owner-email <你的 Gmail>
+  --file reference/2026帳本v3.xlsm --book-name 家庭帳本 --owner-email <你的 Gmail>
 ```
 
 - 報告有錯誤時 exit code 為 1，不寫入任何資料；修正 Excel 後重新執行。

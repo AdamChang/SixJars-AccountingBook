@@ -15,4 +15,8 @@ public static class LegacyWorkbookMapper
     /// <param name="bookName">帳本名稱；正式匯入時由 CLI 的 <c>--book-name</c> 指定（T40）。</param>
     public static LegacyImportResult Map(LegacyWorkbook workbook, string bookName = DefaultBookName) =>
         new MappingSession(workbook, bookName).Run();
+
+    /// <summary>補匯舊年度：把舊年度對應到既有帳本（會把只在舊年度出現的項目加入 <paramref name="book"/>）。</summary>
+    public static LegacyPrependMapping MapInto(LegacyWorkbook workbook, Book book) =>
+        new MappingSession(workbook, book.Name).RunInto(book);
 }

@@ -86,6 +86,14 @@ public class MonthlyReportTests
             options => options.WithStrictOrdering());
     }
 
+    /// <summary>spec M3-1：餘額調整不是收支，也不是財務規劃的入出，月報表完全不受影響。</summary>
+    [Fact]
+    public void Balance_adjustments_do_not_appear_in_the_report() =>
+        Build([
+            Flow(TransactionKind.BalanceAdjustment, -8506m),
+            Flow(TransactionKind.BalanceAdjustment, 5000m, fund: _freedom),
+        ]).Should().BeEquivalentTo(Build([]));
+
     [Fact]
     public void Empty_lines_are_omitted_and_every_section_is_present()
     {

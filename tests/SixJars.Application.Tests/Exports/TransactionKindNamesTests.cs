@@ -13,6 +13,6 @@ public class TransactionKindNamesTests
     {
         Enum.GetValues<TransactionKind>().Select(TransactionKindNames.Of).Should().Equal(
             "收入", "支出", "轉帳", "提款", "現金存入", "加值", "繳卡費",
-            "新增貸款", "貸款繳款", "入新資金", "出資金", "資金回流");
+            "新增貸款", "貸款繳款", "入新資金", "出資金", "資金回流", "餘額調整");
     }
 }

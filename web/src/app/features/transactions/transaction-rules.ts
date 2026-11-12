@@ -14,6 +14,7 @@ export interface KindRule {
   loanPrincipal: boolean;                      // true = 必填
   signed: boolean;                             // 收入、支出：帶正負號
   flow: 'accountToCounter' | 'counterToAccount' | null;   // 列表的「從 → 到」
+  webEditable: boolean;                        // false = 不能在 Web 新增或編輯（後端一律 400）
 }
 
 const CASH_BANK: AccountType[] = ['Cash', 'Bank'];
@@ -22,61 +23,70 @@ const CASH_BANK_EWALLET: AccountType[] = ['Cash', 'Bank', 'EWallet'];
 export const KIND_RULES: Record<TransactionKind, KindRule> = {
   Income: {
     label: '收入', account: { label: '帳戶', types: CASH_BANK_EWALLET }, counter: null,
-    category: { required: true }, planningFund: false, loanPrincipal: false, signed: true, flow: null,
+    category: { required: true }, planningFund: false, loanPrincipal: false, signed: true, flow: null, webEditable: true,
   },
   Expense: {
     label: '支出', account: { label: '帳戶', types: ['Cash', 'Bank', 'CreditCard', 'EWallet'] }, counter: null,
-    category: { required: true }, planningFund: false, loanPrincipal: false, signed: true, flow: null,
+    category: { required: true }, planningFund: false, loanPrincipal: false, signed: true, flow: null, webEditable: true,
   },
   Transfer: {
     label: '轉帳', account: { label: '從', types: CASH_BANK },
     counter: { label: '到', types: CASH_BANK, required: true },
-    category: null, planningFund: false, loanPrincipal: false, signed: false, flow: 'accountToCounter',
+    category: null, planningFund: false, loanPrincipal: false, signed: false, flow: 'accountToCounter', webEditable: true,
   },
   Withdrawal: {
     label: '提款', account: { label: '銀行', types: ['Bank'] },
     counter: { label: '現金', types: ['Cash'], required: true },
-    category: null, planningFund: false, loanPrincipal: false, signed: false, flow: 'accountToCounter',
+    category: null, planningFund: false, loanPrincipal: false, signed: false, flow: 'accountToCounter', webEditable: true,
   },
   CashDeposit: {
     label: '現金存入', account: { label: '銀行', types: ['Bank'] },
     counter: { label: '現金', types: ['Cash'], required: true },
-    category: null, planningFund: false, loanPrincipal: false, signed: false, flow: 'counterToAccount',
+    category: null, planningFund: false, loanPrincipal: false, signed: false, flow: 'counterToAccount', webEditable: true,
   },
   TopUp: {
     label: '加值', account: { label: '電子錢包', types: ['EWallet'] },
     counter: { label: '來源', types: ['Cash', 'Bank', 'CreditCard'], required: true },
-    category: null, planningFund: false, loanPrincipal: false, signed: false, flow: 'counterToAccount',
+    category: null, planningFund: false, loanPrincipal: false, signed: false, flow: 'counterToAccount', webEditable: true,
   },
   CardPayment: {
     label: '繳卡費', account: { label: '付款帳戶', types: CASH_BANK },
     counter: { label: '信用卡', types: ['CreditCard'], required: true },
-    category: null, planningFund: false, loanPrincipal: false, signed: false, flow: 'accountToCounter',
+    category: null, planningFund: false, loanPrincipal: false, signed: false, flow: 'accountToCounter', webEditable: true,
   },
   LoanDisbursement: {
     label: '新增貸款', account: { label: '入帳帳戶', types: CASH_BANK },
     counter: { label: '貸款', types: ['Loan'], required: true },
-    category: null, planningFund: false, loanPrincipal: false, signed: false, flow: 'counterToAccount',
+    category: null, planningFund: false, loanPrincipal: false, signed: false, flow: 'counterToAccount', webEditable: true,
   },
   LoanPayment: {
     label: '貸款繳款', account: { label: '付款帳戶', types: CASH_BANK },
     counter: { label: '貸款', types: ['Loan'], required: true },
-    category: { required: false }, planningFund: false, loanPrincipal: true, signed: false, flow: 'accountToCounter',
+    category: { required: false }, planningFund: false, loanPrincipal: true, signed: false, flow: 'accountToCounter', webEditable: true,
   },
   FundAllocation: {
     label: '入新資金', account: { label: '轉入帳戶', types: CASH_BANK_EWALLET },
     counter: { label: '轉出帳戶', types: CASH_BANK, required: false },
-    category: null, planningFund: true, loanPrincipal: false, signed: false, flow: 'counterToAccount',
+    category: null, planningFund: true, loanPrincipal: false, signed: false, flow: 'counterToAccount', webEditable: true,
   },
   FundWithdrawal: {
-    label: '出資金', account: { label: '帳戶', types: CASH_BANK_EWALLET }, counter: null,
-    category: { required: false }, planningFund: true, loanPrincipal: false, signed: false, flow: null,
+    label: '出資金', account: { label: '帳戶', types: ['Cash', 'Bank', 'CreditCard', 'EWallet'] }, counter: null,
+    category: { required: false }, planningFund: true, loanPrincipal: false, signed: false, flow: null, webEditable: true,
   },
   FundReturn: {
     label: '資金回流', account: { label: '帳戶', types: CASH_BANK_EWALLET }, counter: null,
-    category: null, planningFund: true, loanPrincipal: false, signed: false, flow: null,
+    category: null, planningFund: true, loanPrincipal: false, signed: false, flow: null, webEditable: true,
+  },
+  // 金額本身帶正負號：帳戶的調整看分錄；財務規劃帳戶的調整（planningFundId 不為 null）掛在現金帳戶、只影響該信封
+  BalanceAdjustment: {
+    label: '餘額調整', account: { label: '帳戶', types: ['Cash', 'Bank', 'CreditCard', 'EWallet', 'Loan'] }, counter: null,
+    category: null, planningFund: false, loanPrincipal: false, signed: false, flow: null, webEditable: false,
   },
 };
+
+export const NOT_EDITABLE_MESSAGE = '餘額調整只能由補匯舊年度產生，無法在網頁上編輯';
+
+// 新增選單只列 webEditable 的類型（不含 BalanceAdjustment）
 
 export const PRIMARY_KINDS: TransactionKind[] = ['Expense', 'Income', 'Transfer'];
 export const MORE_KINDS: TransactionKind[] = [

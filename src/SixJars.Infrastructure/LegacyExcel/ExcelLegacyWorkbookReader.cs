@@ -86,11 +86,12 @@ public sealed class ExcelLegacyWorkbookReader : ILegacyWorkbookReader
 
     private static IEnumerable<LegacyTemplateRow> TemplateSection(SheetGrid sheet, LegacyTemplateSection section, int first, int last, string? noteColumn) =>
         Enumerable.Range(first, last - first + 1)
-            .Where(row => sheet.Text($"E{row}") is not null && sheet.Number($"N{row}") != 0m)
+            // 只看金額：項目空白但有金額的列也要讀出來，交給對應決定（不能默默丟掉一筆錢，v3 10 月第 86 列）。
+            .Where(row => sheet.Number($"N{row}") != 0m)
             .Select(row => new LegacyTemplateRow(
                 row,
                 section,
-                sheet.Text($"E{row}")!,
+                sheet.Text($"E{row}") ?? "",
                 sheet.Text($"J{row}"),
                 sheet.Number($"N{row}"),
                 sheet.Date($"T{row}"),

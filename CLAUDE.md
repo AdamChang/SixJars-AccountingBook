@@ -20,10 +20,12 @@ dotnet ef migrations add <Name> --project src/SixJars.Infrastructure --startup-p
 
 # CLI（管理工具：import-legacy / add-member / add-creator / remove-creator / revoke-mcp-access / restore-backup），連線字串只讀環境變數 ConnectionStrings__SixJars
 dotnet run --project src/SixJars.Cli -- --help
+# 補匯舊年度到既有帳本最前面（與 --book-name／--owner-email 互斥；銜接差額預設整批不寫入，--adjust 才以「餘額調整」補齊）
+dotnet run --project src/SixJars.Cli -- import-legacy --file <前一年.xlsm> --into <bookId> --dry-run
 ```
 
 - Api / Application / Infrastructure / Acceptance 測試透過 Testcontainers 啟動 `postgres:17-alpine`（assembly 共用一個容器、每個測試各自建資料庫並套 migration），**需要 Docker 正在執行**。Domain 測試不需要。
-- Acceptance 測試讀真實舊帳本 `reference/2026帳本v1.xlsm`（個資，已 gitignore；可用 `SIXJARS_LEGACY_WORKBOOK` 覆寫路徑）。檔案不存在時這些測試會 **skip 而非 fail**，回報結果時要說明。
+- Acceptance 測試讀真實舊帳本 `reference/2026帳本v3.xlsm`（個資，已 gitignore；可用 `SIXJARS_LEGACY_WORKBOOK` 覆寫路徑）。檔案不存在時這些測試會 **skip 而非 fail**，回報結果時要說明。
 - 本機跑 API 與部署（Neon、Cloud Run、migration bundle、DDL/DML 角色分離）見 `docs/deploy.md`。App 啟動時**不會**自動 migrate。
 - 正式部署由 push `v*.*.*` tag 觸發 `.github/workflows/deploy.yml`（重跑 `ci.yml` → build／push image → `gcloud run deploy`，ADR 0012）；migration 仍由使用者在本機執行，`/health/ready`（有未套用的 migration 時回 503）是 Cloud Run 的 startup probe。一次性 GCP 設定在 `scripts/setup-gcp.ps1`。
 

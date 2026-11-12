@@ -6,7 +6,7 @@ import { BookDto, TagDto, TransactionDto } from '../../core/api/dto';
 import { formatAmount } from '../../shared/money';
 import { TagChip } from '../../shared/tag-chip';
 import { sortTags } from '../../shared/tags';
-import { KIND_RULES, categoryLabel, isLocked } from './transaction-rules';
+import { KIND_RULES, NOT_EDITABLE_MESSAGE, categoryLabel, isLocked } from './transaction-rules';
 
 interface TransactionRow {
   dto: TransactionDto;
@@ -19,6 +19,8 @@ interface TransactionRow {
   tags: TagDto[];
   negative: boolean;
   locked: boolean;
+  // 不是鎖帳、而是這個類型不能在 Web 編輯時的說明；可編輯時為 null
+  notEditableReason: string | null;
 }
 
 @Component({
@@ -42,6 +44,7 @@ export class TransactionList {
   protected readonly rows = computed<TransactionRow[]>(() => {
     const book = this.book();
     const accountName = (id: string | null) => book.accounts.find(account => account.id === id)?.name ?? '';
+    const fundName = (id: string) => book.planningFunds.find(fund => fund.id === id)?.name ?? '';
     return this.transactions().map(dto => {
       const rule = KIND_RULES[dto.kind];
       const account = accountName(dto.accountId);
@@ -52,6 +55,9 @@ export class TransactionList {
         accountText = `${account} → ${counter}`;
       } else if (counter !== null && rule.flow === 'counterToAccount') {
         accountText = `${counter} → ${account}`;
+      } else if (dto.kind === 'BalanceAdjustment' && dto.planningFundId !== null) {
+        // 財務規劃帳戶的調整只是掛在現金帳戶、沒有分錄，顯示真正被調整的信封
+        accountText = fundName(dto.planningFundId);
       }
       return {
         dto,
@@ -66,12 +72,13 @@ export class TransactionList {
         tags: sortTags(book.tags, dto.tagIds),
         negative: dto.amount < 0,
         locked: isLocked(dto.date, book.lockDate),
+        notEditableReason: rule.webEditable ? null : NOT_EDITABLE_MESSAGE,
       };
     });
   });
 
   protected onRowClick(row: TransactionRow): void {
-    if (!row.locked) {
+    if (!row.locked && row.notEditableReason === null) {
       this.edit.emit(row.dto);
     }
   }

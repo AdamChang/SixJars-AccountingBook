@@ -57,6 +57,17 @@ public class TransactionBuilderTests
         rebuilt.Should().BeEquivalentTo(expected, o => o.Excluding(t => t.Id));
     }
 
+    /// <summary>還原備份要能重建財務規劃帳戶的餘額調整（spec M3-5）：有 PlanningFundId 時建成不產生分錄的調整。</summary>
+    [Fact]
+    public void Fund_adjustment_round_trips_through_the_dto()
+    {
+        var expected = _factory.FundAdjustment(Jan30, _fund.Id, _cash.Id, 5000m, Note, BudgetMonth.FromKey(Feb));
+
+        var rebuilt = TransactionBuilder.Build(_book, TransactionDto.From(expected, version: 0).ToInput());
+
+        rebuilt.Should().BeEquivalentTo(expected, o => o.Excluding(t => t.Id));
+    }
+
     private (TransactionInput Input, Transaction Expected) Case(TransactionKind kind)
     {
         var month = BudgetMonth.FromKey(Feb);
@@ -98,6 +109,9 @@ public class TransactionBuilderTests
             TransactionKind.FundReturn => (
                 Input(kind, 50m, _bank.Id, planningFundId: _fund.Id),
                 _factory.FundReturn(Jan30, _fund.Id, _bank.Id, 50m, Note, month)),
+            TransactionKind.BalanceAdjustment => (
+                Input(kind, -8506m, _bank.Id),
+                _factory.AccountAdjustment(Jan30, _bank.Id, -8506m, Note, month)),
             _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
         };
     }

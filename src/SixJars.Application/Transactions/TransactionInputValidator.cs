@@ -19,6 +19,7 @@ namespace SixJars.Application.Transactions;
 /// <item><term>FundAllocation</term><description>選填（轉出帳戶）、不使用、必填、不使用</description></item>
 /// <item><term>FundWithdrawal</term><description>不使用、選填、必填、不使用</description></item>
 /// <item><term>FundReturn</term><description>不使用、不使用、必填、不使用</description></item>
+/// <item><term>BalanceAdjustment</term><description>一律拒絕（只能由補匯舊年度產生）</description></item>
 /// </list>
 /// </remarks>
 public sealed class TransactionInputValidator : AbstractValidator<TransactionInput>
@@ -37,6 +38,8 @@ public sealed class TransactionInputValidator : AbstractValidator<TransactionInp
     public TransactionInputValidator()
     {
         RuleFor(i => i.Kind).IsInEnum();
+        // spec M3-5：餘額調整只能由補匯舊年度產生（還原備份經 TransactionBuilder，不經過這個 validator）。
+        RuleFor(i => i.Kind).NotEqual(BalanceAdjustment).WithMessage("餘額調整只能由補匯舊年度產生，不能手動建立或修改成這個類型。");
         RuleFor(i => i.AccountId).NotEmpty();
 
         RuleFor(i => i.CounterAccountId).NotEmpty().When(i => CounterAccountRequired.Contains(i.Kind));

@@ -497,6 +497,7 @@ public class RestoreBackupTests(PostgresFixture postgres)
             var scenario = new Scenario(factory, connectionString, client, book.Id.Value);
             await scenario.FillAsync(book);
             await scenario.ArchiveAndReorderAsync();
+            await scenario.AddBalanceAdjustmentsAsync(book);
             await scenario.Post(other.Id.Value, "transactions", Input(TransactionKind.Expense, "2026-01-06", -77m, other.FindAccount("現金")!,
                 category: other.FindCategory("主食")!.Id.Value));
 
@@ -518,7 +519,12 @@ public class RestoreBackupTests(PostgresFixture postgres)
             var transactions = a.Transactions.ToDictionary(t => t.Transaction.Id);
             // (a) 已刪除的交易：一般刪除 1 筆、付款後刪除 2 筆。
             a.Transactions.Count(t => t.DeletedAt is not null).Should().Be(3);
-            a.Transactions.Select(t => t.Transaction.Kind).Distinct().Should().HaveCount(12, "涵蓋全部 12 種交易類型");
+            a.Transactions.Select(t => t.Transaction.Kind).Distinct().Should().HaveCount(13, "涵蓋全部 13 種交易類型");
+            // (l) 餘額調整（spec M3-5）：帳戶的調整有一筆分錄；財務規劃帳戶的調整掛在現金、沒有分錄。
+            a.Transactions.Should().Contain(t => t.Transaction.Kind == TransactionKind.BalanceAdjustment
+                && t.Transaction.PlanningFundId == null && t.Transaction.Postings.Count == 1);
+            a.Transactions.Should().Contain(t => t.Transaction.Kind == TransactionKind.BalanceAdjustment
+                && t.Transaction.PlanningFundId != null && t.Transaction.Postings.Count == 0);
             // (b) 付款交易被刪除後回到未付。
             a.PlannedExpenses.Should().Contain(p => p.PlannedExpense.Note == "付款被刪除" && !p.PlannedExpense.IsPaid && p.DeletedAt == null);
             // (c) 已刪除、已付款，付款交易仍在。
@@ -582,6 +588,23 @@ public class RestoreBackupTests(PostgresFixture postgres)
             (await Client.PostAsync($"/api/books/{BookId}/tags/{oldProject}/archive", null, Ct)).EnsureSuccessStatusCode();
             (await Client.PutAsJsonAsync($"/api/books/{BookId}/tags/order",
                 new { ids = current.Tags!.Select(t => t.Id).Reverse() }, ApiJson.Options, Ct)).EnsureSuccessStatusCode();
+        }
+
+        /// <summary>
+        /// (l) 餘額調整只由補匯舊年度（CLI）產生，API 不接受這種類型，所以直接寫入資料庫：
+        /// 日期是期初日、歸屬 12 月，與補匯產生的形狀相同（spec M3-4）。
+        /// </summary>
+        public async Task AddBalanceAdjustmentsAsync(Book book)
+        {
+            var factory = new TransactionFactory(book);
+            var month = new BudgetMonth(book.OpeningDate.Year, 12);
+            // 用 ApiFactory 的連線池（它結束時會清掉）；另開 DbContext 會多留一個池，整套測試跑時會用完 Postgres 的連線數。
+            await using var scope = Factory.Services.CreateAsyncScope();
+            var db = scope.ServiceProvider.GetRequiredService<SixJarsDbContext>();
+            db.Transactions.AddRange(
+                factory.AccountAdjustment(book.OpeningDate, book.FindAccount("國泰世華銀行")!.Id, 8506m, "補匯銜接調整", month),
+                factory.FundAdjustment(book.OpeningDate, book.FindPlanningFund("財務自由帳戶")!.Id, book.FindAccount("現金")!.Id, -5000m, "補匯銜接調整", month));
+            await db.SaveChangesAsync(Ct);
         }
 
         public async ValueTask DisposeAsync()

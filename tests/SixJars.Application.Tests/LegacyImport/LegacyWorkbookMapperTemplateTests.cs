@@ -96,4 +96,30 @@ public class LegacyWorkbookMapperTemplateTests
         result.Book.FindCategory("特別支出", "牙齒矯正")!.Nature.Should().Be(ExpenseNature.Special);
         result.Transactions.Single().Kind.Should().Be(TransactionKind.Expense);
     }
+
+    /// <summary>項目空白的特別支出（v3 10 月第 86 列）歸到「特別支出」主分類並警告，不能默默丟掉。</summary>
+    [Fact]
+    public void Special_template_without_item_uses_main_category_with_warning()
+    {
+        var result = LegacyWorkbookMapper.Map(Workbook(Month(10, templates:
+            [Template(86, LegacyTemplateSection.Special, "", "國泰世華銀行", -16000m, new DateOnly(2026, 10, 27))])));
+
+        result.Report.Errors.Should().BeEmpty();
+        result.Report.Warnings.Should().ContainSingle(i => i.Sheet == "10月" && i.Row == 86);
+        result.Transactions.Single().CategoryId.Should().Be(result.Book.FindCategory("特別支出")!.Id);
+        result.PlannedExpenses.Single().IsPaid.Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData(LegacyTemplateSection.Fixed)]
+    [InlineData(LegacyTemplateSection.Loan)]
+    public void Fixed_or_loan_template_without_item_is_an_error(LegacyTemplateSection section)
+    {
+        var result = LegacyWorkbookMapper.Map(Workbook(Month(10, templates:
+            [Template(52, section, "", "國泰世華銀行", -599m, new DateOnly(2026, 10, 16))])));
+
+        result.Transactions.Should().BeEmpty();
+        result.PlannedExpenses.Should().BeEmpty();
+        result.Report.Errors.Should().ContainSingle(i => i.Row == 52 && i.Message.Contains("項目"));
+    }
 }

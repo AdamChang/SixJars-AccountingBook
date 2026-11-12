@@ -19,6 +19,7 @@ public static class TransactionKindNames
         TransactionKind.FundAllocation => "入新資金",
         TransactionKind.FundWithdrawal => "出資金",
         TransactionKind.FundReturn => "資金回流",
+        TransactionKind.BalanceAdjustment => "餘額調整",
         _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "沒有對應中文名稱的交易類型。"),
     };
 }

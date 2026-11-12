@@ -12,6 +12,9 @@ public sealed class TransactionFactory(Book book, TransactionId? fixedId = null)
 {
     private static readonly AccountType[] FundAccountTypes = [AccountType.Cash, AccountType.Bank, AccountType.EWallet];
 
+    /// <summary>出資金可以刷卡：消費刷在信用卡上，錢算是從信封出（舊 Excel 允許，2026-11-11 決定）。</summary>
+    private static readonly AccountType[] FundWithdrawalAccountTypes = [.. FundAccountTypes, AccountType.CreditCard];
+
     public Transaction Income(DateOnly date, AccountId accountId, CategoryId categoryId, decimal amount, string? note = null, BudgetMonth? budgetMonth = null)
     {
         RequireNonZero(amount);
@@ -155,7 +158,7 @@ public sealed class TransactionFactory(Book book, TransactionId? fixedId = null)
     {
         RequirePositive(amount);
         book.GetPlanningFund(fundId);
-        RequireAccount(accountId, FundAccountTypes);
+        RequireAccount(accountId, FundWithdrawalAccountTypes);
         if (categoryId is { } category)
         {
             RequireCategory(category, CategoryKind.Expense);
@@ -171,6 +174,26 @@ public sealed class TransactionFactory(Book book, TransactionId? fixedId = null)
         book.GetPlanningFund(fundId);
         RequireAccount(accountId, FundAccountTypes);
         return Create(TransactionKind.FundReturn, date, budgetMonth, amount, accountId, null, null, note, [new(accountId, amount)], planningFundId: fundId);
+    }
+
+    /// <summary>帳戶的餘額調整（spec M3-1）：任何類型的帳戶都可以，金額帶正負號，產生一筆分錄。</summary>
+    public Transaction AccountAdjustment(DateOnly date, AccountId accountId, decimal amount, string? note = null, BudgetMonth? budgetMonth = null)
+    {
+        RequireNonZero(amount);
+        book.GetAccount(accountId);
+        return Create(TransactionKind.BalanceAdjustment, date, budgetMonth, amount, accountId, null, null, note, [new(accountId, amount)]);
+    }
+
+    /// <summary>
+    /// 財務規劃帳戶的餘額調整（spec M3-1）：財務規劃帳戶是信封，調整不影響任何帳戶，所以不產生分錄、只有 FundDelta。
+    /// Transaction 一定要掛一個帳戶，比照同帳戶圈存的入新資金，掛在現金帳戶上。
+    /// </summary>
+    public Transaction FundAdjustment(DateOnly date, PlanningFundId fundId, AccountId cashId, decimal amount, string? note = null, BudgetMonth? budgetMonth = null)
+    {
+        RequireNonZero(amount);
+        book.GetPlanningFund(fundId);
+        RequireAccount(cashId, AccountType.Cash);
+        return Create(TransactionKind.BalanceAdjustment, date, budgetMonth, amount, cashId, null, null, note, [], planningFundId: fundId);
     }
 
     /// <summary>

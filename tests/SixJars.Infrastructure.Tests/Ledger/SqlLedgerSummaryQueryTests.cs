@@ -246,7 +246,7 @@ public class SqlLedgerSummaryQueryTests(PostgresFixture postgres)
     }
 
     /// <summary>
-    /// 涵蓋全部 12 種交易類型與 spec 列出的邊界情況。每一筆的目的寫在旁邊；改資料時要確認變異測試仍然抓得到。
+    /// 涵蓋全部交易類型與 spec 列出的邊界情況。每一筆的目的寫在旁邊；改資料時要確認變異測試仍然抓得到。
     /// </summary>
     private sealed class Scenario
     {
@@ -288,6 +288,9 @@ public class SqlLedgerSummaryQueryTests(PostgresFixture postgres)
                 f.FundWithdrawal(new DateOnly(2026, 2, 13), emergency.Id, s.Cash.Id, 200m),
                 f.Expense(new DateOnly(2026, 2, 14), s.Bank.Id, s.Phone.Id, -599m),
                 f.Expense(new DateOnly(2026, 2, 15), s.Wallet.Id, s.Food.Id, -60m),
+                // 餘額調整（spec M3）：動帳戶與財務規劃帳戶的餘額，但不影響月可用餘額。
+                f.AccountAdjustment(new DateOnly(2026, 1, 9), s.Bank.Id, -8506m, budgetMonth: January),
+                f.FundAdjustment(new DateOnly(2026, 1, 9), s.FreedomFund.Id, s.Cash.Id, 5000m, budgetMonth: January),
                 // 範圍外：2026-04，測試月可用餘額的 to 邊界。
                 f.Expense(new DateOnly(2026, 4, 2), s.Cash.Id, s.Food.Id, -50m),
             ];

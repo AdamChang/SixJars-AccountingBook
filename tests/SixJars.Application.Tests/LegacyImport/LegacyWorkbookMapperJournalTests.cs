@@ -137,4 +137,51 @@ public class LegacyWorkbookMapperJournalTests
         result.Transactions.Should().BeEmpty();
         result.Report.Errors.Should().ContainSingle(i => i.Row == 91);
     }
+
+    /// <summary>Excel 的出資金只看「主選單 = 財務規劃帳戶、金額 &lt; 0」，副選單寫成支出主分類時仍是出資金（v3 5 月第 157 列）。</summary>
+    [Fact]
+    public void Negative_fund_row_with_expense_category_as_sub_is_withdrawal_with_that_category()
+    {
+        var result = MapJanuary(Row(157, Jan6, "國泰外幣帳戶", "財務自由帳戶", "主食", -23784m));
+
+        result.Report.Errors.Should().BeEmpty();
+        var tx = result.Transactions.Single();
+        tx.Kind.Should().Be(TransactionKind.FundWithdrawal);
+        tx.CategoryId.Should().Be(result.Book.FindCategory("主食")!.Id);
+        tx.Postings.Should().Equal(new Posting(result.Book.FindAccount("國泰外幣帳戶")!.Id, -23784m));
+        tx.FundDelta.Should().Be(-23784m);
+    }
+
+    /// <summary>v3 的副選單是子分類（放水流／吃魚喝茶）：名稱在支出子分類中唯一時對到它。</summary>
+    [Fact]
+    public void Negative_fund_row_with_unique_expense_sub_category_as_sub_is_withdrawal_with_that_category()
+    {
+        var result = MapJanuary(Row(157, Jan6, "國泰外幣帳戶", "財務自由帳戶", "中餐", -500m));
+
+        result.Report.Errors.Should().BeEmpty();
+        result.Transactions.Single().CategoryId.Should().Be(result.Book.FindCategory("主食", "中餐")!.Id);
+    }
+
+    [Theory]
+    [InlineData("工作薪資1", -100)]   // 收入分類不是出資金的分類
+    [InlineData("中獎", -100)]        // 收入子分類也不是
+    [InlineData("主食", 100)]         // 正數不是出資金
+    public void Fund_row_with_category_sub_is_rejected_otherwise(string sub, int amount)
+    {
+        var result = MapJanuary(Row(158, Jan6, "國泰外幣帳戶", "財務自由帳戶", sub, amount));
+
+        result.Transactions.Should().BeEmpty();
+        result.Report.Errors.Should().ContainSingle(i => i.Row == 158);
+    }
+
+    /// <summary>Excel 不影響任何數字（v3 5 月第 165 列「母親給肉粽」）；略過並警告，與制式表格略過 0 元一致。</summary>
+    [Fact]
+    public void Zero_amount_journal_row_is_skipped_with_warning()
+    {
+        var result = MapJanuary(Row(165, Jan6, "現金", "主食", "中餐", 0m));
+
+        result.Transactions.Should().BeEmpty();
+        result.Report.Errors.Should().BeEmpty();
+        result.Report.Warnings.Should().ContainSingle(i => i.Row == 165);
+    }
 }
