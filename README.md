@@ -47,7 +47,7 @@ web/                      Angular PWA（記帳、總覽、預定支出、預算�
 - **稽核與軟刪除**：每次寫入留下前後快照；刪除只標記，不參與計算。
 - **樂觀並行**：更新／刪除需帶版本號，衝突回 409。
 - **匯出與備份**：交易明細 CSV／XLSX（含標籤欄）；整本帳 JSON 備份（格式 v5，含預算與標籤，可用 CLI 還原）。
-- **舊帳匯入**：CLI 把舊 Excel 記帳本轉成新帳本，附檢查報告與 dry-run。
+- **舊帳匯入**：CLI 把舊 Excel 記帳本轉成新帳本，附檢查報告與 dry-run；也能把前一年的 Excel 補匯到既有帳本最前面，之後每天的餘額不變。
 - **權限**：Google 登入，只有帳本成員可存取；非成員一律 404。目前只實作「擁有者」角色。
 - **Web 前端**：記帳頁（鍵盤快速連續記帳、手機兩行清單）、總覽頁、預定支出頁（本月清單、產生、付款、週期項目）、預算頁（依月份切換、行內編輯預設值與覆寫值；總覽頁有本月預算摘要卡）、報表頁（月報、年報，依月份切換、可展開分類）、設定頁（含標籤管理、匯出與備份下載）；記帳時可選標籤，交易清單以色塊顯示標籤並可依標籤篩選當月交易；可安裝為 PWA。
 
@@ -159,9 +159,41 @@ dotnet run --project src/SixJars.Cli -- add-creator --email <gmail>
 # 從建立者名單移除（已建立的帳本不受影響）
 dotnet run --project src/SixJars.Cli -- remove-creator --email <gmail>
 
+# 撤銷某個 Google 帳號的所有 MCP 授權（Claude 等 AI client 的唯讀存取，立即生效，ADR 0013）
+dotnet run --project src/SixJars.Cli -- revoke-mcp-access --email <gmail>
+
 # 從 JSON 備份還原一本帳
 dotnet run --project src/SixJars.Cli -- restore-backup --file <backup.json>
 ```
+
+#### 跨年度補匯舊帳本
+
+舊 Excel 一年一個檔案。用 `import-legacy` 匯入某一年（例如 2026）成為帳本之後，可以用 `--into` 把**前一年**（2025）的 Excel 接到同一本帳本最前面：期初日往前移、期初餘額改成那一年的年初值，2026 以後每一天的帳戶與財務規劃帳戶餘額完全不變。帳本仍是連續時間軸，這不是年度結轉（ADR 0002）。要補更早的年份就再跑一次，每次往前一年。設計見 [補匯舊年度 spec](docs/superpowers/specs/2026-11-11-prepend-legacy-year-design.md)。
+
+```powershell
+# 1. 先 dry run：印出檢查報告與銜接摘要，不寫入
+dotnet run --project src/SixJars.Cli -- import-legacy --file <前一年.xlsm> --into <bookId> --dry-run
+
+# 2. 銜接摘要沒有差額時，正式補匯
+dotnet run --project src/SixJars.Cli -- import-legacy --file <前一年.xlsm> --into <bookId>
+
+# 3. 有差額、確認是 Excel 本身沒接上（例如當年漏記）時，同意以「餘額調整」補齊：先 dry run 看調整清單
+dotnet run --project src/SixJars.Cli -- import-legacy --file <前一年.xlsm> --into <bookId> --adjust --dry-run
+dotnet run --project src/SixJars.Cli -- import-legacy --file <前一年.xlsm> --into <bookId> --adjust
+```
+
+- `--into` 與 `--book-name`／`--owner-email` 互斥；`--adjust` 只能搭配 `--into`。
+- 整批在單一 DB transaction 內寫入；報告有任何錯誤時 exit code 為 1，不寫入任何資料。
+- 會擋下的情況：
+  - 年度不相連：Excel 年度必須是帳本開始年度（最早一筆交易的歸屬月份年度）的前一年。
+  - 舊年度有交易晚於帳本第一天。
+  - 名稱相同但類型不同的帳戶。
+  - 銜接點對不起來：舊年度推算的期末 ≠ 帳本期初；只在舊年度出現的項目，期末不為 0。
+- 銜接摘要逐列印出每個帳戶與財務規劃帳戶的舊年度期初、變動、推算期末、帳本期初、差額與調整，用來找出哪個帳戶對不起來。
+- `--adjust` 只處理銜接差額這一種錯誤：在原本的期初日、歸屬舊年度 12 月，每個帳戶各補一筆「餘額調整」。餘額調整不計入月可用餘額與收支報表。其他錯誤照樣擋下。
+- 設定項目依名稱對應。只出現在舊年度的帳戶、財務規劃帳戶與分類會新增並封存；支出性質不同時以帳本為準，只給警告。帳本有鎖帳日時照樣補匯，鎖帳日不動，報告會提醒。
+- 稽核記錄寫兩筆：匯入摘要，以及期初日與期初餘額的前後快照。
+- Web 同時改了帳本時會發生並行衝突，重跑即可。
 
 ### 部署
 

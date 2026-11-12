@@ -23,6 +23,7 @@
    - [7.5 回滾](#75-回滾)
 8. [閒置與喚醒：預設不設定 Cloud Scheduler](#8-閒置與喚醒預設不設定-cloud-scheduler)
 9. [首次搬家：匯入舊 Excel](#9-首次搬家匯入舊-excel)
+   - [補匯前一年的 Excel](#補匯前一年的-excel)
 10. [新增成員](#10-新增成員)
 11. [備份與還原](#11-備份與還原)
 12. [安全注意事項](#12-安全注意事項)
@@ -543,6 +544,34 @@ dotnet run --project src/SixJars.Cli -- import-legacy `
 - 成功時印出 `已匯入帳本 <BookId>`，請記下 BookId（第 10 節會用到）。
 - 擁有者第一次以 Google 登入時才綁定帳號。
 - 匯入後以瀏覽器登入，確認 `/api/books/<BookId>/summary?budgetMonth=202601` 等月份的數字與 Excel 一致。
+
+### 補匯前一年的 Excel
+
+搬家可以分好幾次做：帳本建好以後，用 `--into <BookId>` 把前一年的 Excel 接到同一本帳本最前面。補匯後期初日會往前移，帳本原有的每一天餘額都不變。要補更早的年份就再跑一次，每次往前一年。連線字串同上（app 角色即可）。
+
+```powershell
+# 1. dry run：印出報告與銜接摘要（每個帳戶的舊年度期初｜變動｜推算期末｜帳本期初｜差額｜調整），不寫入
+dotnet run --project src/SixJars.Cli -- import-legacy `
+  --file reference/2025記帳.xlsm --into <BookId> --dry-run
+
+# 2a. 沒有差額：拿掉 --dry-run 正式補匯
+dotnet run --project src/SixJars.Cli -- import-legacy `
+  --file reference/2025記帳.xlsm --into <BookId>
+
+# 2b. 有差額，而且確認是 Excel 本身沒接上（例如當年漏記）：加 --adjust 以「餘額調整」補齊，一樣先 dry run 看調整清單
+dotnet run --project src/SixJars.Cli -- import-legacy `
+  --file reference/2025記帳.xlsm --into <BookId> --adjust --dry-run
+dotnet run --project src/SixJars.Cli -- import-legacy `
+  --file reference/2025記帳.xlsm --into <BookId> --adjust
+```
+
+- `--into` 不能和 `--book-name`／`--owner-email` 混用；`--adjust` 只能搭配 `--into`。
+- Excel 必須是帳本開始年度的前一年，交易不能晚於帳本第一天，否則報錯。不加 `--adjust` 時，銜接差額也算錯誤。
+- 報告有錯誤時 exit code 為 1，整批不寫入。`--adjust` 只會把銜接差額轉成餘額調整，其他錯誤仍要先修正 Excel。
+- 餘額調整的日期是原本的期初日，不計入月可用餘額與收支報表。
+- 補匯期間 Web 剛好改到帳本時會發生並行衝突，重跑即可。
+- 補匯後以瀏覽器確認前一年各月（例如 `summary?budgetMonth=202512`）與 Excel 一致，且原有月份的數字沒變。
+- 設計與完整檢查規則見 [補匯舊年度 spec](superpowers/specs/2026-11-11-prepend-legacy-year-design.md)，README 的「跨年度補匯舊帳本」也有摘要。
 
 用完後清除變數：`Remove-Item Env:ConnectionStrings__SixJars`。
 
