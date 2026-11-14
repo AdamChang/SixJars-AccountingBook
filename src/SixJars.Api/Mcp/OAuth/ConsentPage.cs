@@ -13,18 +13,19 @@ namespace SixJars.Api.Mcp.OAuth;
 /// </remarks>
 internal static class ConsentPage
 {
-    public static IResult Render(HttpContext context, IAntiforgery antiforgery, AuthorizeValidation.Valid request, string? email)
+    public static IResult Render(
+        HttpContext context, IAntiforgery antiforgery, AuthorizeValidation.Valid request, string? email, int maxWritesPerDay)
     {
         var tokens = antiforgery.GetAndStoreTokens(context);
         var redirectHost = new Uri(request.RedirectUri).Authority;
         var html = new StringBuilder()
             .Append("<h1>允許存取六罐子記帳本？</h1>")
             .Append("<p><strong>").Append(Encode(request.ClientHost)).Append("</strong> 要求以你的身分（")
-            .Append(Encode(email ?? "目前登入的帳號")).Append("）<strong>唯讀</strong>存取你可以看到的帳本、帳戶與交易。</p>")
-            .Append("<p>同意後會轉回 <code>").Append(Encode(redirectHost)).Append("</code>。它不能新增、修改或刪除任何資料；之後可由管理者撤銷。</p>")
+            .Append(Encode(email ?? "目前登入的帳號")).Append("）存取你可以看到的帳本、帳戶與交易。<strong>預設只能讀取</strong>，不能新增、修改或刪除任何資料。</p>")
+            .Append("<p>同意後會轉回 <code>").Append(Encode(redirectHost)).Append("</code>。</p>")
             // 授權釣魚：攻擊者可以把自己 Claude 產生的授權連結傳給你，同意後就是「他的」Claude 讀你的帳本；技術上無法分辨，只能提醒。
             .Append("<p style=\"border:2px solid #c62828;padding:.75rem;background:#ffebee\"><strong>只有在你剛剛自己從 Claude 按下「Connect」時才允許。</strong>")
-            .Append("別人傳給你的連結請按「拒絕」：同意後，存取權會交給發起這個連結的人的 Claude，對方就能讀你的帳本。</p>")
+            .Append("別人傳給你的連結請按「拒絕」：同意後，存取權會交給發起這個連結的人的 Claude，對方就能讀你的帳本；若勾選了寫入，還能替你新增交易。</p>")
             .Append("<form method=\"post\" action=\"").Append(OAuthEndpoints.AuthorizePath).Append("\">")
             .Append(Hidden(tokens.FormFieldName, tokens.RequestToken!))
             .Append(Hidden("response_type", "code"))
@@ -35,6 +36,14 @@ internal static class ConsentPage
             .Append(Hidden("scope", request.Scope))
             .Append(Hidden("resource", request.Resource))
             .Append(request.State is null ? "" : Hidden("state", request.State))
+            // 核取方塊必須在 <form> 內（瀏覽器只送出表單內的欄位），且不預設勾選；不用 JS（CSP 是 default-src 'none'），警語直接靜態列在底下。host 取自 client_id，不用 CIMD 的 client_name。
+            .Append("<fieldset><legend>寫入權限（選填）</legend>")
+            .Append("<label><input type=\"checkbox\" name=\"allow_write\" value=\"1\"> 也允許 <strong>").Append(Encode(request.ClientHost))
+            .Append("</strong> 新增交易（記帳）</label>")
+            .Append("<ul><li>勾選後只能<strong>新增</strong>交易，不能修改或刪除。</li>")
+            .Append("<li>每天最多 ").Append(maxWritesPerDay).Append(" 筆。</li>")
+            .Append("<li>它會依你提供的信件或對話內容記帳，請只連線你信任的 client。</li>")
+            .Append("<li>之後可由管理者以 <code>revoke-mcp-access</code> 撤銷授權。</li></ul></fieldset>")
             .Append("<button type=\"submit\" name=\"decision\" value=\"allow\">允許</button> ")
             .Append("<button type=\"submit\" name=\"decision\" value=\"deny\">拒絕</button>")
             .Append("</form>");

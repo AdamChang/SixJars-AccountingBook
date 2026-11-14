@@ -39,5 +39,12 @@ internal sealed class TransactionConfiguration : IEntityTypeConfiguration<Transa
         builder.Navigation(t => t.Postings).UsePropertyAccessMode(PropertyAccessMode.Field);
         builder.Navigation(t => t.Tags).UsePropertyAccessMode(PropertyAccessMode.Field);
         builder.Ignore(t => t.TagIds);
+        // 交易來源（ADR 0014）：經由哪個 AI client、來源識別碼（例如信件的 Message-ID）。
+        builder.Property(t => t.CreatedVia).HasMaxLength(100);
+        builder.Property(t => t.ExternalRef).HasMaxLength(255);
+        // 同一本帳內，未刪除交易的來源識別碼唯一：重複記帳的最後一道防線。
+        // HasFilter 是原生 SQL（PostgreSQL 欄位名稱要加雙引號、大小寫要一致），寫錯 migration 仍會成功，由持久化測試守住。
+        builder.HasIndex(t => new { t.BookId, t.ExternalRef }).IsUnique()
+            .HasFilter("\"ExternalRef\" IS NOT NULL AND \"DeletedAt\" IS NULL");
     }
 }

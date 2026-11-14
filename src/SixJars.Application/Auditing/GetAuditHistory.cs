@@ -17,11 +17,12 @@ public sealed record AuditEntryDto(
     string EntityType,
     Guid EntityId,
     JsonElement? Before,
-    JsonElement? After)
+    JsonElement? After,
+    string? Via = null)
 {
     /// <summary>修改歷史與備份（T41）共用：資料庫存的 JSON 字串轉成 JSON 物件。</summary>
     public static AuditEntryDto From(AuditEntry e) =>
-        new(e.Id, e.At, e.ActorSubject, e.Action, e.EntityType, e.EntityId, Parse(e.Before), Parse(e.After));
+        new(e.Id, e.At, e.ActorSubject, e.Action, e.EntityType, e.EntityId, Parse(e.Before), Parse(e.After), e.Via);
 
     private static JsonElement? Parse(string? json)
     {

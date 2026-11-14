@@ -2,11 +2,17 @@ using Microsoft.Extensions.Options;
 
 namespace SixJars.Api.Mcp.OAuth;
 
-/// <summary>白名單 host 等授權伺服器設定（組態 <c>Mcp:AllowedClientIdHosts</c>）。</summary>
+/// <summary>白名單 host、每日寫入上限等授權伺服器設定（組態 <c>Mcp:AllowedClientIdHosts</c>、<c>Mcp:MaxWritesPerDay</c>）。</summary>
 internal sealed class McpOAuthOptions
 {
     /// <summary>CIMD 的 client_id 只接受這些 host（不分大小寫、須完全相同，不含子網域）；預設只有 Claude。</summary>
     public string[] AllowedClientIdHosts { get; set; } = ["claude.ai"];
+
+    /// <summary>
+    /// 同意頁告知的每日寫入上限（組態 <c>Mcp:MaxWritesPerDay</c>）。這裡只負責顯示；實際的限制由記帳 command 強制，
+    /// 兩處必須讀同一個值，使用者同意的數字才會等於真正的上限。
+    /// </summary>
+    public int MaxWritesPerDay { get; set; } = 15;
 }
 
 /// <summary>authorize 請求的參數；GET 取自 query，POST（同意）取自表單。</summary>
@@ -73,9 +79,10 @@ internal sealed class AuthorizeRequestValidator(IClientMetadataFetcher fetcher, 
             return new AuthorizeValidation.RedirectError(p.RedirectUri, "invalid_request", p.State);
         }
 
-        // 只有唯讀一種 scope；省略時就是它。
-        var scopes = (p.Scope ?? McpOAuth.Scope).Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        if (scopes.Length == 0 || scopes.Any(s => s != McpOAuth.Scope))
+        // 請求的 scope 必須是 {read, write} 的非空子集；省略時視為 read。注意這只驗證「請求」：
+        // 實際授予什麼由同意頁的核取方塊決定（OAuthEndpoints.ConsentAsync），這裡的結果不能直接當授予範圍。
+        var scopes = (p.Scope ?? McpOAuth.ReadScope).Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (scopes.Length == 0 || scopes.Any(s => !McpOAuth.SupportedScopes.Contains(s)))
         {
             return new AuthorizeValidation.RedirectError(p.RedirectUri, "invalid_scope", p.State);
         }
@@ -87,6 +94,6 @@ internal sealed class AuthorizeRequestValidator(IClientMetadataFetcher fetcher, 
             return new AuthorizeValidation.RedirectError(p.RedirectUri, "invalid_target", p.State);
         }
 
-        return new AuthorizeValidation.Valid(p.ClientId!, clientUri.Host, p.RedirectUri, p.CodeChallenge, McpOAuth.Scope, resource, p.State);
+        return new AuthorizeValidation.Valid(p.ClientId!, clientUri.Host, p.RedirectUri, p.CodeChallenge, string.Join(' ', scopes), resource, p.State);
     }
 }

@@ -76,6 +76,10 @@ namespace SixJars.Infrastructure.Persistence.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
+                    b.Property<string>("Via")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("BookId", "EntityId");
@@ -384,11 +388,19 @@ namespace SixJars.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("CounterAccountId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("CreatedVia")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
                     b.Property<DateOnly>("Date")
                         .HasColumnType("date");
 
                     b.Property<DateTimeOffset?>("DeletedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ExternalRef")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
 
                     b.Property<string>("Kind")
                         .IsRequired()
@@ -414,6 +426,10 @@ namespace SixJars.Infrastructure.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("BookId", "BudgetMonth");
+
+                    b.HasIndex("BookId", "ExternalRef")
+                        .IsUnique()
+                        .HasFilter("\"ExternalRef\" IS NOT NULL AND \"DeletedAt\" IS NULL");
 
                     b.ToTable("Transactions");
                 });

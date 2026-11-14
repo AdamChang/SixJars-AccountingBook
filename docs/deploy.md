@@ -656,11 +656,11 @@ dotnet run --project src/SixJars.Cli -- restore-backup --file <備份檔路徑>.
 
 ## 13. 連接 Claude（遠端 MCP）
 
-Api 的 `/mcp` 是唯讀的遠端 MCP server（ADR 0013），可以讓 Claude 讀取帳本，例如比對信用卡帳單。授權伺服器內建在同一個服務：使用者以原本的 Google 帳號登入，並在同意頁按下「允許」。
+Api 的 `/mcp` 是遠端 MCP server（ADR 0013），預設唯讀，可以讓 Claude 讀取帳本，例如比對信用卡帳單；授權時勾選「也允許新增交易」才會開放記帳 tool（ADR 0014）。授權伺服器內建在同一個服務：使用者以原本的 Google 帳號登入，並在同意頁按下「允許」。
 
 **前提**
 
-- `AddMcpGrants` 與 `McpGrantConcurrency` 兩個 migration 已套用（第 4 節）。沒套用時 `/health/ready` 回 503，新版本不會上線。
+- `AddMcpGrants`、`McpGrantConcurrency` 與 `McpBookkeeping` 三個 migration 已套用（第 4 節）。`McpBookkeeping` 新增 `Transactions.ExternalRef`、`Transactions.CreatedVia`、`AuditEntries.Via` 三欄與一個帶 filter 的唯一索引，皆為可為 null 的新欄位，舊版不受影響。沒套用時 `/health/ready` 回 503，新版本不會上線。
 - 要連的人能登入 Web，也就是帳本成員或建立者。Claude 只看得到他本來就看得到的帳本。
 
 ### 13.1 首次上線檢查清單（v1.1.0）
@@ -706,6 +706,7 @@ MCP 第一次上線（PR #21）時逐項執行。之後的版本只要有 MCP �
 - [ ] 附上信用卡 PDF 帳單請 Claude 比對。確認它依序呼叫 `list_books` → `list_accounts` → `list_account_transactions`，輸出有 A–G 分組與差異分解，結果和舊 Excel 的比對 sheet 大致一致。
 - [ ] Claude 手機 app 開同一個 connector，問一個簡單的問題（例如「列出我的帳本」）。
 - [ ] 撤銷驗證（第 13.5 節）：撤銷後 Claude 呼叫 tool 會要求重新 Connect，重新 Connect 後恢復正常。
+- [ ] 記帳驗證（第 13.3 節）：重新 Connect 並勾選「也允許新增交易」，用一封真實信件請 Claude 試記一筆，再確認來源：交易 API 回傳的該筆 `createdVia` 為 `mcp:claude.ai`、`externalRef` 有值（網頁的「Claude」標記待前端計畫 `2026-11-01-mcp-bookkeeping-frontend` 完成後才有，在此之前看不到標記不代表部署失敗）。
 
 **部署後**
 
@@ -742,6 +743,17 @@ claude mcp add --transport http sixjars https://<cloud-run-網址>/mcp
 ### 13.3 使用
 
 附上信用卡 PDF 帳單，請 Claude「比對國泰 Combo 卡 8/14–9/15 的帳單」。Claude 會依 server 提供的比對規則（A–G 分組）列出差異。也可以直接選用 prompt `reconcile_credit_card_statement`。
+
+**記帳（寫入）**
+
+- 預設唯讀。在同意頁勾選「也允許新增交易」（預設不勾）的授權才有 `ledger:write`，Claude 才會看到 `add_transaction`。沒勾時請它記帳，它會說做不到。
+- **既有連線**不會自動升級：在 claude.ai 移除舊的 connector，重新加入（第 13.2 節）並勾選該核取方塊。
+- 貼上信件或明細，選用 prompt `record_transactions`：Claude 先列表格請你確認，確認後才新增。同一封信再處理一次，會因來源識別碼相同而回報重複、略過。
+- 每日寫入上限由 `Mcp__MaxWritesPerDay` 控制，**可省略**，預設 15（每個使用者＋client host，以台北時間的日界線計算）。要調整時寫進 `deploy.yml` 的 `--set-env-vars`（理由同第 13.4 節）：
+
+  ```text
+  ##Mcp__MaxWritesPerDay=30
+  ```
 
 ### 13.4 可信任的 client（CIMD host 白名單）
 

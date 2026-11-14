@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Logging.Abstractions;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
+using SixJars.Application.Transactions;
 using SixJars.Tests.Shared;
 using Xunit;
 
@@ -65,13 +66,61 @@ public partial class McpEndToEndTests(PostgresFixture postgres)
         (await ListBookIdsAsync(factory, newTokens.GetProperty("access_token").GetString()!)).Should().Equal(book.Id.Value);
     }
 
-    private static async Task<IEnumerable<Guid>> ListBookIdsAsync(ApiFactory factory, string accessToken)
+    [Fact]
+    public async Task Write_consent_to_add_and_read_back_via_api()
+    {
+        var (factory, _) = await OAuthTestClient.CreateFactoryAsync(postgres, Ct);
+        await using var _f = factory;
+        var book = await factory.SeedBookAsync(Ct);
+        var browser = OAuthTestClient.CreateClient(factory);
+        var claude = OAuthTestClient.CreateClient(factory, subject: null);
+
+        // 同意頁勾選「也允許新增交易」→ code → token。
+        var (verifier, challenge) = OAuthTestClient.NewPkce();
+        var consent = await OAuthTestClient.ConsentAsync(browser, OAuthTestClient.AuthorizeParameters(challenge), Ct, allowWrite: true);
+        consent.StatusCode.Should().Be(HttpStatusCode.Redirect);
+        var code = QueryHelpers.ParseQuery(consent.Headers.Location!.Query)["code"].ToString();
+        var issued = await OAuthTestClient.TokenAsync(claude, OAuthTestClient.CodeExchange(code, verifier), Ct);
+        var tokens = await issued.Content.ReadFromJsonAsync<JsonElement>(Ct);
+        tokens.GetProperty("scope").GetString().Should().Contain("ledger:write");
+
+        // MCP 記一筆支出。
+        await using var mcp = await ConnectAsync(factory, tokens.GetProperty("access_token").GetString()!);
+        var result = await mcp.CallToolAsync("add_transaction", new Dictionary<string, object?>
+        {
+            ["bookId"] = book.Id.Value,
+            ["kind"] = "Expense",
+            ["date"] = "2026-01-15",
+            ["amount"] = 120,
+            ["accountId"] = book.FindAccount("現金")!.Id.Value,
+            ["categoryId"] = book.FindCategory("主食", "午餐")!.Id.Value,
+            ["sourceId"] = "<e2e-1@mail>",
+        }, cancellationToken: Ct);
+        result.IsError.Should().NotBe(true, string.Concat(result.Content.OfType<TextContentBlock>().Select(c => c.Text)));
+
+        // 用 cookie API 讀回。
+        var member = await factory.CreateMemberClientAsync();
+        var list = await member.GetFromJsonAsync<List<TransactionDto>>(
+            $"/api/books/{book.Id.Value}/transactions?from=2026-01-01&to=2026-01-31", ApiJson.Options, Ct);
+        var stored = list.Should().ContainSingle().Subject;
+        stored.CreatedVia.Should().Be("mcp:claude.ai");
+        stored.ExternalRef.Should().Be("<e2e-1@mail>");
+        stored.Amount.Should().Be(-120m);
+    }
+
+    private static async Task<McpClient> ConnectAsync(ApiFactory factory, string accessToken)
     {
         var http = factory.CreateClient(new() { BaseAddress = new Uri("https://localhost"), HandleCookies = false });
         http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-        await using var client = await McpClient.CreateAsync(new HttpClientTransport(
+        return await McpClient.CreateAsync(new HttpClientTransport(
             new HttpClientTransportOptions { Endpoint = new Uri("https://localhost/mcp"), TransportMode = HttpTransportMode.StreamableHttp },
             http, NullLoggerFactory.Instance, ownsHttpClient: true), cancellationToken: Ct);
+    }
+
+    private static async Task<IEnumerable<Guid>> ListBookIdsAsync(ApiFactory factory, string accessToken)
+    {
+        await using var client = await ConnectAsync(factory, accessToken);
+        (await client.ListToolsAsync(cancellationToken: Ct)).Select(t => t.Name).Should().NotContain("add_transaction");
         var result = await client.CallToolAsync("list_books", new Dictionary<string, object?>(), cancellationToken: Ct);
         result.IsError.Should().NotBe(true);
         var json = JsonDocument.Parse(string.Concat(result.Content.OfType<TextContentBlock>().Select(c => c.Text))).RootElement;
