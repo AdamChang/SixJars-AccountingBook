@@ -71,27 +71,33 @@ public class DeleteBookEndpointsTests(PostgresFixture postgres)
         await SeedEverythingAsync(factory, client, other);
         var otherBefore = await RowCountsAsync(factory, other);
         otherBefore.Values.Should().OnlyContain(count => count > 0, "seed 必須涵蓋每張表，否則「刪光」可能是空轉通過");
+        var auditBefore = (await RowCountsAsync(factory, book))["AuditEntries"];
 
         var response = await DeleteAsync(client, book, "測試帳本");
 
         response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        // 稽核記錄不刪除（TD-01）：app 角色沒有 AuditEntries 的 UPDATE／DELETE 權限，舊記錄原樣保留，再多一筆刪除摘要當墓碑。
         (await RowCountsAsync(factory, book)).Should().OnlyContain(
-            pair => pair.Value == (pair.Key == "AuditEntries" ? 1 : 0), "只留下一筆刪除摘要；已軟刪除的資料也要刪掉");
+            pair => pair.Value == (pair.Key == "AuditEntries" ? auditBefore + 1 : 0), "其餘資料都要刪掉，已軟刪除的也是");
         (await RowCountsAsync(factory, other)).Should().Equal(otherBefore);
     }
 
     [Fact]
-    public async Task Delete_leaves_a_single_summary_entry_by_the_signed_in_owner()
+    public async Task Delete_keeps_existing_audit_entries_and_appends_a_summary_by_the_signed_in_owner()
     {
         await using var factory = await ApiFactory.CreateAsync(postgres, Ct);
         var book = await factory.SeedBookAsync(Ct);
         var client = await factory.CreateMemberClientAsync();
         await SeedEverythingAsync(factory, client, book);
         var preview = await client.GetFromJsonAsync<BookDeletionPreview>(PreviewUrl(book), ApiJson.Options, Ct);
+        var baseline = (await AuditTrailTests.EntriesAsync(factory)).Where(e => e.BookId == book.Id.Value).ToList();
 
         (await DeleteAsync(client, book, "測試帳本")).StatusCode.Should().Be(HttpStatusCode.NoContent);
 
-        var entry = (await AuditTrailTests.EntriesAsync(factory)).Should().ContainSingle(e => e.BookId == book.Id.Value).Subject;
+        var after = (await AuditTrailTests.EntriesAsync(factory)).Where(e => e.BookId == book.Id.Value).ToList();
+        // 舊記錄一筆不少、內容不變（append-only）。
+        after.IntersectBy(baseline.Select(e => e.Id), e => e.Id).Should().BeEquivalentTo(baseline);
+        var entry = after.ExceptBy(baseline.Select(e => e.Id), e => e.Id).Should().ContainSingle().Subject;
         (entry.Action, entry.EntityType, entry.EntityId, entry.ActorSubject)
             .Should().Be((AuditAction.Delete, AuditEntityTypes.Book, book.Id.Value, ApiFactory.DefaultSubject));
         entry.After.Should().BeNull();

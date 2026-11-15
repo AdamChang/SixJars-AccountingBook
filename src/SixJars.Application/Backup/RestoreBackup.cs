@@ -89,7 +89,9 @@ internal sealed class RestoreBackupHandler(ISixJarsDbContext db, IAuditTrail aud
 
         db.BookMembers.AddRange(members);
         // 稽核記錄原樣寫回（Id、時間、操作者與快照都不變），再加一筆這次還原的記錄（操作者為 CLI）。
-        db.AuditEntries.AddRange(backup.AuditEntries.Select(e => new AuditEntry
+        // 這本帳若曾在此資料庫被刪除，舊記錄仍在（刪除帳本不刪稽核，ADR 0010 修訂）；稽核是 append-only，同 Id 即同一筆，略過不重寫。
+        var retained = await db.AuditEntries.Where(e => e.BookId == backup.Book.Id).Select(e => e.Id).ToListAsync(cancellationToken);
+        db.AuditEntries.AddRange(backup.AuditEntries.ExceptBy(retained, e => e.Id).Select(e => new AuditEntry
         {
             Id = e.Id,
             BookId = backup.Book.Id,

@@ -34,8 +34,9 @@ export interface DeleteBookDialogData { bookId: string; name: string; isLastBook
           <dt>週期預定支出</dt><dd>{{ p.recurringPlannedExpenses }} 筆</dd>
           <dt>預算</dt><dd>{{ p.categoryBudgets }} 個分類</dd>
           <dt>成員</dt><dd>{{ p.members }} 位</dd>
-          <dt>稽核記錄</dt><dd>{{ p.auditEntries }} 筆</dd>
+          <dt>稽核記錄</dt><dd>{{ p.auditEntries }} 筆（保留）</dd>
         </dl>
+        <p class="note">稽核記錄不會刪除：保留在資料庫中供日後追查，刪除後從畫面上看不到。</p>
         <a matButton="outlined" class="backup" [href]="backupUrl" download>下載完整備份</a>
         <mat-form-field class="confirm-name">
           <mat-label>輸入帳本名稱以確認</mat-label>

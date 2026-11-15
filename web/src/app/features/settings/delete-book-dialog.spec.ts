@@ -46,7 +46,8 @@ describe('DeleteBookDialog', () => {
     const text = el.textContent!;
     expect(text).toContain('12 筆');
     expect(text).toContain('2026-03-31');
-    expect(text).toContain('40 筆');
+    expect(text).toContain('40 筆（保留）');
+    expect(el.querySelector('.note')?.textContent).toContain('稽核記錄不會刪除');
     expect(el.querySelector<HTMLAnchorElement>('a.backup')!.getAttribute('href')).toBe('/api/books/book-1/export/backup.json');
   });
 

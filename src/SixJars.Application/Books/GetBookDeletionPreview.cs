@@ -10,7 +10,7 @@ public sealed record GetBookDeletionPreview(Guid BookId) : IRequest<BookDeletion
 
 /// <param name="Transactions">未刪除的交易筆數（spec D3）；已軟刪除的交易一樣會被刪除，但不列入。</param>
 /// <param name="PlannedExpenses">未刪除的預定支出筆數（同上）。</param>
-/// <param name="AuditEntries">這本帳本的全部稽核記錄筆數；刪除後只剩一筆刪除摘要。</param>
+/// <param name="AuditEntries">這本帳本的全部稽核記錄筆數；刪除時不會移除，另外再加一筆刪除摘要。</param>
 public sealed record BookDeletionPreview(
     string Name, DateOnly OpeningDate, DateOnly? LockDate,
     int Transactions, int PlannedExpenses, int RecurringPlannedExpenses,

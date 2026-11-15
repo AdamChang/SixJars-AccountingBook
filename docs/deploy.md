@@ -227,7 +227,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO sixjars_a
 -- identity 欄位（例如 DataProtectionKeys.Id）的 sequence。
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO sixjars_app;
 
--- 稽核記錄是 append-only（ADR 0006）：app 只需要新增與讀取。
+-- 稽核記錄是 append-only（ADR 0006）：app 只需要新增與讀取。刪除帳本也不刪稽核記錄（ADR 0010 修訂），不需要 DELETE。
 REVOKE UPDATE, DELETE ON "AuditEntries" FROM sixjars_app;
 -- migration 歷史只給 app 讀。
 REVOKE INSERT, UPDATE, DELETE ON "__EFMigrationsHistory" FROM sixjars_app;
