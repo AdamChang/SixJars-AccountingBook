@@ -8,7 +8,8 @@ using SixJars.Domain.Common;
 namespace SixJars.Application.Books;
 
 /// <summary>
-/// 硬刪除整本帳本（issue #6、ADR 0010）：帳本與所有帶 BookId 的資料都會移除，只留一筆刪除摘要的稽核記錄。
+/// 硬刪除整本帳本（issue #6、ADR 0010）：帳本與所有帶 BookId 的業務資料都會移除；既有的稽核記錄原樣保留，
+/// 再新增一筆刪除摘要當作墓碑。稽核記錄是 append-only，正式環境的 app 角色沒有 UPDATE／DELETE 權限（docs/deploy.md §3.3）。
 /// <see cref="ConfirmName"/> 必須與帳本名稱完全相同（ordinal、不 trim，spec D2），否則擲 <see cref="DomainException"/>（422 <c>name-mismatch</c>）。
 /// 與 DeleteTransaction 的慣例刻意不同：鎖帳日不擋（Q10）、不做樂觀並行（Q7）、任一位擁有者都能刪（Q6）。
 /// </summary>
@@ -43,10 +44,10 @@ internal sealed class DeleteBookHandler(ISixJarsDbContext db, IAuditTrail audit,
         await db.CategoryBudgets.Where(b => b.BookId == id).ExecuteDeleteAsync(cancellationToken);
         await db.Transactions.IgnoreQueryFilters().Where(t => t.BookId == id).ExecuteDeleteAsync(cancellationToken);
         await db.BookMembers.Where(m => m.BookId == id).ExecuteDeleteAsync(cancellationToken);
-        // 舊的稽核記錄含有完整快照，留著就等於沒刪（Q8）。
-        await db.AuditEntries.Where(e => e.BookId == request.BookId).ExecuteDeleteAsync(cancellationToken);
+        // AuditEntries 刻意不刪也不改（ADR 0010 修訂）：帳本與成員已刪，稽核 API 對這本帳一律 404，舊快照只能直接查資料庫。
         await db.Books.Where(b => b.Id == id).ExecuteDeleteAsync(cancellationToken);
 
+        // 墓碑：這本帳已刪除的唯一標記。
         audit.Record<BookDeletionPreview>(request.BookId, AuditAction.Delete, AuditEntityTypes.Book, request.BookId, summary, null);
         await db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);

@@ -178,6 +178,31 @@ public class RestoreBackupTests(PostgresFixture postgres)
     }
 
     [Fact]
+    public async Task Restore_after_deleting_the_book_skips_retained_audit_entries()
+    {
+        var source = await Scenario.BuildAsync(postgres);
+        await using var _ = source;
+        var a = await source.ExportAsync();
+        // 刪除帳本會保留既有的稽核記錄（TD-01），所以同一個資料庫裡已經有備份中那些 Id 的記錄。
+        using (var delete = new HttpRequestMessage(HttpMethod.Delete, $"/api/books/{a.Book.Id}")
+               { Content = JsonContent.Create(new { confirmName = a.Book.Name }) })
+        {
+            (await source.Client.SendAsync(delete, Ct)).StatusCode.Should().Be(HttpStatusCode.NoContent);
+        }
+
+        (await RestoreAsync(source.ConnectionString, a)).Should().Be(a.Book.Id);
+
+        var b = await source.ExportAsync();
+        // 備份裡的記錄各一筆（沒有重複寫入），另外多了刪除摘要（墓碑）與這次的 Restore。
+        b.AuditEntries.Select(e => e.Id).Should().OnlyHaveUniqueItems();
+        b.AuditEntries.Should().HaveCount(a.AuditEntries.Count + 2);
+        b.AuditEntries.Should().ContainSingle(e => e.Action == AuditAction.Delete && e.EntityType == AuditEntityTypes.Book);
+        b.AuditEntries.Should().ContainSingle(e => e.Action == AuditAction.Restore);
+        var kept = b.AuditEntries.IntersectBy(a.AuditEntries.Select(e => e.Id), e => e.Id).ToList();
+        Comparable(b with { AuditEntries = kept }).Should().Be(Comparable(a));
+    }
+
+    [Fact]
     public async Task Restored_book_has_same_summary()
     {
         var source = await Scenario.BuildAsync(postgres);
