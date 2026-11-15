@@ -306,7 +306,7 @@ sequenceDiagram
 ## 待確認問題
 
 1. **#1（優先，已查證）**：查到的資料庫中 `sixjars_app` 對 `AuditEntries` 沒有 DELETE 權限，也沒有刪除帳本的記錄（見「對資料庫的唯讀查證」）。(a) 已解答：2026-11-14 使用者確認正式環境的 `sixjars_app` 確實沒有這個權限。仍待決定：(b) 要放寬授權（`GRANT DELETE`，稽核不再是資料庫層級的 append-only），還是改變刪除帳本的做法；兩者都要同步更新 `docs/deploy.md` §3.3。
-1a. 資料庫已套用未合併分支 `feat/mcp-write` 的 migration `McpBookkeeping`：是刻意先套用（準備發版），還是測試時誤套到這個資料庫？目前線上的 `v1.1.4` 與它是否相容，需要看該 migration 的內容（未讀）。
+1a. **已解答（2026-11-15）**：是刻意先套用；與 `v1.1.4` 相容，正式 schema 也與 migration 檔一致（`99-open-questions.md` Q-P13、Q-P15）。以下是原問題：資料庫已套用未合併分支 `feat/mcp-write` 的 migration `McpBookkeeping`：是刻意先套用（準備發版），還是測試時誤套到這個資料庫？目前線上的 `v1.1.4` 與它是否相容，需要看該 migration 的內容（未讀）。
 1b. 實際上沒有 `sixjars_migrator` 角色、migration 以 `neondb_owner` 執行、PostgreSQL 是 18 而非 17：是手冊過時，還是這個資料庫是重建過的另一套？CI 是否要跟著改用 PostgreSQL 18？
 2. #2：是否要把角色授權納入可重複執行的腳本或測試（例如 Api 測試改用只有 DML 的角色連線），讓這類落差在 CI 就被擋下？
 3. #3：secret 要不要改成固定版本號（部署時明確指定），讓密碼輪替也經過 startup probe？目前輪替密碼的實際做法是什麼？

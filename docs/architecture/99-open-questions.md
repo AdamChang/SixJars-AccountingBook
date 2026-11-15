@@ -8,7 +8,7 @@
 
 | # | 問題 | 為什麼優先 | 關聯 |
 |---|---|---|---|
-| Q-P13 | 正式資料庫已套用未合併分支 `feat/mcp-write` 的 migration `McpBookkeeping`：是刻意先套用（準備發版），還是測試時誤套用？它與線上的 `v1.1.4` 相容嗎？ | 線上程式正跑在它不認得的 schema 上，`/health/ready` 偵測不到 | TD-09 |
+| ~~Q-P15~~ | 已解答，見最後的「已解答」表。原問題：正式資料庫裡 `McpBookkeeping` 的實際 schema，是否與 `feat/mcp-write` 目前的 migration 檔一致？應有 `Transactions.CreatedVia varchar(100)`、`Transactions.ExternalRef varchar(255)`、`AuditEntries.Via varchar(100)`（三者皆 nullable），以及部分唯一索引 `IX_Transactions_BookId_ExternalRef`（`"ExternalRef" IS NOT NULL AND "DeletedAt" IS NULL`） | 該 commit 的 author date 是 11-02、committer date 是 11-12，可能 rebase 或修改過。若套用到正式環境的是較早的版本，日後 merge 時 `efbundle` 會以「已套用」為由略過，schema 就會靜默分歧 | TD-09 |
 | Q-P2 | 最近一次下載備份是什麼時候？存放在哪裡？是否做過還原演練？Neon 方案的時間點還原保留幾天？ | 決定 TD-05 的實際暴露程度 | TD-05 |
 | Q-D1 | `Transactions` 不對 `Books`／`Accounts`／`Categories`／`PlanningFunds` 建外鍵，是受 EF「不能指向 owned type」的限制，還是對 `BookId` 也是刻意不建？有沒有 ADR 記錄？ | 決定 TD-04 要用 DB 約束還是應用層的鎖來處理 | TD-04、TD-05 |
 
@@ -26,7 +26,7 @@
 | Q-P9 | 正式環境是否出現過「Claude 無預警要求重新連線」？ | `14` Q4 | TD-28 |
 | Q-P10 | 是否遇過「部署後舊分頁呼叫新 API 出錯」？ | `16` Q5 | TD-36 |
 | Q-P11 | `docs/deploy.md` §2.1 的 image 大小、§2.4「Cloud Run 是否自動壓縮靜態檔」尚未實測，是否已經量過？ | `17` Q9 | TD-33 |
-| Q-P13 | 見「優先處理」 | `17` Q1a | TD-09 |
+| Q-P15 | 見「優先處理」 | Q-P13 的後續 | TD-09 |
 | Q-P14 | 實際環境沒有 `sixjars_migrator`，資料表屬於 `neondb_owner`：migration 實際上用哪個角色執行？手冊 §3.1、§3.3 要改成符合現況，還是把環境改成符合手冊？ | `17`「對資料庫的唯讀查證」 | TD-02、TD-33 |
 | Q-P12 | 2026 年以前的舊帳本，版面（列數、欄位位置）是否與 2026 年版完全相同？實際補匯過哪些年度？有沒有月份的流水帳超過第 172 列？ | `15` Q1 | TD-18 |
 
@@ -83,6 +83,9 @@
 
 | 原問題 | 答案 | 答案出處 |
 |---|---|---|
+| Q-P15：正式 schema 是否與 `McpBookkeeping` 的 migration 檔一致？ | **一致**。三個欄位的型別、長度與 nullable 完全相符，也沒有預設值；`IX_Transactions_BookId_ExternalRef` 的定義（含部分條件）逐字相符。`__EFMigrationsHistory` 中的 `ProductVersion` 是 10.0.13。三個新欄位目前在正式資料中都沒有值（各 0 筆），表示 `feat/mcp-write` 的程式從未在正式環境寫入過。日後 merge 時，只要這個 migration 檔不再修改，`efbundle` 略過它是正確的 | 唯讀 Neon 查詢（以 `sixjars_app` 角色執行 `information_schema.columns`、`pg_indexes`、`__EFMigrationsHistory`），2026-11-15。可見的 Neon 專案只有一個，依使用者先前的確認視為正式資料庫 |
+| Q-P2（部分）：Neon 時間點還原保留幾天？ | **只有 6 小時**（專案設定 `history_retention_seconds = 21600`）。超過 6 小時才發現的資料問題，只能靠使用者自己下載的 JSON 備份，TD-05 的第二道防線因此很薄弱。備份頻率、存放位置與是否做過還原演練，仍待營運者回答 | Neon `list_projects`，2026-11-15 |
+| Q-P13（`17` Q1a）：`McpBookkeeping` 與線上的 `v1.1.4` 相容嗎？ | **相容**。它只做兩件事：新增三個 nullable、無預設值的欄位（`Transactions.CreatedVia`、`Transactions.ExternalRef`、`AuditEntries.Via`），以及一個只涵蓋 `ExternalRef IS NOT NULL` 的部分唯一索引。`v1.1.4` 的 EF 查詢只 SELECT 自己認得的欄位，INSERT 不帶這三個欄位時就寫入 NULL，所以永遠不會觸發那個索引；`v1.1.4` 的 `src/` 也沒有 `SELECT *` 或其他會受影響的原生 SQL。`/health/ready` 只檢查 assembly 認得、卻還沒套用的 migration，資料庫多出來的 migration 不影響判斷，回 200 是正確的。剩下的風險不在相容性，而在 schema 是否與 migration 檔一致（Q-P15，已確認一致）。**營運者說明是刻意先套用**（2026-11-15），為 `feat/mcp-write` 發版預先準備；merge 前這個 migration 檔不可再修改 | 階段 3 後續：`git show feat/mcp-write:…/20261101161200_McpBookkeeping.cs`、snapshot diff、`git grep` `v1.1.4`（2026-11-15） |
 | Q-P1（`17` Q1）：正式環境的 `sixjars_app` 對 `AuditEntries` 有沒有 DELETE 權限？ | **沒有**。TD-01 成立，正式環境的「刪除帳本」目前不可用。還沒確認的部分：實際回應是否為 500、正式環境是否有人試過刪除 | 使用者在正式環境查詢 `has_table_privilege`（2026-11-14） |
 | `10` Q5：前端呼叫 `GET /transactions` 時是否都帶月份？ | 是，`TransactionApi.list` 的 `budgetMonth` 是必要參數 | `16`「呼叫的後端端點」 |
 | `11` Q3：`DbUpdateException` 回什麼？ | 500（`ApiExceptionHandler` 沒有對應）；後續的處理方式轉為 Q-D6 | `13`「例外對應」 |
